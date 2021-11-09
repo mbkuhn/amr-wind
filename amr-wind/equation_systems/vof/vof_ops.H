@@ -75,10 +75,14 @@ struct PostSolveOp<VOF>
     {
         m_fields.field.fillpatch(m_sim.time().current_time());
         auto& multiphase = m_sim.physics_manager().get<MultiPhase>();
+<<<<<<< HEAD
         multiphase.set_density_via_vof();
 
         // Calculate n+1/2 density
         multiphase.set_nph_density();
+=======
+        multiphase.set_density_via_vof(amr_wind::FieldState::Old);
+>>>>>>> added and corrected filtering at pre_advance_work
     }
 
     CFDSim& m_sim;

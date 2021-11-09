@@ -42,7 +42,7 @@ public:
 
     void set_density_via_levelset();
 
-    void set_density_via_vof();
+    void set_density_via_vof(const FieldState State);
 
     void set_nph_density();
 
