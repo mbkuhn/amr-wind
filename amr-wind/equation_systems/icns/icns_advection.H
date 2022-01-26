@@ -39,6 +39,9 @@ public:
     amrex::Real density1() { return m_rho1; }
     amrex::Real density2() { return m_rho2; }
 
+    amrex::Real density1() { return m_rho1; }
+    amrex::Real density2() { return m_rho2; }
+
 private:
     void init_projector(const FaceFabPtrVec& /*beta*/) noexcept;
     void init_projector(const amrex::Real /*beta*/) noexcept;
@@ -118,8 +121,13 @@ struct AdvectionOp<ICNS, fvm::Godunov>
 
         // Setup density factor arrays for multiplying velocity flux
         fields_in.repo.declare_face_normal_field(
+<<<<<<< HEAD
             {"advalpha_x", "advalpha_y", "advalpha_z"}, 1,
             fvm::Godunov::nghost_mac, 1);
+=======
+            {"advalpha_x", "advalpha_y", "advalpha_z"}, 1,
+            fvm::Godunov::nghost_mac, 1);
+>>>>>>> compiled and running version of new mass-momentum approach. fails while running, needs to be tested more.
     }
 
     void preadvect(const FieldState fstate, const amrex::Real dt)
