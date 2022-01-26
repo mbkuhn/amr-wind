@@ -109,9 +109,7 @@ struct AdvectionOp<ICNS, fvm::Godunov>
         } else if (amrex::toLower(mflux_type) == "upwind") {
             mflux_scheme = godunov::scheme::UPWIND;
         } else {
-            amrex::Print()
-                << "For mflux_type, default is upwind"
-                << std::endl;
+            amrex::Print() << "For mflux_type, default is upwind" << std::endl;
             mflux_scheme = godunov::scheme::UPWIND;
         }
 
@@ -304,8 +302,7 @@ struct AdvectionOp<ICNS, fvm::Godunov>
             repo.get_field("density").state(amr_wind::FieldState::Old);
         auto& rho_nph =
             repo.get_field("density").state(amr_wind::FieldState::NPH);
-        auto& VOF_o =
-            repo.get_field("vof").state(amr_wind::FieldState::Old);
+        auto& VOF_o = repo.get_field("vof").state(amr_wind::FieldState::Old);
 
         amrex::Gpu::DeviceVector<int> idnsty;
         idnsty.resize(ICNS::ndim, -1);
@@ -323,19 +320,19 @@ struct AdvectionOp<ICNS, fvm::Godunov>
             amrex::MultiFab momentum(
                 dof_field(lev).boxArray(), dof_field(lev).DistributionMap(), 3,
                 3);
-            amrex::MultiFab::Copy(momentum,dof_field(lev),0,0,3,3);
-            amrex::MultiFab::Multiply(momentum,rho_o(lev),0,0,1,3);
-            amrex::MultiFab::Multiply(momentum,rho_o(lev),0,1,1,3);
-            amrex::MultiFab::Multiply(momentum,rho_o(lev),0,2,1,3);
+            amrex::MultiFab::Copy(momentum, dof_field(lev), 0, 0, 3, 3);
+            amrex::MultiFab::Multiply(momentum, rho_o(lev), 0, 0, 1, 3);
+            amrex::MultiFab::Multiply(momentum, rho_o(lev), 0, 1, 1, 3);
+            amrex::MultiFab::Multiply(momentum, rho_o(lev), 0, 2, 1, 3);
 
             // form source terms for momentum, density
             amrex::MultiFab frhoq(
                 src_term(lev).boxArray(), src_term(lev).DistributionMap(), 3,
                 3);
-            amrex::MultiFab::Copy(frhoq,src_term(lev),0,0,3,3);
-            amrex::MultiFab::Multiply(frhoq,rho_nph(lev),0,0,1,3);
-            amrex::MultiFab::Multiply(frhoq,rho_nph(lev),0,1,1,3);
-            amrex::MultiFab::Multiply(frhoq,rho_nph(lev),0,2,1,3);
+            amrex::MultiFab::Copy(frhoq, src_term(lev), 0, 0, 3, 3);
+            amrex::MultiFab::Multiply(frhoq, rho_nph(lev), 0, 0, 1, 3);
+            amrex::MultiFab::Multiply(frhoq, rho_nph(lev), 0, 1, 1, 3);
+            amrex::MultiFab::Multiply(frhoq, rho_nph(lev), 0, 2, 1, 3);
             amrex::MultiFab frho(
                 src_term(lev).boxArray(), src_term(lev).DistributionMap(), 1,
                 3);
