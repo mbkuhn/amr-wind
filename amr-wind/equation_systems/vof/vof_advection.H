@@ -118,9 +118,14 @@ struct AdvectionOp<VOF, fvm::Godunov>
                     aa_z(lev).array(mfi), dof_field.bcrec_device().data(),
                     tmpfab.dataPtr(), geom, dt, m_use_lagrangian);
 
+<<<<<<< HEAD
                 if (m_rm_debris) {
                     multiphase::debris_loop(bx, dof_field(lev).array(mfi));
                 }
+=======
+                multiphase::debris_loop(bx, dof_field(lev).array(mfi));
+
+>>>>>>> making the methods conservative across boundaries via communication instead.
                 amrex::Gpu::streamSynchronize();
             }
         }
