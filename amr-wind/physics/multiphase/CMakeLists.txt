@@ -7,13 +7,7 @@ target_sources(${amr_wind_lib_name}
   ZalesakDiskScalarVel.cpp
   DamBreak.cpp
   SloshingTank.cpp
-  BreakingWaves.cpp
   RainDrop.cpp
   )
 
-<<<<<<< HEAD
 add_subdirectory(wave_basin)
-=======
-add_subdirectory(numerical_wave_tank)
-
->>>>>>> added a basic numerical wave tank capability with only linear waves at the moment
