@@ -247,6 +247,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void balance_eulerian_fluxes(
                 vofL(domhi + 1, j, k) = 0.0;
             }
         }
+
         volfrac(i, j, k) = volfrac(i, j, k) -
                            (fluxR(i, j, k) - fluxL(i + 1, j, k)) +
                            (fluxR(i - 1, j, k) - fluxL(i, j, k)) +
@@ -266,6 +267,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void balance_eulerian_fluxes(
                 vofL(i, domhi + 1, k) = 0.0;
             }
         }
+
         volfrac(i, j, k) = volfrac(i, j, k) -
                            (fluxR(i, j, k) - fluxL(i, j + 1, k)) +
                            (fluxR(i, j - 1, k) - fluxL(i, j, k)) +
@@ -285,6 +287,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void balance_eulerian_fluxes(
                 vofL(i, j, domhi + 1) = 0.0;
             }
         }
+
         volfrac(i, j, k) = volfrac(i, j, k) -
                            (fluxR(i, j, k) - fluxL(i, j, k + 1)) +
                            (fluxR(i, j, k - 1) - fluxL(i, j, k)) +
