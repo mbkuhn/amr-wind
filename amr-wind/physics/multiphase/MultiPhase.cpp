@@ -102,7 +102,6 @@ void MultiPhase::post_advance_work()
     switch (m_interface_capturing_method) {
     case InterfaceCapturingMethod::VOF:
         // Compute the print the total volume fraction
-        favre_filtering();
         if (m_verbose > 0) {
             m_total_volfrac = volume_fraction_sum();
             amrex::Real mom_x = momentum_sum(0) - q0;
