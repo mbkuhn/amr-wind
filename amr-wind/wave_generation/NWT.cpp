@@ -157,8 +157,8 @@ void NWT::apply_relaxation_method(amrex::Real time)
                     switch (wave_type) {
                     case wave_generator::LinearWaves: {
                         nwt::linear_monochromatic_waves(
-                            wavelength, waterdepth, waveheight, x, y, z, time,
-                            eta, u_w, v_w, w_w);
+                            wavelength, waterdepth, waveheight, x, dx[0], z,
+                            time, eta, u_w, v_w, w_w);
                         break;
                     }
                     case wave_generator::StokesWaves: {
