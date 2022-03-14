@@ -72,6 +72,8 @@ private:
 
     wave_generator m_generator_type = wave_generator::LinearWaves;
 
+    int m_stokes_order{2};
+
     //! Water depth
     amrex::Real m_waterdepth{1.0};
 

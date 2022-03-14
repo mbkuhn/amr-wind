@@ -34,6 +34,7 @@ NWT::NWT(CFDSim& sim)
         m_generator_type = wave_generator::LinearWaves;
     } else if (amrex::toLower(wave_type) == "stokeswaves") {
         m_generator_type = wave_generator::StokesWaves;
+        pp.query("stokes_order", m_stokes_order);
     } else if (amrex::toLower(wave_type) == "bichromatic") {
         m_generator_type = wave_generator::BiChromatic;
     } else if (amrex::toLower(wave_type) == "spectrum") {
@@ -140,6 +141,8 @@ void NWT::apply_relaxation_method(amrex::Real time)
             const amrex::Real absorb_length_factor = m_absorb_length_factor;
             const amrex::Real zsl = m_zsl;
 
+            int stokes_order = m_stokes_order;
+
             wave_generator wave_type = m_generator_type;
 
             amrex::ParallelFor(
@@ -163,6 +166,9 @@ void NWT::apply_relaxation_method(amrex::Real time)
                         break;
                     }
                     case wave_generator::StokesWaves: {
+                        nwt::stokes_waves(
+                            stokes_order, wavelength, waterdepth, waveheight, x,
+                            time, eta, u_w, v_w, w_w);
                         break;
                     }
                     case wave_generator::BiChromatic: {
