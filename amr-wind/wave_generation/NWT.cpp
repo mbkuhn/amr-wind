@@ -1,7 +1,8 @@
 #include "amr-wind/physics/multiphase/MultiPhase.H"
 #include "amr-wind/wave_generation/NWT.H"
 #include "amr-wind/wave_generation/wave_utils.H"
-#include "amr-wind/wave_generation/wave_theories.H"
+#include "amr-wind/wave_generation/linear_waves.H"
+#include "amr-wind/wave_generation/stokes_waves.H"
 #include "amr-wind/utilities/trig_ops.H"
 #include "amr-wind/CFDSim.H"
 #include "AMReX_ParmParse.H"
@@ -156,7 +157,7 @@ void NWT::apply_relaxation_method(amrex::Real time)
 
                     switch (wave_type) {
                     case wave_generator::LinearWaves: {
-                        nwt::linear_monochromatic_waves(
+                        nwt::linear_waves(
                             wavelength, waterdepth, waveheight, x, dx[0], z,
                             time, eta, u_w, v_w, w_w);
                         break;
