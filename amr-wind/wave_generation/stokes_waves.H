@@ -298,8 +298,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void stokes_waves(
     v_w = 0.0;
     w_w = c0 * std::sqrt(9.81 / std::pow(k, 3)) *
           (ss11 + ss22 + ss31 + ss33 + ss42 + ss44 + ss51 + ss53 + ss55);
+}
 
 } // namespace nwt
-} // namespace nwt
+} // namespace amr_wind
 
 #endif

@@ -1,5 +1,5 @@
-#ifndef WAVES_THEORIES_H_
-#define WAVES_THEORIES_H_
+#ifndef LINEAR_WAVES_H_
+#define LINEAR_WAVES_H_
 
 #include <AMReX_FArrayBox.H>
 #include <cmath>
