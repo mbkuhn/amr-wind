@@ -121,8 +121,10 @@ void NWT::apply_relaxation_method(amrex::Real time)
     const amrex::Real rho1 = mphase.rho1();
     const amrex::Real rho2 = mphase.rho2();
 
+    auto vof_target = m_sim.repo().create_scratch_field(1, 1, FieldLoc::CELL);
     // Interpolate within the relazation zones
     for (int lev = 0; lev < nlevels; ++lev) {
+        // Create a scratch field for the target_vof
         for (amrex::MFIter mfi(m_vof(lev)); mfi.isValid(); ++mfi) {
             const auto& gbx = mfi.growntilebox();
             const auto& dx = geom[lev].CellSizeArray();
@@ -161,8 +163,8 @@ void NWT::apply_relaxation_method(amrex::Real time)
                     switch (wave_type) {
                     case wave_generator::LinearWaves: {
                         nwt::linear_waves(
-                            wavelength, waterdepth, waveheight, x, dx[0], z,
-                            time, eta, u_w, v_w, w_w);
+                            wavelength, waterdepth, waveheight, x, z, time, eta,
+                            u_w, v_w, w_w);
                         break;
                     }
                     case wave_generator::StokesWaves: {
