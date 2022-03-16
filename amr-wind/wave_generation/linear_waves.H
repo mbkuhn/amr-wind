@@ -26,7 +26,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void linear_waves(
 
     const amrex::Real phase = k * x - omega * time;
 
-    const amrex::Real eta = waveheight / 2.0 * std::cos(phase);
+    eta = waveheight / 2.0 * std::cos(phase);
 
     u_w = omega * waveheight / 2.0 * std::cosh(k * (z + waterdepth)) /
           std::sinh(k * waterdepth) * std::cos(phase);
