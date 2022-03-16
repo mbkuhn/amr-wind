@@ -43,7 +43,7 @@ void multiphase::split_advection_step(
 
     Array4<Real> fluxL = makeArray4(p, bxg4, 1);
     p += fluxL.size();
-    Array4<Real> fluxR = makeArray4(p, bxg1, 1);
+    Array4<Real> fluxR = makeArray4(p, bxg4, 1);
     p += fluxR.size(); // NOLINT: Value not read warning
     Array4<Real> vofL = makeArray4(p, bxg4, 1);
     p += vofL.size();
