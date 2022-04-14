@@ -121,7 +121,6 @@ void NWT::apply_relaxation_method(amrex::Real time)
     const amrex::Real rho1 = mphase.rho1();
     const amrex::Real rho2 = mphase.rho2();
 
-    auto vof_target = m_sim.repo().create_scratch_field(1, 1, FieldLoc::CELL);
     // Interpolate within the relazation zones
     for (int lev = 0; lev < nlevels; ++lev) {
         // Create a scratch field for the target_vof
