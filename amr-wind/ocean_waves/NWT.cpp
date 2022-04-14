@@ -38,8 +38,6 @@ NWT::NWT(CFDSim& sim)
     } else if (amrex::toLower(wave_type) == "bichromatic") {
         m_generator_type = wave_generator::BiChromatic;
     } else if (amrex::toLower(wave_type) == "spectrum") {
-        // amrex::toLower(godunov_type) == "weno" ||
-        // amrex::toLower(godunov_type) == "weno_js") {
         m_generator_type = wave_generator::Spectrum;
     } else {
         amrex::Print()
