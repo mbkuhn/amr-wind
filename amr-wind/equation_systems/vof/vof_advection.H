@@ -28,7 +28,7 @@ struct AdvectionOp<VOF, fvm::Godunov>
 
     void preadvect(const FieldState /*unused*/, const amrex::Real /*unused*/) {}
 
-    void operator()(const FieldState /*unused*/, const amrex::Real dt)
+    void operator()(const FieldState /*unused*/, const amrex::Real real_dt)
     {
         static_assert(
             VOF::ndim == 1, "Invalid number of components for scalar");
@@ -45,6 +45,9 @@ struct AdvectionOp<VOF, fvm::Godunov>
         // Advect volume using either the Explicit Lagrangian onto-cell or
         // Implicit Eulerian Sweeping method with PLIC reconstruction
         //
+
+        // Use half of time step
+        amrex::Real dt = 0.5 * real_dt;
 
         // Scratch field for fluxC
         auto fluxC = repo.create_scratch_field(1, 0, amr_wind::FieldLoc::CELL);
@@ -64,6 +67,13 @@ struct AdvectionOp<VOF, fvm::Godunov>
 #ifdef _OPENMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
+
+            // Zero advalpha
+            aa_x(lev).setVal(0.0);
+            aa_y(lev).setVal(0.0);
+            aa_z(lev).setVal(0.0);
+
+            // First half time step
             for (amrex::MFIter mfi(dof_field(lev), mfi_info); mfi.isValid();
                  ++mfi) {
                 const auto& bx = mfi.tilebox();
@@ -112,6 +122,64 @@ struct AdvectionOp<VOF, fvm::Godunov>
                 tmpfab.setVal<amrex::RunOn::Device>(0.0);
                 multiphase::split_advection_step(
                     lev, bx, isweep + 2, dof_field(lev).array(mfi),
+                    (*fluxC)(lev).array(mfi), u_mac(lev).const_array(mfi),
+                    v_mac(lev).const_array(mfi), w_mac(lev).const_array(mfi),
+                    aa_x(lev).array(mfi), aa_y(lev).array(mfi),
+                    aa_z(lev).array(mfi), dof_field.bcrec_device().data(),
+                    tmpfab.dataPtr(), geom, dt, m_use_lagrangian);
+
+                amrex::Gpu::streamSynchronize();
+            }
+
+            // Second half time step
+            for (amrex::MFIter mfi(dof_field(lev), mfi_info); mfi.isValid();
+                 ++mfi) {
+                const auto& bx = mfi.tilebox();
+                amrex::FArrayBox tmpfab(amrex::grow(bx, 1), 2 * VOF::ndim + 2);
+                tmpfab.setVal<amrex::RunOn::Device>(0.0);
+
+                multiphase::cmask_loop(
+                    bx, dof_field(lev).array(mfi), (*fluxC)(lev).array(mfi),
+                    m_use_lagrangian);
+
+                multiphase::split_advection_step(
+                    lev, bx, isweep + 2, dof_field(lev).array(mfi),
+                    (*fluxC)(lev).array(mfi), u_mac(lev).const_array(mfi),
+                    v_mac(lev).const_array(mfi), w_mac(lev).const_array(mfi),
+                    aa_x(lev).array(mfi), aa_y(lev).array(mfi),
+                    aa_z(lev).array(mfi), dof_field.bcrec_device().data(),
+                    tmpfab.dataPtr(), geom, dt, m_use_lagrangian);
+
+                amrex::Gpu::streamSynchronize();
+            }
+
+            dof_field(lev).FillBoundary(geom[lev].periodicity());
+
+            for (amrex::MFIter mfi(dof_field(lev), mfi_info); mfi.isValid();
+                 ++mfi) {
+                const auto& bx = mfi.tilebox();
+                amrex::FArrayBox tmpfab(amrex::grow(bx, 1), 2 * VOF::ndim + 2);
+                tmpfab.setVal<amrex::RunOn::Device>(0.0);
+                multiphase::split_advection_step(
+                    lev, bx, isweep + 1, dof_field(lev).array(mfi),
+                    (*fluxC)(lev).array(mfi), u_mac(lev).const_array(mfi),
+                    v_mac(lev).const_array(mfi), w_mac(lev).const_array(mfi),
+                    aa_x(lev).array(mfi), aa_y(lev).array(mfi),
+                    aa_z(lev).array(mfi), dof_field.bcrec_device().data(),
+                    tmpfab.dataPtr(), geom, dt, m_use_lagrangian);
+
+                amrex::Gpu::streamSynchronize();
+            }
+
+            dof_field(lev).FillBoundary(geom[lev].periodicity());
+
+            for (amrex::MFIter mfi(dof_field(lev), mfi_info); mfi.isValid();
+                 ++mfi) {
+                const auto& bx = mfi.tilebox();
+                amrex::FArrayBox tmpfab(amrex::grow(bx, 1), 2 * VOF::ndim + 2);
+                tmpfab.setVal<amrex::RunOn::Device>(0.0);
+                multiphase::split_advection_step(
+                    lev, bx, isweep + 0, dof_field(lev).array(mfi),
                     (*fluxC)(lev).array(mfi), u_mac(lev).const_array(mfi),
                     v_mac(lev).const_array(mfi), w_mac(lev).const_array(mfi),
                     aa_x(lev).array(mfi), aa_y(lev).array(mfi),
