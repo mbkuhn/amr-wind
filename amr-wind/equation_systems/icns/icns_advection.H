@@ -316,6 +316,7 @@ struct AdvectionOp<ICNS, fvm::Godunov>
             aa_y(lev).FillBoundary(geom[lev].periodicity());
             aa_z(lev).FillBoundary(geom[lev].periodicity());
 
+            /*
             // form momentum multifab
             amrex::MultiFab momentum(
                 dof_field(lev).boxArray(), dof_field(lev).DistributionMap(), 3,
@@ -337,6 +338,7 @@ struct AdvectionOp<ICNS, fvm::Godunov>
                 src_term(lev).boxArray(), src_term(lev).DistributionMap(), 1,
                 3);
             frho.setVal(0.0);
+            */
 
             // multifab for flagging multiphase fluxes
 
@@ -368,24 +370,16 @@ struct AdvectionOp<ICNS, fvm::Godunov>
                     amrex::makeArray4(tmpifab.dataPtr(), amrex::grow(bx, 2), 1);
                 flag_multiphase(VOF_o(lev).const_array(mfi), flag);
 
-                // rhou
-                godunov::compute_fluxes(
+                // rhou/rho
+                godunov::multiphase_fluxes(
                     lev, bx, ICNS::ndim, (*flux_x)(lev).array(mfi),
                     (*flux_y)(lev).array(mfi), (*flux_z)(lev).array(mfi),
-                    momentum.const_array(mfi), u_mac(lev).const_array(mfi),
-                    v_mac(lev).const_array(mfi), w_mac(lev).const_array(mfi),
-                    frhoq.const_array(mfi), dof_field.bcrec_device().data(),
-                    iconserv.data(), tmpfab.dataPtr(), geom, dt, mflux_scheme,
-                    flag);
-                // /rho
-                godunov::compute_fluxes(
-                    lev, bx, 1, (*flux_x)(lev).array(mfi),
-                    (*flux_y)(lev).array(mfi), (*flux_z)(lev).array(mfi),
-                    rho_o(lev).const_array(mfi), u_mac(lev).const_array(mfi),
-                    v_mac(lev).const_array(mfi), w_mac(lev).const_array(mfi),
-                    frho.const_array(mfi), rho_o.bcrec_device().data(),
-                    idnsty.data(), tmpfab.dataPtr(), geom, dt, mflux_scheme,
-                    flag);
+                    dof_field(lev).const_array(mfi),
+                    rho_o(lev).const_array(mfi), rho_nph(lev).const_array(mfi),
+                    u_mac(lev).const_array(mfi), v_mac(lev).const_array(mfi),
+                    w_mac(lev).const_array(mfi), src_term(lev).const_array(mfi),
+                    dof_field.bcrec_device().data(), tmpfab.dataPtr(), geom, dt,
+                    mflux_scheme, flag);
 
                 // Multiply fluxes by density contribution
                 multiply_fluxes(

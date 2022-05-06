@@ -51,6 +51,27 @@ void compute_fluxes(
     godunov::scheme godunov_scheme,
     amrex::Array4<int const> const& flag);
 
+void multiphase_fluxes(
+    int lev,
+    amrex::Box const& bx,
+    int ncomp,
+    amrex::Array4<amrex::Real> const& fx,
+    amrex::Array4<amrex::Real> const& fy,
+    amrex::Array4<amrex::Real> const& fz,
+    amrex::Array4<amrex::Real const> const& q,
+    amrex::Array4<amrex::Real const> const& rho_o,
+    amrex::Array4<amrex::Real const> const& rho_nph,
+    amrex::Array4<amrex::Real const> const& umac,
+    amrex::Array4<amrex::Real const> const& vmac,
+    amrex::Array4<amrex::Real const> const& wmac,
+    amrex::Array4<amrex::Real const> const& fq,
+    amrex::BCRec const* pbc,
+    amrex::Real* p,
+    amrex::Vector<amrex::Geometry> geom,
+    amrex::Real dt,
+    godunov::scheme mflux_scheme,
+    amrex::Array4<int const> const& flag);
+
 void compute_advection(
     int lev,
     amrex::Box const& bx,

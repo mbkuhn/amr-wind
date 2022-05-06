@@ -35,6 +35,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void minmod(
     }
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real minmod(
+    const amrex::Real sm1,
+    const amrex::Real s0,
+    const amrex::Real sp1)
+{
+    amrex::Real ds = 0.0;
+    amrex::Real junk = 0.0;
+    minmod(sm1, s0, sp1, ds, junk);
+    return ds;
+}
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void Godunov_minmod_bc(
     const int n,
     const amrex::Real sm1,
@@ -200,6 +211,51 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void Godunov_minmod_fpu_z(
     } else {
         Im = S(i, j, k, n);
     }
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void Godunov_minmod_cc_grad(
+    const int i,
+    const int j,
+    const int k,
+    const int n,
+    const amrex::Real dx,
+    const amrex::Real dy,
+    const amrex::Real dz,
+    const amrex::Array4<const amrex::Real>& S,
+    amrex::Real& Gx,
+    amrex::Real& Gy,
+    amrex::Real& Gz)
+{
+    amrex::Real sm1 = 0.0;
+    amrex::Real sp1 = 0.0;
+    amrex::Real s0 = S(i, j, k, n);
+
+    // X-direction
+    sm1 = S(i - 1, j, k, n);
+    sp1 = S(i + 1, j, k, n);
+    Gx = minmod(sm1, s0, sp1) / dx;
+    // Y-direction
+    sm1 = S(i, j - 1, k, n);
+    sp1 = S(i, j + 1, k, n);
+    Gy = minmod(sm1, s0, sp1) / dy;
+    // Z-direction
+    sm1 = S(i, j, k - 1, n);
+    sp1 = S(i, j, k + 1, n);
+    Gz = minmod(sm1, s0, sp1) / dz;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real sptemp_interp(
+    const amrex::Real s0,
+    const amrex::Real dt,
+    const amrex::Real d1,
+    const amrex::Real vel1,
+    const amrex::Real vel2,
+    const amrex::Real vel3,
+    const amrex::Real G1,
+    const amrex::Real G2,
+    const amrex::Real G3)
+{
+    return (s0 + 0.5 * (d1 * G1 - dt * (vel1 * G1 + vel2 * G2 + vel3 * G3)));
 }
 
 } // namespace
