@@ -303,11 +303,14 @@ struct AdvectionOp<ICNS, fvm::Godunov>
             repo.get_field("density").state(amr_wind::FieldState::Old);
         auto& rho_nph =
             repo.get_field("density").state(amr_wind::FieldState::NPH);
-        auto& VOF_o =
-            repo.get_field("vof").state(amr_wind::FieldState::Old);
 
         amrex::Gpu::DeviceVector<int> idnsty;
         idnsty.resize(ICNS::ndim, -1);
+
+        auto& vof_n = repo.get_field("vof").state(amr_wind::FieldState::Old);
+        auto& vof_np1 = repo.get_field("vof");
+        auto& vel_n =
+            repo.get_field("velocity").state(amr_wind::FieldState::Old);
 
         //
         // Advect momentum eqns
@@ -368,7 +371,7 @@ struct AdvectionOp<ICNS, fvm::Godunov>
                 amrex::IArrayBox tmpifab(amrex::grow(bx, 2), 1);
                 amrex::Array4<int> flag =
                     amrex::makeArray4(tmpifab.dataPtr(), amrex::grow(bx, 2), 1);
-                flag_multiphase(VOF_o(lev).const_array(mfi), flag);
+                flag_multiphase(vof_n(lev).const_array(mfi), flag);
 
                 // rhou
                 godunov::compute_fluxes(
@@ -389,24 +392,21 @@ struct AdvectionOp<ICNS, fvm::Godunov>
                     idnsty.data(), tmpfab.dataPtr(), geom, dt, mflux_scheme,
                     flag);
 
-                // Multiply fluxes by density contribution
-                multiply_fluxes(
-                    bx, amrex::grow(bx, 1), ICNS::ndim,
-                    (*flux_x)(lev).array(mfi), (*flux_y)(lev).array(mfi),
-                    (*flux_z)(lev).array(mfi), aa_x(lev).array(mfi),
-                    aa_y(lev).array(mfi), aa_z(lev).array(mfi),
-                    m_macproj_op.density1(), m_macproj_op.density2());
-
                 amrex::Gpu::streamSynchronize();
             }
         }
 
         amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>> fluxes(
             repo.num_active_levels());
+        amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>> facevof(
+            repo.num_active_levels());
         for (int lev = 0; lev < repo.num_active_levels(); ++lev) {
             fluxes[lev][0] = &(*flux_x)(lev);
             fluxes[lev][1] = &(*flux_y)(lev);
             fluxes[lev][2] = &(*flux_z)(lev);
+            facevof[lev][0] = &(aa_x)(lev);
+            facevof[lev][1] = &(aa_y)(lev);
+            facevof[lev][2] = &(aa_z)(lev);
         }
 
         // In order to enforce conservation across coarse-fine boundaries we
@@ -416,6 +416,9 @@ struct AdvectionOp<ICNS, fvm::Godunov>
                 geom[lev].Domain().size() / geom[lev - 1].Domain().size();
             amrex::average_down_faces(
                 GetArrOfConstPtrs(fluxes[lev]), fluxes[lev - 1], rr,
+                geom[lev - 1]);
+            amrex::average_down_faces(
+                GetArrOfConstPtrs(facevof[lev]), facevof[lev - 1], rr,
                 geom[lev - 1]);
         }
 
@@ -428,12 +431,15 @@ struct AdvectionOp<ICNS, fvm::Godunov>
                  mfi.isValid(); ++mfi) {
                 const auto& bx = mfi.tilebox();
 
-                godunov::compute_advection(
-                    lev, bx, ICNS::ndim, conv_term(lev).array(mfi),
-                    (*flux_x)(lev).array(mfi), (*flux_y)(lev).array(mfi),
-                    (*flux_z)(lev).array(mfi), u_mac(lev).const_array(mfi),
-                    v_mac(lev).const_array(mfi), w_mac(lev).const_array(mfi),
-                    iconserv.data(), geom);
+                // Multiply fluxes by density contribution
+                compute_multiphase_advection(
+                    lev, bx, ICNS::ndim, vof_n(lev).array(mfi),
+                    vof_np1(lev).array(mfi), vel_n(lev).array(mfi),
+                    conv_term(lev).array(mfi), (*flux_x)(lev).array(mfi),
+                    (*flux_y)(lev).array(mfi), (*flux_z)(lev).array(mfi),
+                    aa_x(lev).array(mfi), aa_y(lev).array(mfi),
+                    aa_z(lev).array(mfi), m_macproj_op.density1(),
+                    m_macproj_op.density2(), dt, geom);
             }
         }
     }
@@ -454,47 +460,68 @@ struct AdvectionOp<ICNS, fvm::Godunov>
             });
     }
 
-    // Multiply fluxes by density contribution
-    void multiply_fluxes(
+    void compute_multiphase_advection(
+        int lev,
         amrex::Box const& bx,
-        amrex::Box const& bxg1,
-        const int ncomp,
-        amrex::Array4<amrex::Real> const& Fx,
-        amrex::Array4<amrex::Real> const& Fy,
-        amrex::Array4<amrex::Real> const& Fz,
+        int ncomp,
+        amrex::Array4<amrex::Real> const& vofn,
+        amrex::Array4<amrex::Real> const& vofnp1,
+        amrex::Array4<amrex::Real> const& veln,
+        amrex::Array4<amrex::Real> const& dqdt,
+        amrex::Array4<amrex::Real> const& fx,
+        amrex::Array4<amrex::Real> const& fy,
+        amrex::Array4<amrex::Real> const& fz,
         amrex::Array4<amrex::Real> const& advalpha_x,
         amrex::Array4<amrex::Real> const& advalpha_y,
         amrex::Array4<amrex::Real> const& advalpha_z,
-        amrex::Real rho1,
-        amrex::Real rho2)
+        const amrex::Real rho1,
+        const amrex::Real rho2,
+        const amrex::Real dt,
+        amrex::Vector<amrex::Geometry> geom)
     {
-        amrex::ParallelFor(
-            bxg1, ncomp,
-            [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-                // Use dedicated boxes to modify fluxes at faces and avoid going
-                // out of bounds.
-                amrex::Box const& xbx = amrex::surroundingNodes(bx, 0);
-                amrex::Box const& ybx = amrex::surroundingNodes(bx, 1);
-                amrex::Box const& zbx = amrex::surroundingNodes(bx, 2);
+        const auto dxinv = geom[lev].InvCellSizeArray();
+        constexpr amrex::Real tiny = 1e-12;
+        constexpr amrex::Real bigv = 1.0 - 1e-12;
 
-                // NOTE: This step assumes constant density in each phase
-                // and constant cell size on the current level.
-                amrex::Real rhof;
-                if (xbx.contains(i, j, k)) {
-                    rhof = rho1 * advalpha_x(i, j, k) +
-                           rho2 * (1.0 - advalpha_x(i, j, k));
-                    Fx(i, j, k, n) = rhof * Fx(i, j, k, n);
-                }
-                if (ybx.contains(i, j, k)) {
-                    rhof = rho1 * advalpha_y(i, j, k) +
-                           rho2 * (1.0 - advalpha_y(i, j, k));
-                    Fy(i, j, k, n) = rhof * Fy(i, j, k, n);
-                }
-                if (zbx.contains(i, j, k)) {
-                    rhof = rho1 * advalpha_z(i, j, k) +
-                           rho2 * (1.0 - advalpha_z(i, j, k));
-                    Fz(i, j, k, n) = rhof * Fz(i, j, k, n);
-                }
+        amrex::ParallelFor(
+            bx, ncomp,
+            [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+                // If cell has liquid, include liquid fluxes
+                int liqnow = (vofnp1(i, j, k) > tiny) ? 1 : 0;
+                // If cell has gas, include gas fluxes
+                int gasnow = (vofnp1(i, j, k) < bigv) ? 1 : 0;
+                // If cell no longer has liquid, subtract previous liq mom.
+                int liqwas = (liqnow == 0 && vofn(i, j, k) > tiny) ? 1 : 0;
+                // If cell no longer has gas, subtract previous gas mom.
+                int gaswas = (gasnow == 0 && vofn(i, j, k) < bigv) ? 1 : 0;
+                // Liquid momentum fluxes
+                dqdt(i, j, k, n) =
+                    rho1 * (amrex::Real)liqnow *
+                    (dxinv[0] * (fx(i, j, k, n) * advalpha_x(i, j, k) -
+                                 fx(i + 1, j, k, n) * advalpha_x(i + 1, j, k)) +
+                     dxinv[1] * (fy(i, j, k, n) * advalpha_y(i, j, k) -
+                                 fy(i, j + 1, k, n) * advalpha_y(i, j + 1, k)) +
+                     dxinv[2] * (fz(i, j, k, n) * advalpha_z(i, j, k) -
+                                 fz(i, j, k + 1, n) * advalpha_z(i, j, k + 1)));
+                // Gas momentum fluxes
+                dqdt(i, j, k, n) +=
+                    rho2 * (amrex::Real)liqnow *
+                    (dxinv[0] * (fx(i, j, k, n) * (1.0 - advalpha_x(i, j, k)) -
+                                 fx(i + 1, j, k, n) *
+                                     (1.0 - advalpha_x(i + 1, j, k))) +
+                     dxinv[1] * (fy(i, j, k, n) * (1.0 - advalpha_y(i, j, k)) -
+                                 fy(i, j + 1, k, n) *
+                                     (1.0 - advalpha_y(i, j + 1, k))) +
+                     dxinv[2] * (fz(i, j, k, n) * (1.0 - advalpha_z(i, j, k)) -
+                                 fz(i, j, k + 1, n) *
+                                     (1.0 - advalpha_z(i, j, k + 1))));
+                // Removal of liquid momentum
+                dqdt(i, j, k, n) -= (amrex::Real)liqwas * rho1 * vofn(i, j, k) *
+                                    veln(i, j, k, n) / dt;
+                // Removal of gas momentum
+                dqdt(i, j, k, n) -= (amrex::Real)gaswas * rho2 *
+                                    (1.0 - vofn(i, j, k)) * veln(i, j, k, n) /
+                                    dt;
             });
     }
 
