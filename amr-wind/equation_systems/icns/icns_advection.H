@@ -505,7 +505,7 @@ struct AdvectionOp<ICNS, fvm::Godunov>
                                  fz(i, j, k + 1, n) * advalpha_z(i, j, k + 1)));
                 // Gas momentum fluxes
                 dqdt(i, j, k, n) +=
-                    rho2 * (amrex::Real)liqnow *
+                    rho2 * (amrex::Real)gasnow *
                     (dxinv[0] * (fx(i, j, k, n) * (1.0 - advalpha_x(i, j, k)) -
                                  fx(i + 1, j, k, n) *
                                      (1.0 - advalpha_x(i + 1, j, k))) +
