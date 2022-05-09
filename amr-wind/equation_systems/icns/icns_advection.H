@@ -297,10 +297,12 @@ struct AdvectionOp<ICNS, fvm::Godunov>
         auto& aa_y = repo.get_field("advalpha_y");
         auto& aa_z = repo.get_field("advalpha_z");
 
+        /*
         auto& rho_o =
             repo.get_field("density").state(amr_wind::FieldState::Old);
         auto& rho_nph =
             repo.get_field("density").state(amr_wind::FieldState::NPH);
+        */
         auto& VOF_o =
             repo.get_field("vof").state(amr_wind::FieldState::Old);
 
@@ -374,11 +376,13 @@ struct AdvectionOp<ICNS, fvm::Godunov>
                 godunov::multiphase_fluxes(
                     lev, bx, ICNS::ndim, (*flux_x)(lev).array(mfi),
                     (*flux_y)(lev).array(mfi), (*flux_z)(lev).array(mfi),
-                    dof_field(lev).const_array(mfi),
-                    rho_o(lev).const_array(mfi), rho_nph(lev).const_array(mfi),
+                    dof_field(lev).const_array(mfi), aa_x(lev).const_array(mfi),
+                    aa_y(lev).const_array(mfi), aa_z(lev).const_array(mfi),
                     u_mac(lev).const_array(mfi), v_mac(lev).const_array(mfi),
                     w_mac(lev).const_array(mfi), src_term(lev).const_array(mfi),
+                    VOF_o(lev).const_array(mfi),
                     dof_field.bcrec_device().data(), tmpfab.dataPtr(), geom, dt,
+                    m_macproj_op.density1(), m_macproj_op.density2(),
                     mflux_scheme, flag);
 
                 // Multiply fluxes by density contribution

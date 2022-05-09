@@ -246,16 +246,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void Godunov_minmod_cc_grad(
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real sptemp_interp(
     const amrex::Real s0,
-    const amrex::Real dt,
     const amrex::Real d1,
-    const amrex::Real vel1,
-    const amrex::Real vel2,
-    const amrex::Real vel3,
+    const amrex::Real dtvel1,
+    const amrex::Real dtvel2,
+    const amrex::Real dtvel3,
     const amrex::Real G1,
     const amrex::Real G2,
     const amrex::Real G3)
 {
-    return (s0 + 0.5 * (d1 * G1 - dt * (vel1 * G1 + vel2 * G2 + vel3 * G3)));
+    return (s0 + 0.5 * (d1 * G1 - (dtvel1 * G1 + dtvel2 * G2 + dtvel3 * G3)));
 }
 
 } // namespace

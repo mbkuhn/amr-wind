@@ -4,6 +4,7 @@
 
 #include "amr-wind/equation_systems/vof/vof.H"
 #include "amr-wind/equation_systems/vof/SplitAdvection.H"
+#include "amr-wind/core/field_ops.H"
 
 namespace amr_wind {
 namespace pde {
@@ -41,6 +42,11 @@ struct AdvectionOp<VOF, fvm::Godunov>
         auto& aa_z = repo.get_field("advalpha_z");
 
         auto& dof_field = fields.field;
+        auto& dof_old = dof_field.state(amr_wind::FieldState::Old);
+
+        // Duplicate field for old
+        amr_wind::field_ops::copy(dof_old, dof_field, 0, 0, 1, 1);
+
         //
         // Advect volume using either the Explicit Lagrangian onto-cell or
         // Implicit Eulerian Sweeping method with PLIC reconstruction

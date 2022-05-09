@@ -715,16 +715,20 @@ void godunov::multiphase_fluxes(
     Array4<Real> const& fy,
     Array4<Real> const& fz,
     Array4<Real const> const& q,
-    Array4<Real const> const& rho_o,
-    Array4<Real const> const& rho_nph,
+    Array4<Real const> const& aa_x,
+    Array4<Real const> const& aa_y,
+    Array4<Real const> const& aa_z,
     Array4<Real const> const& umac,
     Array4<Real const> const& vmac,
     Array4<Real const> const& wmac,
     Array4<Real const> const& fq,
+    Array4<Real const> const& vofn,
     BCRec const* pbc,
     Real* p,
     Vector<amrex::Geometry> geom,
     Real dt,
+    Real rho1,
+    Real rho2,
     godunov::scheme mflux_scheme,
     Array4<int const> const& flag)
 {
@@ -744,43 +748,22 @@ void godunov::multiphase_fluxes(
     const auto dlo = amrex::lbound(domain);
     const auto dhi = amrex::ubound(domain);
 
-    Array4<Real> Grhox = makeArray4(p, bxg1, 1);
-    p += Grhox.size();
-    Array4<Real> Grhoy = makeArray4(p, bxg1, 1);
-    p += Grhoy.size();
-    Array4<Real> Grhoz = makeArray4(p, bxg1, 1);
-    p += Grhoz.size();
-    Array4<Real> Gmomx = makeArray4(p, bxg1, ncomp);
-    p += Gmomx.size();
-    Array4<Real> Gmomy = makeArray4(p, bxg1, ncomp);
-    p += Gmomy.size();
-    Array4<Real> Gmomz = makeArray4(p, bxg1, ncomp);
-    p += Gmomz.size();
+    Array4<Real> Gu = makeArray4(p, bxg1, ncomp);
+    p += Gu.size();
+    Array4<Real> Gv = makeArray4(p, bxg1, ncomp);
+    p += Gv.size();
+    Array4<Real> Gw = makeArray4(p, bxg1, ncomp);
+    p += Gw.size();
 
-    Array4<Real> rhoq = makeArray4(p, bxg2, ncomp);
-    p += rhoq.size();
-
-    // Construct momentum and add source terms to it
-    amrex::ParallelFor(
-        bxg2, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-            rhoq(i, j, k, n) = rho_o(i, j, k) * q(i, j, k, n); // +
-                               //0.5 * dt * rho_nph(i, j, k) * fq(i, j, k, n);
-        });
-    // Generate cell-centered gradients
+    // Generate cell-centered gradients (should add forces)
     switch (mflux_scheme) {
     case godunov::scheme::MINMOD: {
         amrex::ParallelFor(
             bxg1, ncomp,
             [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
                 Godunov_minmod_cc_grad(
-                    i, j, k, n, dx, dy, dz, rhoq, Gmomx(i, j, k, n),
-                    Gmomy(i, j, k, n), Gmomz(i, j, k, n));
-            });
-        amrex::ParallelFor(
-            bxg1, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                Godunov_minmod_cc_grad(
-                    i, j, k, 0, dx, dy, dz, rho_o, Grhox(i, j, k),
-                    Grhoy(i, j, k), Grhoz(i, j, k));
+                    i, j, k, n, dx, dy, dz, q, Gu(i, j, k, n), Gv(i, j, k, n),
+                    Gw(i, j, k, n));
             });
         break;
     }
@@ -792,73 +775,113 @@ void godunov::multiphase_fluxes(
     // X-direction
     amrex::ParallelFor(
         xbx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-            Real uf = umac(i, j, k);
+            Real xf = dt * umac(i, j, k);
             // Select index and sign of spatial interpolation (upwinding)
-            bool upw = uf > 0.;
+            bool upw = xf > 0.;
             int ii = upw ? i - 1 : i;
             Real sdir = upw ? 1. : -1.;
             // Interpolate other MAC velocities to face
-            Real vf = 0.5 * (vmac(ii, j, k) + vmac(ii, j + 1, k));
-            Real wf = 0.5 * (wmac(ii, j, k) + wmac(ii, j, k + 1));
+            Real yf = dt * 0.5 * (vmac(ii, j, k) + vmac(ii, j + 1, k));
+            Real zf = dt * 0.5 * (wmac(ii, j, k) + wmac(ii, j, k + 1));
+            // Map normal displacements according to phase,
+            // resort to upwinding if phase was not present before
+            Real xf_l = (vofn(ii, j, k) * dx < aa_x(i, j, k) * amrex::Math::abs(xf))
+                            ? sdir * dx
+                            : xf * aa_x(i, j, k) / (vofn(ii, j, k) + 1e-15);
+            Real xf_g = ((1.0 - vofn(ii, j, k)) * dx <
+                         (1.0 - aa_x(i, j, k)) * amrex::Math::abs(xf))
+                            ? sdir * dx
+                            : xf * (1.0 - aa_x(i, j, k)) /
+                                  (1.0 - vofn(ii, j, k) + 1e-15);
             // First gradient will be used for spatial interpolation
-            Real momfx = sptemp_interp(
-                rhoq(ii, j, k, n), dt, sdir * dx, uf, vf, wf,
-                Gmomx(ii, j, k, n), Gmomy(ii, j, k, n), Gmomz(ii, j, k, n));
-            // These density operations repeat, but it saves storage
-            Real rhofx = sptemp_interp(
-                rho_o(ii, j, k), dt, sdir * dx, uf, vf, wf, Grhox(ii, j, k),
-                Grhoy(ii, j, k), Grhoz(ii, j, k));
+            // Liquid phase, then gas phase
+            Real uf_l = sptemp_interp(
+                q(ii, j, k, n), sdir * dx, xf_l, yf, zf, Gu(ii, j, k, n),
+                Gv(ii, j, k, n), Gw(ii, j, k, n));
+            Real uf_g = sptemp_interp(
+                q(ii, j, k, n), sdir * dx, xf_g, yf, zf, Gu(ii, j, k, n),
+                Gv(ii, j, k, n), Gw(ii, j, k, n));
             // Check if flux should be saved
             if (flag(i, j, k) == 1 || flag(i - 1, j, k) == 1) {
-                fx(i, j, k, n) = umac(i, j, k) * momfx / rhofx;
+                fx(i, j, k, n) =
+                    umac(i, j, k) *
+                    (rho1 * uf_l * aa_x(i, j, k) +
+                     rho2 * uf_g * (1.0 - aa_x(i, j, k))) /
+                    (rho1 * aa_x(i, j, k) + rho2 * (1.0 - aa_x(i, j, k)));
             }
         });
     // Y-direction
     amrex::ParallelFor(
         ybx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-            Real vf = vmac(i, j, k);
+            Real yf = dt * vmac(i, j, k);
             // Select index and sign of spatial interpolation (upwinding)
-            bool upw = vf > 0.;
+            bool upw = yf > 0.;
             int jj = upw ? j - 1 : j;
             Real sdir = upw ? 1. : -1.;
             // Interpolate other MAC velocities to face
-            Real uf = 0.5 * (umac(i, jj, k) + umac(i + 1, jj, k));
-            Real wf = 0.5 * (wmac(i, jj, k) + wmac(i, jj, k + 1));
+            Real xf = dt * 0.5 * (umac(i, jj, k) + umac(i + 1, jj, k));
+            Real zf = dt * 0.5 * (wmac(i, jj, k) + wmac(i, jj, k + 1));
+            // Map normal displacements according to phase,
+            // resort to upwinding if phase was not present before
+            Real yf_l = (vofn(i, jj, k) * dy < aa_y(i, j, k) * amrex::Math::abs(yf))
+                            ? sdir * dy
+                            : yf * aa_y(i, j, k) / (vofn(i, jj, k) + 1e-15);
+            Real yf_g = ((1.0 - vofn(i, jj, k)) * dy <
+                         (1.0 - aa_y(i, j, k)) * amrex::Math::abs(yf))
+                            ? sdir * dy
+                            : yf * (1.0 - aa_y(i, j, k)) /
+                                  (1.0 - vofn(i, jj, k) + 1e-15);
             // First gradient will be used for spatial interpolation
-            Real momfy = sptemp_interp(
-                rhoq(i, jj, k, n), dt, sdir * dy, vf, uf, wf,
-                Gmomy(i, jj, k, n), Gmomx(i, jj, k, n), Gmomz(i, jj, k, n));
-            // These density operations repeat, but it saves storage
-            Real rhofy = sptemp_interp(
-                rho_o(i, jj, k), dt, sdir * dy, vf, uf, wf, Grhoy(i, jj, k),
-                Grhox(i, jj, k), Grhoz(i, jj, k));
+            Real vf_l = sptemp_interp(
+                q(i, jj, k, n), sdir * dy, yf_l, xf, zf, Gv(i, jj, k, n),
+                Gu(i, jj, k, n), Gw(i, jj, k, n));
+            Real vf_g = sptemp_interp(
+                q(i, jj, k, n), sdir * dy, yf_g, xf, zf, Gv(i, jj, k, n),
+                Gu(i, jj, k, n), Gw(i, jj, k, n));
             // Check if flux should be saved
             if (flag(i, j, k) == 1 || flag(i, j - 1, k) == 1) {
-                fy(i, j, k, n) = vmac(i, j, k) * momfy / rhofy;
+                fy(i, j, k, n) =
+                    vmac(i, j, k) *
+                    (rho1 * vf_l * aa_y(i, j, k) +
+                     rho2 * vf_g * (1.0 - aa_y(i, j, k))) /
+                    (rho1 * aa_y(i, j, k) + rho2 * (1.0 - aa_y(i, j, k)));
             }
         });
     // Z-direction
     amrex::ParallelFor(
         zbx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-            Real wf = wmac(i, j, k);
+            Real zf = dt * wmac(i, j, k);
             // Select index and sign of spatial interpolation (upwinding)
-            bool upw = wf > 0.;
+            bool upw = zf > 0.;
             int kk = upw ? k - 1 : k;
             Real sdir = upw ? 1. : -1.;
             // Interpolate other MAC velocities to face
-            Real uf = 0.5 * (umac(i, j, kk) + umac(i + 1, j, kk));
-            Real vf = 0.5 * (vmac(i, j, kk) + vmac(i, j + 1, kk));
+            Real xf = dt * 0.5 * (umac(i, j, kk) + umac(i + 1, j, kk));
+            Real yf = dt * 0.5 * (vmac(i, j, kk) + vmac(i, j + 1, kk));
+            // Map normal displacements according to phase,
+            // resort to upwinding if phase was not present before
+            Real zf_l = (vofn(i, j, kk) * dz < aa_z(i, j, k) * amrex::Math::abs(zf))
+                            ? sdir * dz
+                            : zf * aa_z(i, j, k) / (vofn(i, j, kk) + 1e-15);
+            Real zf_g = ((1.0 - vofn(i, j, kk)) * dz <
+                         (1.0 - aa_z(i, j, k)) * amrex::Math::abs(zf))
+                            ? sdir * dz
+                            : zf * (1.0 - aa_z(i, j, k)) /
+                                  ((1.0 - vofn(i, j, kk)) + 1e-15);
             // First gradient will be used for spatial interpolation
-            Real momfz = sptemp_interp(
-                rhoq(i, j, kk, n), dt, sdir * dz, wf, uf, vf,
-                Gmomz(i, j, kk, n), Gmomx(i, j, kk, n), Gmomy(i, j, kk, n));
-            // These density operations repeat, but it saves storage
-            Real rhofz = sptemp_interp(
-                rho_o(i, j, kk), dt, sdir * dz, wf, uf, vf, Grhoz(i, j, kk),
-                Grhox(i, j, kk), Grhoy(i, j, kk));
+            Real wf_l = sptemp_interp(
+                q(i, j, kk, n), sdir * dz, zf_l, xf, yf, Gw(i, j, kk, n),
+                Gu(i, j, kk, n), Gv(i, j, kk, n));
+            Real wf_g = sptemp_interp(
+                q(i, j, kk, n), sdir * dz, zf_g, xf, yf, Gw(i, j, kk, n),
+                Gu(i, j, kk, n), Gv(i, j, kk, n));
             // Check if flux should be saved
             if (flag(i, j, k) == 1 || flag(i, j, k - 1) == 1) {
-                fz(i, j, k, n) = wmac(i, j, k) * momfz / rhofz;
+                fz(i, j, k, n) =
+                    wmac(i, j, k) *
+                    (rho1 * wf_l * aa_z(i, j, k) +
+                     rho2 * wf_g * (1.0 - aa_z(i, j, k))) /
+                    (rho1 * aa_z(i, j, k) + rho2 * (1.0 - aa_z(i, j, k)));
             }
         });
 }
