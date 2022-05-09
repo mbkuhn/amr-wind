@@ -20,6 +20,9 @@ void godunov::compute_fluxes(
     Array4<Real const> const& vmac,
     Array4<Real const> const& wmac,
     Array4<Real const> const& fq,
+    Array4<Real const> const& ph_umac,
+    Array4<Real const> const& ph,
+    Array4<Real const> const& wmac,
     BCRec const* pbc,
     int const* iconserv,
     Real* p,
@@ -793,14 +796,42 @@ void godunov::multiphase_fluxes(
                             ? sdir * dx
                             : xf * (1.0 - aa_x(i, j, k)) /
                                   (1.0 - vofn(ii, j, k) + 1e-15);
+            Real uf_l = 0.0;
+            Real uf_g = 0.0;
+            {
+                amrex::Real sm2 = q(ii - 2, j, k, n);
+                amrex::Real sm1 = q(ii - 1, j, k, n);
+                amrex::Real s0 = q(ii, j, k, n);
+                amrex::Real sp1 = q(ii + 1, j, k, n);
+                amrex::Real sp2 = q(ii + 2, j, k, n);
+
+                amrex::Real sedge1 =
+                    weno5(sp2, sp1, s0, sm1, sm2, false); // right of i-1/2
+                amrex::Real sedge2 =
+                    weno5(sm2, sm1, s0, sp1, sp2, false); // left of i+1/2
+
+                amrex::Real sm = sedge1;
+                amrex::Real sp = sedge2;
+
+                amrex::Real s6 = 6.0 * s0 - 3.0 * (sm + sp);
+
+                // upwind
+                uf_l =
+                    sp - (0.5 * xf_l / dx) *
+                             ((sp - sm) - (1.0 - 2.0 / 3.0 * xf_l / dx) * s6);
+                uf_g =
+                    sp - (0.5 * xf_g / dx) *
+                             ((sp - sm) - (1.0 - 2.0 / 3.0 * xf_g / dx) * s6);
+            }
             // First gradient will be used for spatial interpolation
             // Liquid phase, then gas phase
+            /*
             Real uf_l = sptemp_interp(
                 q(ii, j, k, n), sdir * dx, xf_l, yf, zf, Gu(ii, j, k, n),
                 Gv(ii, j, k, n), Gw(ii, j, k, n));
             Real uf_g = sptemp_interp(
                 q(ii, j, k, n), sdir * dx, xf_g, yf, zf, Gu(ii, j, k, n),
-                Gv(ii, j, k, n), Gw(ii, j, k, n));
+                Gv(ii, j, k, n), Gw(ii, j, k, n));*/
             // Check if flux should be saved
             if (flag(i, j, k) == 1 || flag(i - 1, j, k) == 1) {
                 fx(i, j, k, n) =
