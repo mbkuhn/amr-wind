@@ -2,8 +2,8 @@
 #define WAVE_MODEL_H
 
 #include "amr-wind/core/Factory.H"
-#include "amr-wind/ocean_waves/OceanWaveTypes.H"
-#include "amr-wind/ocean_waves/OceanWaveOps.H"
+#include "amr-wind/ocean_waves/OceanWavesTypes.H"
+#include "amr-wind/ocean_waves/OceanWavesOps.H"
 #include "amr-wind/core/MultiParser.H"
 
 namespace amr_wind {
@@ -18,13 +18,13 @@ namespace ocean_waves {
  *
  * This class is intended to represent a single wave model
  */
-class OceanWaveModel
-    : public Factory<OceanWaveModel, CFDSim&, const std::string&, const int>
+class OceanWavesModel
+    : public Factory<OceanWavesModel, CFDSim&, const std::string&, const int>
 {
 public:
-    static std::string base_identifier() { return "WaveModel"; }
+    static std::string base_identifier() { return "OceanWaveModel"; }
 
-    ~OceanWaveModel() override = default;
+    ~OceanWavesModel() override = default;
 
     virtual const std::string& label() const = 0;
 
@@ -32,9 +32,9 @@ public:
 
     virtual void read_inputs(const ::amr_wind::utils::MultiParser&) = 0;
 
-    virtual void init_wave() = 0;
+    virtual void init_waves() = 0;
 
-    virtual void update_freesurface() = 0;
+    virtual void update_free_surface() = 0;
 
     virtual void update_velocities() = 0;
 
@@ -54,7 +54,7 @@ public:
  *
  */
 template <typename WaveTheoryTrait>
-class WaveModel : public OceanWaveModel::Register<WaveModel<WaveTheoryTrait>>
+class OWModel : public OceanWavesModel::Register<OWModel<WaveTheoryTrait>>
 {
 private:
     //! Instance that holds all data related to a particular immersed boundary
@@ -72,7 +72,7 @@ public:
      *  \param label Unique string identifier for this instance
      *  \param id Unique integer tag for this instance
      */
-    WaveModel(CFDSim& sim, const std::string& label, const int id)
+    OWModel(CFDSim& sim, const std::string& label, const int id)
         : m_data(sim, label, id), m_out_op(m_data)
     {}
 
@@ -88,7 +88,7 @@ public:
         m_out_op.read_io_options(pp);
     }
 
-    void update_freesurface() override
+    void update_free_surface() override
     {
         ops::UpdateFSOp<WaveTheoryTrait>()(m_data);
     }
@@ -105,13 +105,10 @@ public:
 
     void write_outputs() override { m_out_op.write_outputs(); }
 
-    void init_wave_model() override
-    {
-        ops::InitDataOp<WaveTheoryTrait>()(m_data);
-    }
+    void init_waves() override { ops::InitDataOp<WaveTheoryTrait>()(m_data); }
 };
 
 } // namespace ocean_waves
 } // namespace amr_wind
 
-#endif /* IBMODEL_H */
+#endif /* OWMODEL_H */

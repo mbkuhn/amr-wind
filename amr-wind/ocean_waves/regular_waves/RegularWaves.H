@@ -1,7 +1,7 @@
-#ifndef REGULAR_WAVES_H
-#define REGULAR_WAVES_H
+#ifndef REGULAR_WAVE_H
+#define REGULAR_WAVE_H
 
-#include "amr-wind/ocean_waves/OceanWaveTypes.H"
+#include "amr-wind/ocean_waves/OceanWavesTypes.H"
 #include "amr-wind/core/vs/vector_space.H"
 
 #include <string>
@@ -13,13 +13,16 @@ namespace ocean_waves {
  *
  *  \ingroup ocean_waves
  */
-struct RegularWaveBaseData
+struct RegularWavesBaseData
 {
-    amrex::Real m_wave_length{1.0};
-    amrex::Real m_water_depth{1.0};
+    amrex::Real wave_height{1.0};
+
+    amrex::Real wave_length{1.0};
+
+    amrex::Real water_depth{1.0};
 };
 
-struct RegularWaveType : public OceanWaveType
+struct RegularWavesType : public OceanWavesType
 {};
 
 } // namespace ocean_waves

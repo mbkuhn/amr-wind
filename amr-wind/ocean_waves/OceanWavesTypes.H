@@ -18,7 +18,7 @@ namespace ocean_waves {
  *
  *  \ingroup immersed boundary
  */
-struct OceanWaveType
+struct OceanWavesType
 {};
 
 using RealList = amrex::Vector<amrex::Real>;
@@ -31,7 +31,7 @@ using DeviceTensorList = amrex::Gpu::DeviceVector<amr_wind::vs::Tensor>;
  *
  *  \ingroup ocean waves
  */
-struct OceanWaveInfo
+struct OceanWavesInfo
 {
     //! Unique string identifier for the ocean waves body (wing, turbine)
     std::string label;
@@ -44,7 +44,7 @@ struct OceanWaveInfo
     //! Unique integer identifier for the ocean waves
     int id{-1};
 
-    OceanWaveInfo(std::string label_in, const int id_in)
+    OceanWavesInfo(std::string label_in, const int id_in)
         : label(std::move(label_in)), id(id_in)
     {}
 };
@@ -54,8 +54,8 @@ struct OceanWaveInfo
  *  \ingroup ocean waves
  *
  */
-template <typename OceanWaveTrait>
-class OceanWaveDataHolder
+template <typename OceanWavesTrait>
+class OceanWavesDataHolder
 {
 private:
     //! Instance of the CFD simulation environment
@@ -63,10 +63,10 @@ private:
 
     //! Basic information about this ocean waves component in relation to
     //! the simulation (usually IBInfo)
-    typename OceanWaveTrait::InfoType m_info;
+    typename OceanWavesTrait::InfoType m_info;
 
     //! Additional data necessary for a given wavem type
-    typename OceanWaveTrait::MetaType m_meta;
+    typename OceanWavesTrait::MetaType m_meta;
 
 public:
     /** Initialize the data structures
@@ -76,18 +76,18 @@ public:
      * component \param id Unique global integer identifier for this immersed
      * boundary component
      */
-    OceanWaveDataHolder(CFDSim& sim, const std::string& label, const int id)
+    OceanWavesDataHolder(CFDSim& sim, const std::string& label, const int id)
         : m_sim(sim), m_info(label, id), m_meta()
     {}
 
     CFDSim& sim() { return m_sim; }
     const CFDSim& sim() const { return m_sim; }
 
-    typename OceanWaveTrait::InfoType& info() { return m_info; }
-    const typename OceanWaveTrait::InfoType& info() const { return m_info; }
+    typename OceanWavesTrait::InfoType& info() { return m_info; }
+    const typename OceanWavesTrait::InfoType& info() const { return m_info; }
 
-    typename OceanWaveTrait::MetaType& meta() { return m_meta; }
-    const typename OceanWaveTrait::MetaType& meta() const { return m_meta; }
+    typename OceanWavesTrait::MetaType& meta() { return m_meta; }
+    const typename OceanWavesTrait::MetaType& meta() const { return m_meta; }
 };
 
 } // namespace ocean_waves

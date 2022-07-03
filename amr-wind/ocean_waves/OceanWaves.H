@@ -15,7 +15,7 @@ class Field;
 
 namespace ocean_waves {
 
-class OceanWaveModel;
+class OceanWavesModel;
 
 /** ocean waves modeling
  *
@@ -40,24 +40,30 @@ public:
 
     void pre_init_actions() override;
 
-    void post_init_actions() override {}
+    void post_init_actions() override;
 
-    void post_regrid_actions() override {}
+    void post_regrid_actions() override;
 
     void pre_advance_work() override;
 
     void post_advance_work() override;
 
+protected:
+    virtual void prepare_outputs();
+
 private:
-    void relaxation_zones();
+    void update_relaxation_zones();
 
     CFDSim& m_sim;
 
-    //! Unique pointer to the ocean waves class
-    std::unique_ptr<OceanWaveModel> m_wave_model;
+    //! Unique pointer to the ocean waves model
+    std::unique_ptr<OceanWavesModel> m_owm;
 
     //! Ocean waves target surface levelset
     Field& m_levelset;
+
+    //! Ocean waves target surface levelset
+    Field& m_vof;
 };
 
 } // namespace ocean_waves
