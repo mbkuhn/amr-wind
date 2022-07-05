@@ -23,7 +23,7 @@ void read_inputs(
 {
     // Free surface zero level
     pp.query("zero_sea_level", wdata.zsl);
-    pp.query("water_depth", wdata.waterdepth);
+    pp.query("water_depth", wdata.water_depth);
 
     // Wave generation/absorption parameters
     pp.query("relax_zone_gen_length", wdata.gen_length);

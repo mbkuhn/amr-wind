@@ -17,7 +17,7 @@ struct RegularWavesBaseData
 {
     amrex::Real zsl{0.0};
 
-    amrex::Real waterdepth{1.0};
+    amrex::Real water_depth{0.5};
 
     // Wave generation/absorption parameters
     amrex::Real gen_length{4.0};

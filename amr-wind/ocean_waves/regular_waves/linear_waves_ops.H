@@ -5,6 +5,7 @@
 #include "amr-wind/ocean_waves/OceanWavesOps.H"
 #include "amr-wind/ocean_waves/OceanWaves.H"
 #include "amr-wind/ocean_waves/regular_waves/regular_waves_ops.H"
+#include "amr-wind/equation_systems/vof/volume_fractions.H"
 
 namespace amr_wind {
 namespace ocean_waves {
@@ -35,28 +36,37 @@ struct InitDataOp<LinearWaves>
 
         auto& sim = data.sim();
         // cppcheck-suppress constVariable
-        auto& levelset = sim.repo().get_field("levelset");
+        auto& m_ow_levelset = sim.repo().get_field("ow_levelset");
         auto& velocity = sim.repo().get_field("velocity");
+        auto& vof = sim.repo().get_field("vof");
         auto nlevels = sim.repo().num_active_levels();
         auto geom = sim.mesh().Geom();
         for (int lev = 0; lev < nlevels; ++lev) {
             const auto& problo = geom[lev].ProbLoArray();
             const auto& dx = geom[lev].CellSizeArray();
-            for (amrex::MFIter mfi(levelset(lev)); mfi.isValid(); ++mfi) {
-                auto phi = levelset(lev).array(mfi);
+            for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid(); ++mfi) {
+                auto phi = m_ow_levelset(lev).array(mfi);
                 auto vel = velocity(lev).array(mfi);
-                const amrex::Real depth = wdata.waterdepth;
-                const auto& bx = mfi.growntilebox();
+                auto volfrac = vof(lev).array(mfi);
+                const amrex::Real zsl = wdata.zsl;
+                const auto& vbx = mfi.validbox();
                 amrex::ParallelFor(
-                    bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                    vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         const amrex::Real z = problo[2] + (k + 0.5) * dx[2];
-                        phi(i, j, k) = z - depth;
+                        phi(i, j, k) = zsl - z;
                         vel(i, j, k, 0) = 0.0;
                         vel(i, j, k, 1) = 0.0;
                         vel(i, j, k, 2) = 0.0;
                     });
+                // Translate levelset to vof
+                const amrex::Real eps = 2. * std::cbrt(dx[0] * dx[1] * dx[2]);
+                amrex::ParallelFor(
+                    vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                        multiphase::levelset_to_vof(i, j, k, eps, phi, volfrac);
+                    });
             }
         }
+        vof.fillpatch(0.0);
     }
 };
 
@@ -79,6 +89,7 @@ struct UpdateRelaxZonesOp<LinearWaves>
 
         for (int lev = 0; lev < nlevels; ++lev) {
             const auto& problo = geom[lev].ProbLoArray();
+            const auto& probhi = geom[lev].ProbHiArray();
             const auto& dx = geom[lev].CellSizeArray();
 
             for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid(); ++mfi) {
@@ -87,13 +98,20 @@ struct UpdateRelaxZonesOp<LinearWaves>
 
                 const amrex::Real waveheight = wdata.wave_height;
                 const amrex::Real wavelength = wdata.wave_length;
-                const amrex::Real waterdepth = wdata.waterdepth;
+                const amrex::Real waterdepth = wdata.water_depth;
 
-                const auto& bx = mfi.growntilebox();
+                const auto& gbx = mfi.growntilebox();
                 amrex::ParallelFor(
-                    bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                        const amrex::Real x = problo[0] + (i + 0.5) * dx[0];
-                        const amrex::Real z = problo[2] + (k + 0.5) * dx[2];
+                    gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                        const amrex::Real x = amrex::min(
+                            amrex::max(
+                                problo[0] + (i + 0.5) * dx[0], problo[0]),
+                            probhi[0]);
+                        const amrex::Real z = amrex::min(
+                            amrex::max(
+                                problo[2] + (k + 0.5) * dx[2], problo[2]),
+                            probhi[2]);
+
                         const amrex::Real wavenumber = 2. * M_PI / wavelength;
                         const amrex::Real omega = std::pow(
                             wavenumber * 9.81 *
@@ -102,16 +120,20 @@ struct UpdateRelaxZonesOp<LinearWaves>
                         const amrex::Real phase = wavenumber * x - omega * time;
                         const amrex::Real eta =
                             waveheight / 2.0 * std::cos(phase);
-                        phi(i, j, k) = z - eta;
-                        vel(i, j, k, 0) = omega * waveheight / 2.0 *
-                                          std::cosh(k * (z + waterdepth)) /
-                                          std::sinh(k * waterdepth) *
-                                          std::cos(phase);
+
+                        phi(i, j, k) = eta - z;
+
+                        vel(i, j, k, 0) =
+                            omega * waveheight / 2.0 *
+                            std::cosh(wavenumber * (z + waterdepth)) /
+                            std::sinh(wavenumber * waterdepth) *
+                            std::cos(phase);
                         vel(i, j, k, 1) = 0.0;
-                        vel(i, j, k, 2) = omega * waveheight / 2.0 *
-                                          std::sinh(k * (z + waterdepth)) /
-                                          std::sinh(k * waterdepth) *
-                                          std::sin(phase);
+                        vel(i, j, k, 2) =
+                            omega * waveheight / 2.0 *
+                            std::sinh(wavenumber * (z + waterdepth)) /
+                            std::sinh(wavenumber * waterdepth) *
+                            std::sin(phase);
                     });
             }
         }
