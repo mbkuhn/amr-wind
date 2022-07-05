@@ -5,7 +5,8 @@
 #include <cmath>
 
 namespace amr_wind {
-namespace nwt {
+namespace ocean_waves {
+namespace regular_waves {
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
 free_surface_to_vof(amrex::Real eta, amrex::Real z, amrex::Real dz)
@@ -58,7 +59,8 @@ ramp(amrex::Real time, amrex::Real ramp_period)
     return f;
 }
 
-} // namespace nwt
+} // namespace regular_waves
+} // namespace ocean_waves
 } // namespace amr_wind
 
 #endif

@@ -11,15 +11,18 @@ namespace ocean_waves {
 
 OceanWaves::OceanWaves(CFDSim& sim)
     : m_sim(sim)
-    , m_levelset(sim.repo().declare_field("levelset", 1, 1, 1))
-    , m_vof(sim.repo().declare_field("vof", 1, 1, 1))
+    , m_ow_levelset(sim.repo().declare_field("ow_levelset", 1, 1, 1))
+    , m_ow_vof(sim.repo().declare_field("ow_vof", 1, 1, 1))
+    , m_ow_velocity(
+          sim.repo().declare_field("ow_velocity", AMREX_SPACEDIM, 1, 1))
 {
 
     if (!sim.physics_manager().contains("Multiphase")) {
         amrex::Abort("OceanWaves requires Multiphase physics to be active");
     }
-    m_levelset.set_default_fillpatch_bc(sim.time());
-    m_vof.set_default_fillpatch_bc(sim.time());
+    m_ow_levelset.set_default_fillpatch_bc(sim.time());
+    m_ow_vof.set_default_fillpatch_bc(sim.time());
+    m_ow_velocity.set_default_fillpatch_bc(sim.time());
 }
 
 OceanWaves::~OceanWaves() = default;
@@ -59,7 +62,7 @@ void OceanWaves::post_regrid_actions() {}
 void OceanWaves::pre_advance_work()
 {
     BL_PROFILE("amr-wind::ocean_waves::OceanWaves::pre_advance_work");
-    update_relaxation_zones();
+    relaxation_zones();
 }
 
 void OceanWaves::post_advance_work()
@@ -70,11 +73,11 @@ void OceanWaves::post_advance_work()
 /** Update ocean waves relaxation zones
  *
  */
-void OceanWaves::update_relaxation_zones()
+void OceanWaves::relaxation_zones()
 {
     BL_PROFILE("amr-wind::ocean_waves::OceanWaves::update_relaxation_zones");
-    m_owm->update_free_surface();
-    m_owm->update_velocities();
+    m_owm->update_relax_zones();
+    m_owm->apply_relax_zones();
 }
 
 void OceanWaves::prepare_outputs()

@@ -26,19 +26,17 @@ void init_data_structures(CFDSim&);
 
 /** Set the free_surface height inside the relaxation zones
  */
-void relaxation_zone_free_surface(CFDSim& /*sim*/);
-
-void relaxation_zone_velocities(CFDSim& /*sim*/);
+void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData&);
 
 void prepare_netcdf_file(
     const std::string& /*ncfile*/,
-    const RegularWaveBaseData& /*meta*/,
-    const IBInfo& /*info*/);
+    const RegularWavesBaseData& /*meta*/,
+    const OceanWavesInfo& /*info*/);
 
 void write_netcdf(
     const std::string& /*ncfile*/,
-    const RegularWaveBaseData& /*meta*/,
-    const OceanWaveInfo& /*info*/,
+    const RegularWavesBaseData& /*meta*/,
+    const OceanWavesInfo& /*info*/,
     const amrex::Real /*time*/);
 
 } // namespace regular_waves
@@ -48,27 +46,21 @@ namespace ops {
 template <typename WaveTheoryTrait>
 struct UseDefaultOp
 {
-    static constexpr bool update_free_surface = true;
-    static constexpr bool update_vel = true;
+    static constexpr bool update_relaxation_zones = true;
+    static constexpr bool apply_relaxation_zones = true;
 };
 
 template <typename WaveTheoryTrait>
-struct UpdateFSOp<
+struct UpdateRelaxZonesOp<
     WaveTheoryTrait,
     typename std::enable_if<
         std::is_base_of<RegularWavesType, WaveTheoryTrait>::value>::type>
 {
-    void operator()(typename WaveTheoryTrait::DataType& /*unused*/)
-    {
-        BL_PROFILE("amr-wind::ocean_waves::OceanWaves::update_free_surface");
-
-        auto& sim = data.sim();
-        regular_waves::relaxation_zone_free_surface(sim);
-    }
+    void operator()(typename WaveTheoryTrait::DataType& /*unused*/) {}
 };
 
 template <typename WaveTheoryTrait>
-struct UpdateVelOp<
+struct ApplyRelaxZonesOp<
     WaveTheoryTrait,
     typename std::enable_if<
         std::is_base_of<RegularWavesType, WaveTheoryTrait>::value>::type>
@@ -77,9 +69,10 @@ struct UpdateVelOp<
     {
         BL_PROFILE("amr-wind::ocean_waves::OceanWaves::update_velocities");
 
+        auto& wdata = data.meta();
         auto& sim = data.sim();
 
-        regular_waves::relaxation_zone_velocities(sim);
+        regular_waves::apply_relaxation_zones(sim, wdata);
     }
 };
 

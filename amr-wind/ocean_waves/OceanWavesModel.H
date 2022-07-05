@@ -34,9 +34,9 @@ public:
 
     virtual void init_waves() = 0;
 
-    virtual void update_free_surface() = 0;
+    virtual void update_relax_zones() = 0;
 
-    virtual void update_velocities() = 0;
+    virtual void apply_relax_zones() = 0;
 
     virtual void prepare_outputs(const std::string&) = 0;
 
@@ -88,14 +88,14 @@ public:
         m_out_op.read_io_options(pp);
     }
 
-    void update_free_surface() override
+    void update_relax_zones() override
     {
-        ops::UpdateFSOp<WaveTheoryTrait>()(m_data);
+        ops::UpdateRelaxZonesOp<WaveTheoryTrait>()(m_data);
     }
 
-    void update_velocities() override
+    void apply_relax_zones() override
     {
-        ops::UpdateVelOp<WaveTheoryTrait>()(m_data);
+        ops::ApplyRelaxZonesOp<WaveTheoryTrait>()(m_data);
     }
 
     void prepare_outputs(const std::string& out_dir) override

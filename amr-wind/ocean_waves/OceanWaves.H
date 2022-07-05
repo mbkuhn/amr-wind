@@ -52,18 +52,21 @@ protected:
     virtual void prepare_outputs();
 
 private:
-    void update_relaxation_zones();
+    void relaxation_zones();
 
     CFDSim& m_sim;
 
     //! Unique pointer to the ocean waves model
     std::unique_ptr<OceanWavesModel> m_owm;
 
-    //! Ocean waves target surface levelset
-    Field& m_levelset;
+    //! Ocean waves target free surface levelset function
+    Field& m_ow_levelset;
 
-    //! Ocean waves target surface levelset
-    Field& m_vof;
+    //! Ocean waves target volume-of-fluid
+    Field& m_ow_vof;
+
+    //! Ocean waves target velocity
+    Field& m_ow_velocity;
 };
 
 } // namespace ocean_waves

@@ -33,27 +33,11 @@ struct ReadInputsOp;
 template <typename WaveTheoryTrait, typename = void>
 struct InitDataOp;
 
-/** Update the positions of the immersed boundary nodes.
- *
- *  \ingroup ocean waves
- *
- *  After this call, the interface expects updated position vectors in the
- *  vel_pos array of the ocean waves grid instance. These positions will
- * be used the sample the velocity field during the simulation.
- */
 template <typename WaveTheoryTrait, typename = void>
-struct UpdateFSOp;
+struct UpdateRelaxZonesOp;
 
-/** Process updated velocities from CFD flow field.
- *
- *  \ingroup ocean waves
- *
- *  The immersed boundary physics interface will populate the `vel` array of the
- *  ocean waves grid instance before calling this function. The updated
- *  velocities can be further processed by specializing this function.
- */
 template <typename WaveTheoryTrait, typename = void>
-struct UpdateVelOp;
+struct ApplyRelaxZonesOp;
 
 template <typename WaveTheoryTrait, typename = void>
 struct ProcessOutputsOp;

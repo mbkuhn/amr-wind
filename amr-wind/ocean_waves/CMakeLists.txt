@@ -1,6 +1,5 @@
 target_sources(${amr_wind_lib_name}
   PRIVATE
-  NWT.cpp
   OceanWaves.cpp
   )
-
+add_subdirectory(regular_waves)

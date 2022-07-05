@@ -7,7 +7,10 @@ namespace amr_wind {
 namespace ocean_waves {
 
 struct LinearWavesData : public RegularWavesBaseData
-{};
+{
+    amrex::Real wave_height{0.1};
+    amrex::Real wave_length{1.0};
+};
 
 struct LinearWaves : public RegularWavesType
 {

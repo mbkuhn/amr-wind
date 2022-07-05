@@ -15,11 +15,20 @@ namespace ocean_waves {
  */
 struct RegularWavesBaseData
 {
-    amrex::Real wave_height{1.0};
+    amrex::Real zsl{0.0};
 
-    amrex::Real wave_length{1.0};
+    amrex::Real waterdepth{1.0};
 
-    amrex::Real water_depth{1.0};
+    // Wave generation/absorption parameters
+    amrex::Real gen_length{4.0};
+
+    amrex::Real beach_length{8.0};
+
+    amrex::Real x_start_beach{22.0};
+
+    bool has_ramp{false};
+
+    amrex::Real ramp_period{2.0};
 };
 
 struct RegularWavesType : public OceanWavesType
@@ -28,4 +37,4 @@ struct RegularWavesType : public OceanWavesType
 } // namespace ocean_waves
 } // namespace amr_wind
 
-#endif /* REGULAR_WAVES_H 
+#endif // REGULAR_WAVES_H

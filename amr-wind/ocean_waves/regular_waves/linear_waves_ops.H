@@ -20,6 +20,9 @@ struct ReadInputsOp<LinearWaves>
         auto& wdata = data.meta();
         auto& info = data.info();
         regular_waves::read_inputs(wdata, info, pp);
+
+        pp.get("wave_length", wdata.wave_length);
+        pp.get("wave_height", wdata.wave_height);
     }
 };
 
@@ -33,6 +36,7 @@ struct InitDataOp<LinearWaves>
         auto& sim = data.sim();
         // cppcheck-suppress constVariable
         auto& levelset = sim.repo().get_field("levelset");
+        auto& velocity = sim.repo().get_field("velocity");
         auto nlevels = sim.repo().num_active_levels();
         auto geom = sim.mesh().Geom();
         for (int lev = 0; lev < nlevels; ++lev) {
@@ -40,12 +44,16 @@ struct InitDataOp<LinearWaves>
             const auto& dx = geom[lev].CellSizeArray();
             for (amrex::MFIter mfi(levelset(lev)); mfi.isValid(); ++mfi) {
                 auto phi = levelset(lev).array(mfi);
-                const amrex::Real depth = wdata.water_depth;
+                auto vel = velocity(lev).array(mfi);
+                const amrex::Real depth = wdata.waterdepth;
                 const auto& bx = mfi.growntilebox();
                 amrex::ParallelFor(
                     bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         const amrex::Real z = problo[2] + (k + 0.5) * dx[2];
                         phi(i, j, k) = z - depth;
+                        vel(i, j, k, 0) = 0.0;
+                        vel(i, j, k, 1) = 0.0;
+                        vel(i, j, k, 2) = 0.0;
                     });
             }
         }
@@ -53,15 +61,18 @@ struct InitDataOp<LinearWaves>
 };
 
 template <>
-struct UpdateFSOp<LinearWaves>
+struct UpdateRelaxZonesOp<LinearWaves>
 {
     void operator()(LinearWaves::DataType& data)
     {
         const auto& wdata = data.meta();
 
         auto& sim = data.sim();
+
+        const auto& time = sim.time().current_time();
         // cppcheck-suppress constVariable
-        auto& levelset = sim.repo().get_field("levelset");
+        auto& m_ow_levelset = sim.repo().get_field("ow_levelset");
+        auto& m_ow_velocity = sim.repo().get_field("ow_velocity");
 
         auto nlevels = sim.repo().num_active_levels();
         auto geom = sim.mesh().Geom();
@@ -70,12 +81,13 @@ struct UpdateFSOp<LinearWaves>
             const auto& problo = geom[lev].ProbLoArray();
             const auto& dx = geom[lev].CellSizeArray();
 
-            for (amrex::MFIter mfi(levelset(lev)); mfi.isValid(); ++mfi) {
-                auto phi = levelset(lev).array(mfi);
+            for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid(); ++mfi) {
+                auto phi = m_ow_levelset(lev).array(mfi);
+                auto vel = m_ow_velocity(lev).array(mfi);
 
-                const amrex::Real height = wdata.wave_height;
+                const amrex::Real waveheight = wdata.wave_height;
                 const amrex::Real wavelength = wdata.wave_length;
-                const amrex::Real waterdepth = wdata.water_depth;
+                const amrex::Real waterdepth = wdata.waterdepth;
 
                 const auto& bx = mfi.growntilebox();
                 amrex::ParallelFor(
@@ -88,8 +100,18 @@ struct UpdateFSOp<LinearWaves>
                                 std::tanh(wavenumber * waterdepth),
                             0.5);
                         const amrex::Real phase = wavenumber * x - omega * time;
-                        const amrex::Real eta = height / 2.0 * std::cos(phase);
+                        const amrex::Real eta =
+                            waveheight / 2.0 * std::cos(phase);
                         phi(i, j, k) = z - eta;
+                        vel(i, j, k, 0) = omega * waveheight / 2.0 *
+                                          std::cosh(k * (z + waterdepth)) /
+                                          std::sinh(k * waterdepth) *
+                                          std::cos(phase);
+                        vel(i, j, k, 1) = 0.0;
+                        vel(i, j, k, 2) = omega * waveheight / 2.0 *
+                                          std::sinh(k * (z + waterdepth)) /
+                                          std::sinh(k * waterdepth) *
+                                          std::sin(phase);
                     });
             }
         }
