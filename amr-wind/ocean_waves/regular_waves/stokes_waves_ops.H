@@ -114,16 +114,19 @@ struct UpdateRelaxZonesOp<StokesWaves>
                             amrex::max(
                                 problo[2] + (k + 0.5) * dx[2], problo[2]),
                             probhi[2]);
+
                         amrex::Real eta{0.0}, u_w{0.0}, v_w{0.0}, w_w{0.0};
+
                         regular_waves::stokes_waves(
                             order, wavelength, waterdepth, waveheight, x, time,
                             eta, u_w, v_w, w_w);
 
                         phi(i, j, k) = eta - z;
-
-                        vel(i, j, k, 0) = u_w;
-                        vel(i, j, k, 1) = v_w;
-                        vel(i, j, k, 2) = w_w;
+                        if (phi(i, j, k) >= 0) {
+                            vel(i, j, k, 0) = u_w;
+                            vel(i, j, k, 1) = v_w;
+                            vel(i, j, k, 2) = w_w;
+                        }
                     });
             }
         }

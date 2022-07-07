@@ -123,17 +123,19 @@ struct UpdateRelaxZonesOp<LinearWaves>
 
                         phi(i, j, k) = eta - z;
 
-                        vel(i, j, k, 0) =
-                            omega * waveheight / 2.0 *
-                            std::cosh(wavenumber * (z + waterdepth)) /
-                            std::sinh(wavenumber * waterdepth) *
-                            std::cos(phase);
-                        vel(i, j, k, 1) = 0.0;
-                        vel(i, j, k, 2) =
-                            omega * waveheight / 2.0 *
-                            std::sinh(wavenumber * (z + waterdepth)) /
-                            std::sinh(wavenumber * waterdepth) *
-                            std::sin(phase);
+                        if (phi(i, j, k) >= 0) {
+                            vel(i, j, k, 0) =
+                                omega * waveheight / 2.0 *
+                                std::cosh(wavenumber * (z + waterdepth)) /
+                                std::sinh(wavenumber * waterdepth) *
+                                std::cos(phase);
+                            vel(i, j, k, 1) = 0.0;
+                            vel(i, j, k, 2) =
+                                omega * waveheight / 2.0 *
+                                std::sinh(wavenumber * (z + waterdepth)) /
+                                std::sinh(wavenumber * waterdepth) *
+                                std::sin(phase);
+                        }
                     });
             }
         }
