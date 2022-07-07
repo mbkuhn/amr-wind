@@ -5,7 +5,8 @@
 #include <cmath>
 
 namespace amr_wind {
-namespace nwt {
+namespace ocean_waves {
+namespace regular_waves {
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void stokes_coefficients(
     int StokesOrder,
@@ -300,7 +301,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void stokes_waves(
           (ss11 + ss22 + ss31 + ss33 + ss42 + ss44 + ss51 + ss53 + ss55);
 }
 
-} // namespace nwt
+} // namespace regular_waves
+} // namespace ocean_waves
 } // namespace amr_wind
-
 #endif

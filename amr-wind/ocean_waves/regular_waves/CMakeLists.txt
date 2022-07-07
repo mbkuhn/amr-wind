@@ -3,4 +3,5 @@ target_sources(${amr_wind_lib_name}
   
   regular_waves_ops.cpp
   LinearWaves.cpp
+  StokesWaves.cpp
   )
