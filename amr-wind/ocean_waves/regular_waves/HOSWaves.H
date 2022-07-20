@@ -12,6 +12,8 @@ struct HOSWavesData : public RegularWavesBaseData
     std::string HOS_prefix{"3d"};
     // Index of first timestep to be used (in filename)
     int HOS_n0{0};
+    // Current index
+    int HOS_n{0};
     // Index of first x point to be used
     int HOS_i0{0};
     // Index of first y point to be used
@@ -19,6 +21,12 @@ struct HOSWavesData : public RegularWavesBaseData
     // Total number of HOS points (read from file)
     int HOS_nx{0};
     int HOS_ny{0};
+    // Time when ow arrays were last changed (last timestep)
+    amrex::Real t_last{0.0};
+    // Time of current HOS lists
+    amrex::Real HOS_t{0.0};
+    // Timestep from HOS data
+    amrex::Real HOS_dt{0.0};
     // Current data for eta, u, v, and w
     RealList eta;
     RealList u;
