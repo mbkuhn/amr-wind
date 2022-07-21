@@ -288,8 +288,6 @@ struct UpdateRelaxZonesOp<HOSWaves>
     {
         auto& wdata = data.meta();
 
-        return;
-
         auto& sim = data.sim();
         // cppcheck-suppress constVariable
         // Get time at conclusion of current timestep
@@ -301,23 +299,29 @@ struct UpdateRelaxZonesOp<HOSWaves>
             // Increment time
             wdata.HOS_t += wdata.HOS_dt;
 
-            // Convert file string to stream
             std::stringstream fname;
-            fname << wdata.HOS_prefix << "_" << wdata.HOS_n << ".dat";
-            std::ifstream is(fname.str());
-            // Read metadata from file
+            fname << wdata.HOS_prefix << "_" << wdata.HOS_n << ".txt";
+            std::ifstream is (fname.str());
+            // Skip metadata
             std::string tmp;
-            // Skip title, variables, dimensions, line after
-            std::getline(is, tmp);
-            std::getline(is, tmp);
-            std::getline(is, tmp);
-            std::getline(is, tmp);
+            std::getline(is,tmp); // Time
+            std::getline(is,tmp); // Timestep
+            std::getline(is,tmp); // x dimensions
+            std::getline(is,tmp); // y dimensions
+            std::getline(is,tmp); // z dimensions
+
             // Read interface heights and velocities
-            amrex::Real buf; // to skip entries
-            for (int ipt = 0; ipt < wdata.HOS_nx * wdata.HOS_ny; ++ipt) {
-                // Skip x, y and save eta, u, v, w
-                is >> buf >> buf >> wdata.eta[ipt] >> wdata.u[ipt] >>
-                    wdata.v[ipt] >> wdata.w[ipt];
+            for (int ilat = 0; ilat < wdata.HOS_nx * wdata.HOS_ny; ++ilat) {
+                // Get eta for current point
+                std::getline(is, tmp, '=');
+                is >> wdata.eta[ilat];
+                // Get u, v, w for full depth of 2D point
+                for (int ivert = 0; ivert < wdata.HOS_nz; ++ivert) {
+                    std::getline(is, tmp, '=');
+                    is >> wdata.u[ilat * wdata.HOS_nz + ivert] >>
+                        wdata.v[ilat * wdata.HOS_nz + ivert] >>
+                        wdata.w[ilat * wdata.HOS_nz + ivert];
+                }
             }
         }
 
@@ -335,43 +339,151 @@ struct UpdateRelaxZonesOp<HOSWaves>
                 auto vel = m_ow_velocity(lev).array(mfi);
 
                 const amrex::Real zsl = wdata.zsl;
-                const int i0 = wdata.HOS_i0;
-                const int j0 = wdata.HOS_j0;
+                const amrex::Real zmin = wdata.HOS_zmin;
+                const amrex::Real zmax = wdata.HOS_zmax;
                 const int hos_nx = wdata.HOS_nx;
+                const int hos_ny = wdata.HOS_ny;
+                const int hos_nz = wdata.HOS_nz;
+                const amrex::Real hos_dx = wdata.HOS_Lx / hos_nx;
+                const amrex::Real hos_dy = wdata.HOS_Ly / hos_ny;
+                const amrex::Real hos_dz = (zmax-zmin) / hos_nz;
                 const auto& vbx = mfi.validbox();
                 amrex::ParallelFor(
                     vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                        // Interpolate temporally
+                        const amrex::Real x = problo[0] + (i + 0.5) * dx[0];
+                        const amrex::Real y = problo[1] + (j + 0.5) * dx[1];
                         const amrex::Real z = problo[2] + (k + 0.5) * dx[2];
-                        phi(i, j, k) +=
-                            ((wdata.eta[i + i0 + (j + j0) * hos_nx] + zsl - z) -
-                             phi(i, j, k)) /
-                            (wdata.HOS_t - wdata.t_last) * (time - wdata.t_last);
-                        amrex::Real efac = 0.0;
-                        if (phi(i, j, k) > 0.0) {
-                            efac = exp(-phi(i, j, k));
-                        } else {
-                            if (phi(i, j, k) > -0.5 * dx[2]) {
-                                efac = 0.5 *
-                                       (1.0 + exp(0.5 * dx[2] - phi(i, j, k)));
-                            }
+                        // Determine lateral indices for interpolation
+                        // It's best to have the grids line up directly
+                        int ii = 0;
+                        amrex::Real HOS_x = hos_dx * (ii + 0.5);
+                        while (HOS_x < x) {
+                            ++ii;
+                            HOS_x = hos_dx * (ii + 0.5);
                         }
-                        vel(i, j, k, 0) +=
-                            ((wdata.u[i + i0 + (j + j0) * hos_nx] * efac) -
-                             vel(i, j, k, 0)) /
-                            (wdata.HOS_t - wdata.t_last) * (time - wdata.t_last);
-                        vel(i, j, k, 1) +=
-                            ((wdata.v[i + i0 + (j + j0) * hos_nx] * efac) -
-                             vel(i, j, k, 1)) /
-                            (wdata.HOS_t - wdata.t_last) * (time - wdata.t_last);
-                        vel(i, j, k, 2) +=
-                            ((wdata.w[i + i0 + (j + j0) * hos_nx] * efac) -
-                             vel(i, j, k, 2)) /
-                            (wdata.HOS_t - wdata.t_last) * (time - wdata.t_last);
+                        int jj = 0;
+                        amrex::Real HOS_y = hos_dy * (jj + 0.5);
+                        while (HOS_y < y) {
+                            ++jj;
+                            HOS_y = hos_dy * (jj + 0.5);
+                        }
+
+                        // Values at HOS_t
+                        amrex::Real HOS_phi, HOS_u, HOS_v, HOS_w;
+
+                        if (z > zmax || z < zmin) {
+                            HOS_phi =
+                                wdata.eta[ii + jj * hos_nx] + zsl - z;
+                            // Assume velocities are zero outside range
+                            HOS_u = 0;
+                            HOS_v = 0;
+                            HOS_w = 0;
+                        } else {
+                            // Determine vertical indices
+                            int kk = 0;
+                            amrex::Real HOS_z = zmin + hos_dz * (kk + 0.5);
+                            while (HOS_z < z) {
+                                ++kk;
+                                HOS_z = zmin + hos_dz * (kk + 0.5);
+                            }
+                            // Shift indices left
+                            ii = ii - 1;
+                            jj = jj - 1;
+                            kk = kk - 1;
+                            // Modify indices to avoid going out of bounds
+                            ii = amrex::max(0, amrex::min(hos_nx - 1, ii));
+                            jj = amrex::max(0, amrex::min(hos_ny - 1, jj));
+                            kk = amrex::max(0, amrex::min(hos_nz - 1, kk));
+                            // Reset locations
+                            HOS_x = hos_dx * (ii + 0.5);
+                            HOS_y = hos_dy * (jj + 0.5);
+                            HOS_z = zmin + hos_dz * (kk + 0.5);
+                            // Interpolation factors
+                            amrex::Real wx_hi = (x - HOS_x) / hos_dx;
+                            amrex::Real wy_hi = (y - HOS_y) / hos_dy;
+                            amrex::Real wz_hi = (z - HOS_z) / hos_dz;
+                            amrex::Real wx_lo = 1.0 - wx_hi;
+                            amrex::Real wy_lo = 1.0 - wy_hi;
+                            amrex::Real wz_lo = 1.0 - wz_hi;
+
+                            // Get data
+                            const amrex::Real eta_00 =
+                                wdata.eta[ii + jj * hos_nx];
+                            const amrex::Real eta_01 =
+                                wdata.eta[ii + (jj + 1) * hos_nx];
+                            const amrex::Real eta_10 =
+                                wdata.eta[ii + 1 + jj * hos_nx];
+                            const amrex::Real eta_11 =
+                                wdata.eta[ii + 1 + (jj + 1) * hos_nx];
+                            const amrex::Real eta_ = wx_lo * wy_lo * eta_00 +
+                                                     wx_lo * wy_hi * eta_01 +
+                                                     wx_hi * wy_lo * eta_10 +
+                                                     wx_hi * wy_hi * eta_11;
+
+                            HOS_phi = eta_ + zsl - z;
+
+                            // Set up indices for clarity
+                            const int i000 = (ii + jj * hos_nx) * hos_nz + kk;
+                            const int i001 =
+                                (ii + jj * hos_nx) * hos_nz + kk + 1;
+                            const int i010 =
+                                (ii + (jj + 1) * hos_nx) * hos_nz + kk;
+                            const int i100 =
+                                (ii + 1 + jj * hos_nx) * hos_nz + kk;
+                            const int i011 =
+                                (ii + (jj + 1) * hos_nx) * hos_nz + kk + 1;
+                            const int i101 =
+                                (ii + 1 + jj * hos_nx) * hos_nz + kk + 1;
+                            const int i110 =
+                                (ii + 1 + (jj + 1) * hos_nx) * hos_nz + kk;
+                            const int i111 =
+                                (ii + 1 + (jj + 1) * hos_nx) * hos_nz + kk + 1;
+                            HOS_u =
+                                wx_lo * wy_lo * wz_lo * wdata.u[i000] +
+                                wx_lo * wy_lo * wz_hi * wdata.u[i001] +
+                                wx_lo * wy_hi * wz_lo * wdata.u[i010] +
+                                wx_lo * wy_hi * wz_hi * wdata.u[i011] +
+                                wx_hi * wy_lo * wz_lo * wdata.u[i100] +
+                                wx_hi * wy_lo * wz_hi * wdata.u[i101] +
+                                wx_hi * wy_hi * wz_lo * wdata.u[i110] +
+                                wx_hi * wy_hi * wz_hi * wdata.u[i111];
+                            HOS_v =
+                                wx_lo * wy_lo * wz_lo * wdata.v[i000] +
+                                wx_lo * wy_lo * wz_hi * wdata.v[i001] +
+                                wx_lo * wy_hi * wz_lo * wdata.v[i010] +
+                                wx_lo * wy_hi * wz_hi * wdata.v[i011] +
+                                wx_hi * wy_lo * wz_lo * wdata.v[i100] +
+                                wx_hi * wy_lo * wz_hi * wdata.v[i101] +
+                                wx_hi * wy_hi * wz_lo * wdata.v[i110] +
+                                wx_hi * wy_hi * wz_hi * wdata.v[i111];
+                            HOS_w =
+                                wx_lo * wy_lo * wz_lo * wdata.w[i000] +
+                                wx_lo * wy_lo * wz_hi * wdata.w[i001] +
+                                wx_lo * wy_hi * wz_lo * wdata.w[i010] +
+                                wx_lo * wy_hi * wz_hi * wdata.w[i011] +
+                                wx_hi * wy_lo * wz_lo * wdata.w[i100] +
+                                wx_hi * wy_lo * wz_hi * wdata.w[i101] +
+                                wx_hi * wy_hi * wz_lo * wdata.w[i110] +
+                                wx_hi * wy_hi * wz_hi * wdata.w[i111];
+                        }
+                        // Interpolate temporally
+                        phi(i, j, k) += (HOS_phi - phi(i, j, k)) /
+                                        (wdata.HOS_t - wdata.t_last) *
+                                        (time - wdata.t_last);
+                        vel(i, j, k, 0) += (HOS_u - vel(i, j, k, 0)) /
+                                           (wdata.HOS_t - wdata.t_last) *
+                                           (time - wdata.t_last);
+                        vel(i, j, k, 1) += (HOS_v - vel(i, j, k, 1)) /
+                                           (wdata.HOS_t - wdata.t_last) *
+                                           (time - wdata.t_last);
+                        vel(i, j, k, 2) += (HOS_w - vel(i, j, k, 2)) /
+                                           (wdata.HOS_t - wdata.t_last) *
+                                           (time - wdata.t_last);
                     });
             }
         }
         m_ow_levelset.fillpatch(0.0);
+        m_ow_velocity.fillpatch(0.0);
         // Record current time as 'last' for next timestep
         wdata.t_last = time;
     }
