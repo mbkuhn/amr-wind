@@ -318,21 +318,29 @@ struct AdvectionOp<ICNS, fvm::Godunov>
 
             // form momentum multifab
             amrex::MultiFab momentum(
-                dof_field(lev).boxArray(), dof_field(lev).DistributionMap(), 3,
-                3);
-            amrex::MultiFab::Copy(momentum, dof_field(lev), 0, 0, 3, 3);
-            amrex::MultiFab::Multiply(momentum, rho_o(lev), 0, 0, 1, 3);
-            amrex::MultiFab::Multiply(momentum, rho_o(lev), 0, 1, 1, 3);
-            amrex::MultiFab::Multiply(momentum, rho_o(lev), 0, 2, 1, 3);
+                dof_field(lev).boxArray(), dof_field(lev).DistributionMap(),
+                ICNS::ndim, fvm::Godunov::nghost_state);
+            amrex::MultiFab::Copy(
+                momentum, dof_field(lev), 0, 0, 3, fvm::Godunov::nghost_state);
+            amrex::MultiFab::Multiply(
+                momentum, rho_o(lev), 0, 0, 1, fvm::Godunov::nghost_state);
+            amrex::MultiFab::Multiply(
+                momentum, rho_o(lev), 0, 1, 1, fvm::Godunov::nghost_state);
+            amrex::MultiFab::Multiply(
+                momentum, rho_o(lev), 0, 2, 1, fvm::Godunov::nghost_state);
 
             // form source terms for momentum, density
             amrex::MultiFab frhoq(
-                src_term(lev).boxArray(), src_term(lev).DistributionMap(), 3,
-                3);
-            amrex::MultiFab::Copy(frhoq, src_term(lev), 0, 0, 3, 3);
-            amrex::MultiFab::Multiply(frhoq, rho_nph(lev), 0, 0, 1, 3);
-            amrex::MultiFab::Multiply(frhoq, rho_nph(lev), 0, 1, 1, 3);
-            amrex::MultiFab::Multiply(frhoq, rho_nph(lev), 0, 2, 1, 3);
+                src_term(lev).boxArray(), src_term(lev).DistributionMap(),
+                ICNS::ndim, fvm::Godunov::nghost_src);
+            amrex::MultiFab::Copy(
+                frhoq, src_term(lev), 0, 0, 3, fvm::Godunov::nghost_src);
+            amrex::MultiFab::Multiply(
+                frhoq, rho_nph(lev), 0, 0, 1, fvm::Godunov::nghost_src);
+            amrex::MultiFab::Multiply(
+                frhoq, rho_nph(lev), 0, 1, 1, fvm::Godunov::nghost_src);
+            amrex::MultiFab::Multiply(
+                frhoq, rho_nph(lev), 0, 2, 1, fvm::Godunov::nghost_src);
             amrex::MultiFab frho(
                 src_term(lev).boxArray(), src_term(lev).DistributionMap(), 1,
                 3);
@@ -534,8 +542,8 @@ struct AdvectionOp<ICNS, fvm::MOL>
     void preadvect(const FieldState fstate, const amrex::Real dt)
     {
 
+        // cppcheck-suppress constVariable
         auto& repo = fields.repo;
-        const auto& geom = repo.mesh().Geom();
         auto& dof_field = fields.field.state(fstate);
 
         // computation of velocity on faces requires
@@ -549,7 +557,7 @@ struct AdvectionOp<ICNS, fvm::MOL>
         //
 
         for (int lev = 0; lev < repo.num_active_levels(); ++lev) {
-#ifdef _OPENMP
+#ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
             {
@@ -566,7 +574,7 @@ struct AdvectionOp<ICNS, fvm::MOL>
     void operator()(const FieldState fstate, const amrex::Real /*unused*/)
     {
 
-        auto& repo = fields.repo;
+        const auto& repo = fields.repo;
         const auto& geom = repo.mesh().Geom();
         // cppcheck-suppress constVariable
         auto& conv_term = fields.conv_term.state(fstate);
@@ -585,7 +593,7 @@ struct AdvectionOp<ICNS, fvm::MOL>
                 mfi_info.EnableTiling(amrex::IntVect(1024, 1024, 1024))
                     .SetDynamic(true);
             }
-#ifdef _OPENMP
+#ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
             for (amrex::MFIter mfi(dof_field(lev), mfi_info); mfi.isValid();

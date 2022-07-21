@@ -63,7 +63,7 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
     }
 
     // Get time
-    const auto& time = sim.time().current_time();
+    const auto& time = sim.time().new_time();
     amrex::Real ramp =
         (wdata.has_ramp) ? regular_waves::ramp(time, wdata.ramp_period) : 1.0;
     // Fill ghost and boundary cells before simulation begins
@@ -75,7 +75,7 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
 
     for (int lev = 0; lev < nlevels; ++lev) {
         for (amrex::MFIter mfi(vof(lev)); mfi.isValid(); ++mfi) {
-            const auto& gbx = mfi.growntilebox();
+            const auto& gbx = mfi.growntilebox(1);
             const auto& dx = geom[lev].CellSizeArray();
             const auto& problo = geom[lev].ProbLoArray();
             const auto& probhi = geom[lev].ProbHiArray();

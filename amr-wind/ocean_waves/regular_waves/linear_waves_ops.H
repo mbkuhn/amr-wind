@@ -1,6 +1,7 @@
 #ifndef LINEAR_WAVES_OPS_H
 #define LINEAR_WAVES_OPS_H
 
+#include "amr-wind/physics/multiphase/MultiPhase.H"
 #include "amr-wind/ocean_waves/regular_waves/LinearWaves.H"
 #include "amr-wind/ocean_waves/OceanWavesOps.H"
 #include "amr-wind/ocean_waves/OceanWaves.H"
@@ -39,30 +40,47 @@ struct InitDataOp<LinearWaves>
         auto& m_ow_levelset = sim.repo().get_field("ow_levelset");
         auto& velocity = sim.repo().get_field("velocity");
         auto& vof = sim.repo().get_field("vof");
+        auto& density = sim.repo().get_field("density");
+
+        // use MultiPhase information
+        const auto& mphase = sim.physics_manager().get<MultiPhase>();
+        const amrex::Real rho1 = mphase.rho1();
+        const amrex::Real rho2 = mphase.rho2();
+
         auto nlevels = sim.repo().num_active_levels();
         auto geom = sim.mesh().Geom();
         for (int lev = 0; lev < nlevels; ++lev) {
             const auto& problo = geom[lev].ProbLoArray();
             const auto& dx = geom[lev].CellSizeArray();
             for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid(); ++mfi) {
+
                 auto phi = m_ow_levelset(lev).array(mfi);
                 auto vel = velocity(lev).array(mfi);
                 auto volfrac = vof(lev).array(mfi);
+                auto rho = density(lev).array(mfi);
+
                 const amrex::Real zsl = wdata.zsl;
-                const auto& vbx = mfi.validbox();
+                const auto& gbx = mfi.growntilebox(1);
+
                 amrex::ParallelFor(
-                    vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                    gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         const amrex::Real z = problo[2] + (k + 0.5) * dx[2];
                         phi(i, j, k) = zsl - z;
                         vel(i, j, k, 0) = 0.0;
                         vel(i, j, k, 1) = 0.0;
                         vel(i, j, k, 2) = 0.0;
                     });
+
                 // Translate levelset to vof
                 const amrex::Real eps = 2. * std::cbrt(dx[0] * dx[1] * dx[2]);
+                const auto& vbx = mfi.validbox();
                 amrex::ParallelFor(
                     vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         multiphase::levelset_to_vof(i, j, k, eps, phi, volfrac);
+                        // Make sure that density is updated before entering the
+                        // solution
+                        rho(i, j, k) = rho1 * volfrac(i, j, k) +
+                                       rho2 * (1. - volfrac(i, j, k));
                     });
             }
         }
@@ -79,7 +97,7 @@ struct UpdateRelaxZonesOp<LinearWaves>
 
         auto& sim = data.sim();
 
-        const auto& time = sim.time().current_time();
+        const auto& time = sim.time().new_time();
         // cppcheck-suppress constVariable
         auto& m_ow_levelset = sim.repo().get_field("ow_levelset");
         auto& m_ow_velocity = sim.repo().get_field("ow_velocity");
@@ -100,7 +118,7 @@ struct UpdateRelaxZonesOp<LinearWaves>
                 const amrex::Real wavelength = wdata.wave_length;
                 const amrex::Real waterdepth = wdata.water_depth;
 
-                const auto& gbx = mfi.growntilebox();
+                const auto& gbx = mfi.growntilebox(1);
                 amrex::ParallelFor(
                     gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         const amrex::Real x = amrex::min(

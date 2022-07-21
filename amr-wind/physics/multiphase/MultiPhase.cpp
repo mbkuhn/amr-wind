@@ -289,7 +289,6 @@ void MultiPhase::set_density_via_vof()
 
 void MultiPhase::set_nph_density()
 {
-
     amr_wind::field_ops::lincomb(
         m_density.state(amr_wind::FieldState::NPH), 0.5,
         m_density.state(amr_wind::FieldState::Old), 0, 0.5, m_density, 0, 0,
