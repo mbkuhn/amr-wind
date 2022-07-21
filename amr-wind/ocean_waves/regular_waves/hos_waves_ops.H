@@ -26,14 +26,7 @@ struct ReadInputsOp<HOSWaves>
         pp.get("HOS_files_prefix", wdata.HOS_prefix);
         pp.query("HOS_init_timestep", wdata.HOS_n0);
         wdata.HOS_n = wdata.HOS_n0;
-        pp.query("HOS_init_time",wdata.HOS_t);
-        pp.get("HOS_dt",wdata.HOS_dt);
-        // Routine assumes nodes of HOS are cells of amr-wind, requiring
-        // - same resolution between HOS and amr-wind
-        // - number of HOS nodes >= nx*ny of amr-wind
-        // For when amr-wind sim is inset of HOS domain, offsets can be used
-        pp.query("HOS_xind_offset", wdata.HOS_i0);
-        pp.query("HOS_yind_offset", wdata.HOS_j0);
+
     }
 };
 
@@ -46,42 +39,80 @@ struct InitDataOp<HOSWaves>
 
         // Convert file string to stream
         std::stringstream fname;
-        fname << wdata.HOS_prefix << "_" << wdata.HOS_n0 << ".dat";
+        fname << wdata.HOS_prefix << "_" << wdata.HOS_n0 << ".txt";
         std::ifstream is (fname.str());
         // Read metadata from file
         std::string tmp;
-        // Skip first two lines (TITLE and VARIABLES)
-        std::getline(is, tmp);
-        std::getline(is, tmp);
-        // Skip "ZONE I="
+        // Get initial time
+        std::getline(is,tmp,'=');
+        std::getline(is,tmp);
+        wdata.HOS_t = std::stof(tmp);
+        // Get dt
+        std::getline(is,tmp,'=');
+        std::getline(is,tmp);
+        wdata.HOS_dt = std::stof(tmp);
+        // Get nx, Lx
         std::getline(is, tmp,'=');
-        // Get dimension i
         std::getline(is, tmp,',');
         wdata.HOS_nx = std::stoi(tmp);
-        // Skip "J ="
         std::getline(is, tmp,'=');
-        // Get dimension j
         std::getline(is, tmp);
+        wdata.HOS_Lx = std::stof(tmp);
+        // Get ny, Ly
+        std::getline(is, tmp,'=');
+        std::getline(is, tmp,',');
         wdata.HOS_ny = std::stoi(tmp);
-        // Check if current dimensions are compatible
+        std::getline(is, tmp,'=');
+        std::getline(is, tmp);
+        wdata.HOS_Ly = std::stof(tmp);
+        // Get nz, zmin, zmax
+        std::getline(is, tmp,'=');
+        std::getline(is, tmp,',');
+        wdata.HOS_nz = std::stoi(tmp);
+        std::getline(is, tmp,'=');
+        std::getline(is, tmp,',');
+        wdata.HOS_zmin = std::stof(tmp);
+        std::getline(is, tmp,'=');
+        std::getline(is, tmp);
+        wdata.HOS_zmax = std::stof(tmp);
+
+        // Modify Lx, Ly to account for node - cell difference
+        wdata.HOS_Lx *=
+            (((amrex::Real)wdata.HOS_nx) / ((amrex::Real)wdata.HOS_nx - 1));
+        wdata.HOS_Ly *=
+            (((amrex::Real)wdata.HOS_ny) / ((amrex::Real)wdata.HOS_ny - 1));
 
         // Allocate arrays for storage
         wdata.eta.resize(wdata.HOS_nx * wdata.HOS_ny);
-        wdata.u.resize(wdata.HOS_nx * wdata.HOS_ny);
-        wdata.v.resize(wdata.HOS_nx * wdata.HOS_ny);
-        wdata.w.resize(wdata.HOS_nx * wdata.HOS_ny);
-        // Skip next line to get to data
-        std::getline(is, tmp);
+        wdata.u.resize(wdata.HOS_nx * wdata.HOS_ny * wdata.HOS_nz);
+        wdata.v.resize(wdata.HOS_nx * wdata.HOS_ny * wdata.HOS_nz);
+        wdata.w.resize(wdata.HOS_nx * wdata.HOS_ny * wdata.HOS_nz);
         // Read interface heights and velocities
-        amrex::Real buf; // to skip entries
-        for (int ipt = 0; ipt < wdata.HOS_nx * wdata.HOS_ny; ++ ipt) {
-            // Skip x, y and save eta, u, v, w
-            is >> buf >> buf >> wdata.eta[ipt] >> wdata.u[ipt] >>
-                wdata.v[ipt] >> wdata.w[ipt];
+        for (int ilat = 0; ilat < wdata.HOS_nx * wdata.HOS_ny; ++ilat) {
+            // Get eta for current point
+            std::getline(is, tmp, '=');
+            is >> wdata.eta[ilat];
+            // Get u, v, w for full depth of 2D point
+            for (int ivert = 0; ivert < wdata.HOS_nz; ++ivert) {
+                std::getline(is, tmp, '=');
+                is >> wdata.u[ilat * wdata.HOS_nz + ivert] >>
+                    wdata.v[ilat * wdata.HOS_nz + ivert] >>
+                    wdata.w[ilat * wdata.HOS_nz + ivert];
+            }
         }
 
         auto& sim = data.sim();
         // cppcheck-suppress constVariable
+        // Check if current dimensions are compatible
+        if ((sim.mesh().Geom()[0]).ProbLoArray()[0] < -1e-6 ||
+            (sim.mesh().Geom()[0]).ProbHiArray()[0] >
+                wdata.HOS_Lx * (1.0 + 1e-6) ||
+            (sim.mesh().Geom()[0]).ProbLoArray()[1] < -1e-6 ||
+            (sim.mesh().Geom()[0]).ProbHiArray()[1] >
+                wdata.HOS_Ly * (1.0 + 1e-6)) {
+            amrex::Abort("HOS OceanWaves: Lateral dimensions incompatible.");
+        }
+
         // Record phase densities
         const auto& mphase = sim.physics_manager().get<MultiPhase>();
         const amrex::Real rho1 = mphase.rho1();
@@ -105,30 +136,187 @@ struct InitDataOp<HOSWaves>
                 auto volfrac = vof(lev).array(mfi);
                 auto rho = density(lev).array(mfi);
                 const amrex::Real zsl = wdata.zsl;
-                const int i0 = wdata.HOS_i0;
-                const int j0 = wdata.HOS_j0;
+                const amrex::Real zmin = wdata.HOS_zmin;
+                const amrex::Real zmax = wdata.HOS_zmax;
                 const int hos_nx = wdata.HOS_nx;
+                const int hos_ny = wdata.HOS_ny;
+                const int hos_nz = wdata.HOS_nz;
+                const amrex::Real hos_dx = wdata.HOS_Lx / hos_nx;
+                const amrex::Real hos_dy = wdata.HOS_Ly / hos_ny;
+                const amrex::Real hos_dz = (zmax-zmin) / hos_nz;
                 const auto& vbx = mfi.validbox();
                 amrex::ParallelFor(
                     vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                        const amrex::Real x = problo[0] + (i + 0.5) * dx[0];
+                        const amrex::Real y = problo[1] + (j + 0.5) * dx[1];
                         const amrex::Real z = problo[2] + (k + 0.5) * dx[2];
-                        phi(i, j, k) =
-                            wdata.eta[i + i0 + (j + j0) * hos_nx] + zsl - z;
-                        amrex::Real efac = 0.0;
-                        if (phi(i, j, k) > 0.0) {
-                            efac = exp(-phi(i, j, k));
-                        } else {
-                            if (phi(i, j, k) > -0.5 * dx[2]) {
-                                efac = 0.5 *
-                                       (1.0 + exp(0.5 * dx[2] - phi(i, j, k)));
-                            }
+                        // Determine lateral indices for interpolation
+                        // It's best to have the grids line up directly
+                        int ii = 0;
+                        amrex::Real HOS_x = hos_dx * (ii + 0.5);
+                        while (HOS_x < x) {
+                            ++ii;
+                            HOS_x = hos_dx * (ii + 0.5);
                         }
-                        vel(i, j, k, 0) =
-                            wdata.u[i + i0 + (j + j0) * hos_nx] * efac;
-                        vel(i, j, k, 1) =
-                            wdata.v[i + i0 + (j + j0) * hos_nx] * efac;
-                        vel(i, j, k, 2) =
-                            wdata.w[i + i0 + (j + j0) * hos_nx] * efac;
+                        int jj = 0;
+                        amrex::Real HOS_y = hos_dy * (jj + 0.5);
+                        while (HOS_y < y) {
+                            ++jj;
+                            HOS_y = hos_dy * (jj + 0.5);
+                        }
+
+                        if (z > zmax || z < zmin) {
+                            phi(i, j, k) =
+                                wdata.eta[ii + jj * hos_nx] + zsl - z;
+                            // Assume velocities are zero outside range
+                            vel(i, j, k, 0) = 0;
+                            vel(i, j, k, 1) = 0;
+                            vel(i, j, k, 2) = 0;
+                        } else {
+                            // Determine vertical indices
+                            int kk = 0;
+                            amrex::Real HOS_z =
+                                zmin + hos_dz * (kk + 0.5);
+                            while (HOS_z < z) {
+                                ++kk;
+                                HOS_z = zmin + hos_dz * (kk + 0.5);
+                            }
+                            // Shift indices left
+                            ii = ii - 1;
+                            jj = jj - 1;
+                            kk = kk - 1;
+                            // Modify indices to avoid going out of bounds
+                            ii = amrex::max(0,amrex::min(hos_nx-1,ii));
+                            jj = amrex::max(0,amrex::min(hos_ny-1,jj));
+                            kk = amrex::max(0,amrex::min(hos_nz-1,kk));
+                            // Reset locations
+                            HOS_x = hos_dx * (ii + 0.5);
+                            HOS_y = hos_dy * (jj + 0.5);
+                            HOS_z = zmin + hos_dz * (kk + 0.5);
+                            // Interpolation factors
+                            amrex::Real wx_hi = (x - HOS_x) / hos_dx;
+                            amrex::Real wy_hi = (y - HOS_y) / hos_dy;
+                            amrex::Real wz_hi = (z - HOS_z) / hos_dz;
+                            amrex::Real wx_lo = 1.0 - wx_hi;
+                            amrex::Real wy_lo = 1.0 - wy_hi;
+                            amrex::Real wz_lo = 1.0 - wz_hi;
+
+                            // Get data
+                            const amrex::Real eta_00 =
+                                wdata.eta[ii + jj * hos_nx];
+                            const amrex::Real eta_01 =
+                                wdata.eta[ii + (jj + 1) * hos_nx];
+                            const amrex::Real eta_10 =
+                                wdata.eta[ii + 1 + jj * hos_nx];
+                            const amrex::Real eta_11 =
+                                wdata.eta[ii + 1 + (jj + 1) * hos_nx];
+                            const amrex::Real eta_ = wx_lo * wy_lo * eta_00 +
+                                                     wx_lo * wy_hi * eta_01 +
+                                                     wx_hi * wy_lo * eta_10 +
+                                                     wx_hi * wy_hi * eta_11;
+
+                            phi(i, j, k) = eta_ + zsl - z;
+
+                            vel(i, j, k, 0) =
+                                wx_lo * wy_lo * wz_lo *
+                                    wdata.u[(ii + jj * hos_nx) * hos_nz + kk] +
+                                wx_lo * wy_lo * wz_hi *
+                                    wdata
+                                        .u[(ii + jj * hos_nx) * hos_nz + kk +
+                                           1] +
+                                wx_lo * wy_hi * wz_lo *
+                                    wdata
+                                        .u[(ii + (jj + 1) * hos_nx) * hos_nz +
+                                           kk] +
+                                wx_lo * wy_hi * wz_hi *
+                                    wdata
+                                        .u[(ii + (jj + 1) * hos_nx) * hos_nz +
+                                           kk + 1] +
+                                wx_hi * wy_lo * wz_lo *
+                                    wdata
+                                        .u[(ii + 1 + jj * hos_nx) * hos_nz +
+                                           kk] +
+                                wx_hi * wy_lo * wz_hi *
+                                    wdata
+                                        .u[(ii + 1 + jj * hos_nx) * hos_nz +
+                                           kk + 1] +
+                                wx_hi * wy_hi * wz_lo *
+                                    wdata
+                                        .u[(ii + 1 + (jj + 1) * hos_nx) *
+                                               hos_nz +
+                                           kk] +
+                                wx_hi * wy_hi * wz_hi *
+                                    wdata
+                                        .u[(ii + 1 + (jj + 1) * hos_nx) *
+                                               hos_nz +
+                                           kk + 1];
+                            vel(i, j, k, 1) =
+                                wx_lo * wy_lo * wz_lo *
+                                    wdata.v[(ii + jj * hos_nx) * hos_nz + kk] +
+                                wx_lo * wy_lo * wz_hi *
+                                    wdata
+                                        .v[(ii + jj * hos_nx) * hos_nz + kk +
+                                           1] +
+                                wx_lo * wy_hi * wz_lo *
+                                    wdata
+                                        .v[(ii + (jj + 1) * hos_nx) * hos_nz +
+                                           kk] +
+                                wx_lo * wy_hi * wz_hi *
+                                    wdata
+                                        .v[(ii + (jj + 1) * hos_nx) * hos_nz +
+                                           kk + 1] +
+                                wx_hi * wy_lo * wz_lo *
+                                    wdata
+                                        .v[(ii + 1 + jj * hos_nx) * hos_nz +
+                                           kk] +
+                                wx_hi * wy_lo * wz_hi *
+                                    wdata
+                                        .v[(ii + 1 + jj * hos_nx) * hos_nz +
+                                           kk + 1] +
+                                wx_hi * wy_hi * wz_lo *
+                                    wdata
+                                        .v[(ii + 1 + (jj + 1) * hos_nx) *
+                                               hos_nz +
+                                           kk] +
+                                wx_hi * wy_hi * wz_hi *
+                                    wdata
+                                        .v[(ii + 1 + (jj + 1) * hos_nx) *
+                                               hos_nz +
+                                           kk + 1];
+                            vel(i, j, k, 2) =
+                                wx_lo * wy_lo * wz_lo *
+                                    wdata.w[(ii + jj * hos_nx) * hos_nz + kk] +
+                                wx_lo * wy_lo * wz_hi *
+                                    wdata
+                                        .w[(ii + jj * hos_nx) * hos_nz + kk +
+                                           1] +
+                                wx_lo * wy_hi * wz_lo *
+                                    wdata
+                                        .w[(ii + (jj + 1) * hos_nx) * hos_nz +
+                                           kk] +
+                                wx_lo * wy_hi * wz_hi *
+                                    wdata
+                                        .w[(ii + (jj + 1) * hos_nx) * hos_nz +
+                                           kk + 1] +
+                                wx_hi * wy_lo * wz_lo *
+                                    wdata
+                                        .w[(ii + 1 + jj * hos_nx) * hos_nz +
+                                           kk] +
+                                wx_hi * wy_lo * wz_hi *
+                                    wdata
+                                        .w[(ii + 1 + jj * hos_nx) * hos_nz +
+                                           kk + 1] +
+                                wx_hi * wy_hi * wz_lo *
+                                    wdata
+                                        .w[(ii + 1 + (jj + 1) * hos_nx) *
+                                               hos_nz +
+                                           kk] +
+                                wx_hi * wy_hi * wz_hi *
+                                    wdata
+                                        .w[(ii + 1 + (jj + 1) * hos_nx) *
+                                               hos_nz +
+                                           kk + 1];
+                        }
                         // ow velocity should initially be in sync with velocity
                         ow_vel(i, j, k, 0) = vel(i, j, k, 0);
                         ow_vel(i, j, k, 1) = vel(i, j, k, 1);
@@ -155,6 +343,8 @@ struct UpdateRelaxZonesOp<HOSWaves>
     void operator()(HOSWaves::DataType& data)
     {
         auto& wdata = data.meta();
+
+        return;
 
         auto& sim = data.sim();
         // cppcheck-suppress constVariable
