@@ -217,105 +217,49 @@ struct InitDataOp<HOSWaves>
 
                             phi(i, j, k) = eta_ + zsl - z;
 
+                            // Set up indices for clarity
+                            const int i000 = (ii + jj * hos_nx) * hos_nz + kk;
+                            const int i001 =
+                                (ii + jj * hos_nx) * hos_nz + kk + 1;
+                            const int i010 =
+                                (ii + (jj + 1) * hos_nx) * hos_nz + kk;
+                            const int i100 =
+                                (ii + 1 + jj * hos_nx) * hos_nz + kk;
+                            const int i011 =
+                                (ii + (jj + 1) * hos_nx) * hos_nz + kk + 1;
+                            const int i101 =
+                                (ii + 1 + jj * hos_nx) * hos_nz + kk + 1;
+                            const int i110 =
+                                (ii + 1 + (jj + 1) * hos_nx) * hos_nz + kk;
+                            const int i111 =
+                                (ii + 1 + (jj + 1) * hos_nx) * hos_nz + kk + 1;
                             vel(i, j, k, 0) =
-                                wx_lo * wy_lo * wz_lo *
-                                    wdata.u[(ii + jj * hos_nx) * hos_nz + kk] +
-                                wx_lo * wy_lo * wz_hi *
-                                    wdata
-                                        .u[(ii + jj * hos_nx) * hos_nz + kk +
-                                           1] +
-                                wx_lo * wy_hi * wz_lo *
-                                    wdata
-                                        .u[(ii + (jj + 1) * hos_nx) * hos_nz +
-                                           kk] +
-                                wx_lo * wy_hi * wz_hi *
-                                    wdata
-                                        .u[(ii + (jj + 1) * hos_nx) * hos_nz +
-                                           kk + 1] +
-                                wx_hi * wy_lo * wz_lo *
-                                    wdata
-                                        .u[(ii + 1 + jj * hos_nx) * hos_nz +
-                                           kk] +
-                                wx_hi * wy_lo * wz_hi *
-                                    wdata
-                                        .u[(ii + 1 + jj * hos_nx) * hos_nz +
-                                           kk + 1] +
-                                wx_hi * wy_hi * wz_lo *
-                                    wdata
-                                        .u[(ii + 1 + (jj + 1) * hos_nx) *
-                                               hos_nz +
-                                           kk] +
-                                wx_hi * wy_hi * wz_hi *
-                                    wdata
-                                        .u[(ii + 1 + (jj + 1) * hos_nx) *
-                                               hos_nz +
-                                           kk + 1];
+                                wx_lo * wy_lo * wz_lo * wdata.u[i000] +
+                                wx_lo * wy_lo * wz_hi * wdata.u[i001] +
+                                wx_lo * wy_hi * wz_lo * wdata.u[i010] +
+                                wx_lo * wy_hi * wz_hi * wdata.u[i011] +
+                                wx_hi * wy_lo * wz_lo * wdata.u[i100] +
+                                wx_hi * wy_lo * wz_hi * wdata.u[i101] +
+                                wx_hi * wy_hi * wz_lo * wdata.u[i110] +
+                                wx_hi * wy_hi * wz_hi * wdata.u[i111];
                             vel(i, j, k, 1) =
-                                wx_lo * wy_lo * wz_lo *
-                                    wdata.v[(ii + jj * hos_nx) * hos_nz + kk] +
-                                wx_lo * wy_lo * wz_hi *
-                                    wdata
-                                        .v[(ii + jj * hos_nx) * hos_nz + kk +
-                                           1] +
-                                wx_lo * wy_hi * wz_lo *
-                                    wdata
-                                        .v[(ii + (jj + 1) * hos_nx) * hos_nz +
-                                           kk] +
-                                wx_lo * wy_hi * wz_hi *
-                                    wdata
-                                        .v[(ii + (jj + 1) * hos_nx) * hos_nz +
-                                           kk + 1] +
-                                wx_hi * wy_lo * wz_lo *
-                                    wdata
-                                        .v[(ii + 1 + jj * hos_nx) * hos_nz +
-                                           kk] +
-                                wx_hi * wy_lo * wz_hi *
-                                    wdata
-                                        .v[(ii + 1 + jj * hos_nx) * hos_nz +
-                                           kk + 1] +
-                                wx_hi * wy_hi * wz_lo *
-                                    wdata
-                                        .v[(ii + 1 + (jj + 1) * hos_nx) *
-                                               hos_nz +
-                                           kk] +
-                                wx_hi * wy_hi * wz_hi *
-                                    wdata
-                                        .v[(ii + 1 + (jj + 1) * hos_nx) *
-                                               hos_nz +
-                                           kk + 1];
+                                wx_lo * wy_lo * wz_lo * wdata.v[i000] +
+                                wx_lo * wy_lo * wz_hi * wdata.v[i001] +
+                                wx_lo * wy_hi * wz_lo * wdata.v[i010] +
+                                wx_lo * wy_hi * wz_hi * wdata.v[i011] +
+                                wx_hi * wy_lo * wz_lo * wdata.v[i100] +
+                                wx_hi * wy_lo * wz_hi * wdata.v[i101] +
+                                wx_hi * wy_hi * wz_lo * wdata.v[i110] +
+                                wx_hi * wy_hi * wz_hi * wdata.v[i111];
                             vel(i, j, k, 2) =
-                                wx_lo * wy_lo * wz_lo *
-                                    wdata.w[(ii + jj * hos_nx) * hos_nz + kk] +
-                                wx_lo * wy_lo * wz_hi *
-                                    wdata
-                                        .w[(ii + jj * hos_nx) * hos_nz + kk +
-                                           1] +
-                                wx_lo * wy_hi * wz_lo *
-                                    wdata
-                                        .w[(ii + (jj + 1) * hos_nx) * hos_nz +
-                                           kk] +
-                                wx_lo * wy_hi * wz_hi *
-                                    wdata
-                                        .w[(ii + (jj + 1) * hos_nx) * hos_nz +
-                                           kk + 1] +
-                                wx_hi * wy_lo * wz_lo *
-                                    wdata
-                                        .w[(ii + 1 + jj * hos_nx) * hos_nz +
-                                           kk] +
-                                wx_hi * wy_lo * wz_hi *
-                                    wdata
-                                        .w[(ii + 1 + jj * hos_nx) * hos_nz +
-                                           kk + 1] +
-                                wx_hi * wy_hi * wz_lo *
-                                    wdata
-                                        .w[(ii + 1 + (jj + 1) * hos_nx) *
-                                               hos_nz +
-                                           kk] +
-                                wx_hi * wy_hi * wz_hi *
-                                    wdata
-                                        .w[(ii + 1 + (jj + 1) * hos_nx) *
-                                               hos_nz +
-                                           kk + 1];
+                                wx_lo * wy_lo * wz_lo * wdata.w[i000] +
+                                wx_lo * wy_lo * wz_hi * wdata.w[i001] +
+                                wx_lo * wy_hi * wz_lo * wdata.w[i010] +
+                                wx_lo * wy_hi * wz_hi * wdata.w[i011] +
+                                wx_hi * wy_lo * wz_lo * wdata.w[i100] +
+                                wx_hi * wy_lo * wz_hi * wdata.w[i101] +
+                                wx_hi * wy_hi * wz_lo * wdata.w[i110] +
+                                wx_hi * wy_hi * wz_hi * wdata.w[i111];
                         }
                         // ow velocity should initially be in sync with velocity
                         ow_vel(i, j, k, 0) = vel(i, j, k, 0);
