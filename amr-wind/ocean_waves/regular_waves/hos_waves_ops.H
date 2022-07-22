@@ -87,14 +87,14 @@ struct InitDataOp<HOSWaves>
         wdata.u.resize(wdata.HOS_nx * wdata.HOS_ny * wdata.HOS_nz);
         wdata.v.resize(wdata.HOS_nx * wdata.HOS_ny * wdata.HOS_nz);
         wdata.w.resize(wdata.HOS_nx * wdata.HOS_ny * wdata.HOS_nz);
+        // Skip key
+        std::getline(is,tmp);
         // Read interface heights and velocities
         for (int ilat = 0; ilat < wdata.HOS_nx * wdata.HOS_ny; ++ilat) {
             // Get eta for current point
-            std::getline(is, tmp, '=');
             is >> wdata.eta[ilat];
             // Get u, v, w for full depth of 2D point
             for (int ivert = 0; ivert < wdata.HOS_nz; ++ivert) {
-                std::getline(is, tmp, '=');
                 is >> wdata.u[ilat * wdata.HOS_nz + ivert] >>
                     wdata.v[ilat * wdata.HOS_nz + ivert] >>
                     wdata.w[ilat * wdata.HOS_nz + ivert];
@@ -309,15 +309,14 @@ struct UpdateRelaxZonesOp<HOSWaves>
             std::getline(is,tmp); // x dimensions
             std::getline(is,tmp); // y dimensions
             std::getline(is,tmp); // z dimensions
+            std::getline(is,tmp); // key
 
             // Read interface heights and velocities
             for (int ilat = 0; ilat < wdata.HOS_nx * wdata.HOS_ny; ++ilat) {
                 // Get eta for current point
-                std::getline(is, tmp, '=');
                 is >> wdata.eta[ilat];
                 // Get u, v, w for full depth of 2D point
                 for (int ivert = 0; ivert < wdata.HOS_nz; ++ivert) {
-                    std::getline(is, tmp, '=');
                     is >> wdata.u[ilat * wdata.HOS_nz + ivert] >>
                         wdata.v[ilat * wdata.HOS_nz + ivert] >>
                         wdata.w[ilat * wdata.HOS_nz + ivert];
