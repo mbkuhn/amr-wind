@@ -14,10 +14,6 @@ struct HOSWavesData : public RegularWavesBaseData
     int HOS_n0{0};
     // Current index
     int HOS_n{0};
-    // Index of first x point to be used
-    int HOS_i0{0};
-    // Index of first y point to be used
-    int HOS_j0{0};
     // Total number of HOS points (read from file)
     int HOS_nx{0};
     int HOS_ny{0};

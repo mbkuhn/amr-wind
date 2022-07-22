@@ -1,5 +1,5 @@
-#ifndef LINEAR_WAVES_OPS_H
-#define LINEAR_WAVES_OPS_H
+#ifndef HOS_WAVES_OPS_H
+#define HOS_WAVES_OPS_H
 
 #include "amr-wind/ocean_waves/regular_waves/HOSWaves.H"
 #include "amr-wind/ocean_waves/OceanWavesOps.H"
