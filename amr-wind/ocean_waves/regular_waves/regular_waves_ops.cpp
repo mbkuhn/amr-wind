@@ -27,8 +27,13 @@ void read_inputs(
 
     // Wave generation/absorption parameters
     pp.query("relax_zone_gen_length", wdata.gen_length);
-    pp.query("numerical_beach_length", wdata.beach_length);
-    pp.query("numerical_beach_start", wdata.x_start_beach);
+    if (pp.contains("relax_zone_out_length")) {
+        wdata.has_beach = false;
+        wdata.has_outprofile = true;
+        pp.query("relax_zone_out_length", wdata.beach_length);
+    } else {
+        pp.query("numerical_beach_length", wdata.beach_length);
+    }
 }
 
 void init_data_structures(RegularWavesBaseData& /*unused*/) {}
@@ -86,9 +91,10 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
             auto target_vel = m_ow_vel(lev).array(mfi);
 
             const amrex::Real gen_length = wdata.gen_length;
-            const amrex::Real x_start_beach = wdata.x_start_beach;
             const amrex::Real beach_length = wdata.beach_length;
             const amrex::Real zsl = wdata.zsl;
+            const bool has_beach = wdata.has_beach;
+            const bool has_outprofile = wdata.has_outprofile;
 
             amrex::ParallelFor(
                 gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -100,9 +106,9 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
                         probhi[2]);
 
                     // Generation region
-                    if (x <= gen_length) {
-                        const amrex::Real Gamma =
-                            regular_waves::Gamma_generate(x, gen_length);
+                    if (x <= problo[0] + gen_length) {
+                        const amrex::Real Gamma = regular_waves::Gamma_generate(
+                            x - problo[0], gen_length);
                         const amrex::Real vf =
                             (1. - Gamma) * target_volfrac(i, j, k) * ramp +
                             Gamma * volfrac(i, j, k);
@@ -124,19 +130,43 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
                             (1. - volfrac(i, j, k)) * vel(i, j, k, 2);
                     }
                     // Numerical beach
-                    if (x >= x_start_beach) {
+                    if (x + beach_length >= probhi[0]) {
                         const amrex::Real Gamma = regular_waves::Gamma_absorb(
-                            x - x_start_beach, beach_length, 1.0);
-                        volfrac(i, j, k) =
-                            (1.0 - Gamma) * regular_waves::free_surface_to_vof(
-                                                zsl, z, dx[2]) +
-                            Gamma * volfrac(i, j, k);
-                        vel(i, j, k, 0) =
-                            Gamma * vel(i, j, k, 0) * volfrac(i, j, k);
-                        vel(i, j, k, 1) =
-                            Gamma * vel(i, j, k, 1) * volfrac(i, j, k);
-                        vel(i, j, k, 2) =
-                            Gamma * vel(i, j, k, 2) * volfrac(i, j, k);
+                            x - (probhi[0] - beach_length), beach_length, 1.0);
+                        if (has_beach) {
+                            volfrac(i, j, k) =
+                                (1.0 - Gamma) *
+                                    regular_waves::free_surface_to_vof(
+                                        zsl, z, dx[2]) +
+                                Gamma * volfrac(i, j, k);
+                            vel(i, j, k, 0) =
+                                Gamma * vel(i, j, k, 0) * volfrac(i, j, k);
+                            vel(i, j, k, 1) =
+                                Gamma * vel(i, j, k, 1) * volfrac(i, j, k);
+                            vel(i, j, k, 2) =
+                                Gamma * vel(i, j, k, 2) * volfrac(i, j, k);
+                        }
+                        if (has_outprofile) {
+                            const amrex::Real vf =
+                                (1. - Gamma) * target_volfrac(i, j, k) * ramp +
+                                Gamma * volfrac(i, j, k);
+                            volfrac(i, j, k) = (vf > 1. - 1.e-10) ? 1.0 : vf;
+                            vel(i, j, k, 0) =
+                                (1. - Gamma) * target_vel(i, j, k, 0) *
+                                    volfrac(i, j, k) * ramp +
+                                Gamma * vel(i, j, k, 0) * volfrac(i, j, k) +
+                                (1. - volfrac(i, j, k)) * vel(i, j, k, 0);
+                            vel(i, j, k, 1) =
+                                (1. - Gamma) * target_vel(i, j, k, 1) *
+                                    volfrac(i, j, k) * ramp +
+                                Gamma * vel(i, j, k, 1) * volfrac(i, j, k) +
+                                (1. - volfrac(i, j, k)) * vel(i, j, k, 1);
+                            vel(i, j, k, 2) =
+                                (1. - Gamma) * target_vel(i, j, k, 2) *
+                                    volfrac(i, j, k) * ramp +
+                                Gamma * vel(i, j, k, 2) * volfrac(i, j, k) +
+                                (1. - volfrac(i, j, k)) * vel(i, j, k, 2);
+                        }
                     }
 
                     // Make sure that density is updated before entering the
