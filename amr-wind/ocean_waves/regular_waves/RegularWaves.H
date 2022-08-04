@@ -24,9 +24,10 @@ struct RegularWavesBaseData
 
     amrex::Real beach_length{8.0};
 
-    amrex::Real x_start_beach{22.0};
-
     bool has_ramp{false};
+
+    bool has_beach{true};
+    bool has_outprofile{false};
 
     amrex::Real ramp_period{2.0};
 };
