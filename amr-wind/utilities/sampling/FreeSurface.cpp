@@ -3,6 +3,7 @@
 #include <AMReX_MultiFabUtil.H>
 #include <utility>
 #include "amr-wind/utilities/ncutils/nc_interface.H"
+#include "amr-wind/equation_systems/vof/volume_fractions.H"
 
 #include "AMReX_ParmParse.H"
 
@@ -145,6 +146,8 @@ void FreeSurface::post_advance_work()
                             amrex::Loop(
                                 bx,
                                 [=, &height_fab](int i, int j, int k) noexcept {
+                                    // Initialize plane variables
+                                    amrex::Real mx, my, mz, alpha;
                                     // Initialize height measurement
                                     amrex::Real ht = plo[2];
                                     // Cell location
@@ -169,101 +172,77 @@ void FreeSurface::post_advance_work()
                                          ((plo[1] == loc[1] &&
                                            xm[1] - loc[1] == 0.5 * dx[1]) ||
                                           (xm[1] - loc[1] < 0.5 * dx[1] &&
-                                           loc[1] - xm[1] <= 0.5 * dx[1]))) &&
-                                        ((vof_arr(i, j, k) < (1.0 - 1e-12) &&
-                                          vof_arr(i, j, k) > 1e-12) ||
-                                         (vof_arr(i, j, k) < 1e-12 &&
-                                          (vof_arr(i, j, k + 1) >
-                                               (1.0 - 1e-12) ||
-                                           vof_arr(i, j, k - 1) >
-                                               (1.0 - 1e-12))))) {
-                                        // Interpolate in x and y for the
-                                        // current cell and the ones above and
-                                        // below
-                                        amrex::Real wx_hi;
-                                        amrex::Real wy_hi;
-                                        int iup, idn, jup, jdn;
-
-                                        // Determine which cells to use for x, y
-                                        if (loc[0] < xm[0]) {
-                                            iup = i;
-                                            idn = i - 1;
-                                            wx_hi = (loc[0] - (xm[0] - dx[0])) *
-                                                    dxi[0];
-                                        } else {
-                                            iup = i + 1;
-                                            idn = i;
-                                            wx_hi = (loc[0] - xm[0]) * dxi[0];
+                                           loc[1] - xm[1] <= 0.5 * dx[1])))) {
+                                        // If cell is full of liquid
+                                        bool calc_flag = false;
+                                        if (vof_arr(i, j, k) >= 1.0 - 1e-12) {
+                                            mx = 0.0;
+                                            my = 0.0;
+                                            mz = 1.0;
+                                            // put bdy at top / bottom depending
+                                            // on instance
+                                            alpha = (amrex::Real)((ni + 1) % 2);
+                                            calc_flag = true;
                                         }
-                                        if (loc[1] < xm[1]) {
-                                            jup = j;
-                                            jdn = j - 1;
-                                            wy_hi = (loc[1] - (xm[1] - dx[1])) *
-                                                    dxi[1];
-                                        } else {
-                                            jup = j + 1;
-                                            jdn = j;
-                                            wy_hi = (loc[1] - xm[1]) * dxi[1];
-                                        }
-                                        amrex::Real wx_lo = 1.0 - wx_hi;
-                                        amrex::Real wy_lo = 1.0 - wy_hi;
-
-                                        amrex::Real vof_above =
-                                            wx_lo * wy_lo *
-                                                vof_arr(idn, jdn, k + 1) +
-                                            wx_lo * wy_hi *
-                                                vof_arr(idn, jup, k + 1) +
-                                            wx_hi * wy_lo *
-                                                vof_arr(iup, jdn, k + 1) +
-                                            wx_hi * wy_hi *
-                                                vof_arr(iup, jup, k + 1);
-                                        amrex::Real vof_here =
-                                            wx_lo * wy_lo *
-                                                vof_arr(idn, jdn, k) +
-                                            wx_lo * wy_hi *
-                                                vof_arr(idn, jup, k) +
-                                            wx_hi * wy_lo *
-                                                vof_arr(iup, jdn, k) +
-                                            wx_hi * wy_hi *
-                                                vof_arr(iup, jup, k);
-                                        amrex::Real vof_below =
-                                            wx_lo * wy_lo *
-                                                vof_arr(idn, jdn, k - 1) +
-                                            wx_lo * wy_hi *
-                                                vof_arr(idn, jup, k - 1) +
-                                            wx_hi * wy_lo *
-                                                vof_arr(iup, jdn, k - 1) +
-                                            wx_hi * wy_hi *
-                                                vof_arr(iup, jup, k - 1);
-
-                                        // Determine which cell to
-                                        // interpolate with
-                                        bool above = (vof_above - 0.5) *
-                                                         (vof_here - 0.5) <=
-                                                     0.0;
-                                        bool below = (vof_below - 0.5) *
-                                                         (vof_here - 0.5) <=
-                                                     0.0;
-                                        if (above) {
-                                            // Interpolate positive
-                                            // direction
-                                            ht = xm[2] +
-                                                 (dx[2]) /
-                                                     (vof_above - vof_here) *
-                                                     (0.5 - vof_here);
-                                        } else {
-                                            if (below) {
-                                                // Interpolate negative
-                                                // direction
-                                                ht =
-                                                    xm[2] -
-                                                    (dx[2]) /
-                                                        (vof_below - vof_here) *
-                                                        (0.5 - vof_here);
+                                        // Cell boundary case
+                                        if (vof_arr(i, j, k) <= 1e-12) {
+                                            mx = 0.0;
+                                            my = 0.0;
+                                            mz = 1.0;
+                                            if (vof_arr(i, j, k + 1) >=
+                                                (1.0 - 1e-12)) {
+                                                // Top boundary
+                                                alpha = 1.0;
+                                                calc_flag = true;
+                                            } else if (
+                                                vof_arr(i, j, k - 1) >=
+                                                (1.0 - 1e-12)) {
+                                                // Bottom boundary
+                                                alpha = 0.0;
+                                                calc_flag = true;
                                             }
-                                            // If none satisfy requirement, then
-                                            // the isosurface vof = 0.5 cannot
-                                            // be detected in the z-direction
+                                        }
+                                        // Multiphase cell case
+                                        if ((vof_arr(i, j, k) < (1.0 - 1e-12) &&
+                                             vof_arr(i, j, k) > 1e-12)) {
+                                            // Get interface reconstruction
+                                            multiphase::fit_plane(
+                                                i, j, k, vof_arr, mx, my, mz,
+                                                alpha);
+                                            calc_flag = true;
+                                        }
+
+                                        if (calc_flag) {
+                                            // Get height of interface
+                                            if (mz == 0) {
+                                                // If slope is undefined in z,
+                                                // use middle of cell
+                                                ht = xm[2];
+                                            } else {
+                                                // Intersect 2D point with plane
+                                                ht = (xm[2] - 0.5 * dx[2]) +
+                                                     (alpha -
+                                                      mx * dxi[0] *
+                                                          (loc[0] -
+                                                           (xm[0] -
+                                                            0.5 * dx[0])) -
+                                                      my * dxi[1] *
+                                                          (loc[1] -
+                                                           (xm[1] -
+                                                            0.5 * dx[1]))) /
+                                                         (mz * dxi[2]);
+                                            }
+                                            // If interface is below lower
+                                            // bound, continue to look
+                                            if (ht < xm[2] - 0.5 * dx[2]) {
+                                                ht = plo[2];
+                                            }
+                                            // If interface is above upper
+                                            // bound, limit it
+                                            if (ht > xm[2] + 0.5 * dx[2] *
+                                                                 (1.0 + 1e-8)) {
+                                                ht = xm[2] + 0.5 * dx[2];
+                                            }
                                         }
                                     }
                                     // Offset by removing lo and contribute to
@@ -334,6 +313,7 @@ void FreeSurface::write_ascii()
         }
 
         // Metadata
+        File << m_sim.time().new_time() << '\n';
         File << m_npts << '\n';
         File << m_npts_dir[0] << ' ' << m_npts_dir[1] << '\n';
 
