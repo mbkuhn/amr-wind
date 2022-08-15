@@ -14,27 +14,12 @@ struct HOSWavesData : public RegularWavesBaseData
     int HOS_n0{0};
     // Current index
     int HOS_n{0};
-    // Total number of HOS points (read from file)
-    int HOS_nx{0};
-    int HOS_ny{0};
-    int HOS_nz{0};
-    // Lateral dimensions
-    amrex::Real HOS_Lx{0.0};
-    amrex::Real HOS_Ly{0.0};
-    // Bounds in vertical direction
-    amrex::Real HOS_zmin{0.0};
-    amrex::Real HOS_zmax{0.0};
     // Time when ow arrays were last changed (last timestep)
     amrex::Real t_last{0.0};
     // Time of current HOS lists
     amrex::Real HOS_t{0.0};
     // Timestep from HOS data
     amrex::Real HOS_dt{0.0};
-    // Current data for eta, u, v, and w
-    RealList eta;
-    RealList u;
-    RealList v;
-    RealList w;
 };
 
 struct HOSWaves : public RegularWavesType
