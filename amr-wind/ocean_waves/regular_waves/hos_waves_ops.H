@@ -128,11 +128,14 @@ struct InitDataOp<HOSWaves>
         auto geom = sim.mesh().Geom();
         for (int lev = 0; lev < nlevels; ++lev) {
             const auto& problo = geom[lev].ProbLoArray();
+            const auto& probhi = geom[lev].ProbHiArray();
             const auto& dx = geom[lev].CellSizeArray();
             for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid(); ++mfi) {
                 auto phi = m_ow_levelset(lev).array(mfi);
                 auto vel = velocity(lev).array(mfi);
                 auto ow_vel = m_ow_velocity(lev).array(mfi);
+                auto volfrac = vof(lev).array(mfi);
+                auto rho = density(lev).array(mfi);
                 const amrex::Real zsl = wdata.zsl;
                 const amrex::Real zmin = wdata.HOS_zmin;
                 const amrex::Real zmax = wdata.HOS_zmax;
@@ -142,12 +145,18 @@ struct InitDataOp<HOSWaves>
                 const amrex::Real hos_dx = wdata.HOS_Lx / hos_nx;
                 const amrex::Real hos_dy = wdata.HOS_Ly / hos_ny;
                 const amrex::Real hos_dz = (zmax-zmin) / hos_nz;
+                const auto& gbx = mfi.growntilebox();
                 const auto& vbx = mfi.validbox();
                 amrex::ParallelFor(
-                    vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                        const amrex::Real x = problo[0] + (i + 0.5) * dx[0];
-                        const amrex::Real y = problo[1] + (j + 0.5) * dx[1];
-                        const amrex::Real z = problo[2] + (k + 0.5) * dx[2];
+                    gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                        amrex::Real x = problo[0] + (i + 0.5) * dx[0];
+                        amrex::Real y = problo[1] + (j + 0.5) * dx[1];
+                        amrex::Real z = problo[2] + (k + 0.5) * dx[2];
+                        // Adjust x,y for periodicity:
+                        if (x > probhi[0]) x -= (probhi[0] - problo[0]);
+                        if (y > probhi[1]) y -= (probhi[1] - problo[1]);
+                        if (x < problo[0]) x += (probhi[0] - problo[0]);
+                        if (y < problo[1]) y += (probhi[1] - problo[1]);
                         // Determine lateral indices for interpolation
                         // It's best to have the grids line up directly
                         int ii = 0;
@@ -264,15 +273,6 @@ struct InitDataOp<HOSWaves>
                         ow_vel(i, j, k, 1) = vel(i, j, k, 1);
                         ow_vel(i, j, k, 2) = vel(i, j, k, 2);
                     });
-            }
-            // Fill boundaries with levelset to be able to calculate normals
-            m_ow_levelset(lev).FillBoundary(geom[lev].periodicity());
-            // Calculate vof using phi, calculate density
-            for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid(); ++mfi) {
-                auto phi = m_ow_levelset(lev).array(mfi);
-                auto volfrac = vof(lev).array(mfi);
-                auto rho = density(lev).array(mfi);
-                const auto& vbx = mfi.validbox();
 
                 const amrex::Real eps = 2. * std::cbrt(dx[0] * dx[1] * dx[2]);
                 amrex::ParallelFor(
