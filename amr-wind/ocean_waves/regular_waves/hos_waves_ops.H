@@ -133,8 +133,6 @@ struct InitDataOp<HOSWaves>
                 auto phi = m_ow_levelset(lev).array(mfi);
                 auto vel = velocity(lev).array(mfi);
                 auto ow_vel = m_ow_velocity(lev).array(mfi);
-                auto volfrac = vof(lev).array(mfi);
-                auto rho = density(lev).array(mfi);
                 const amrex::Real zsl = wdata.zsl;
                 const amrex::Real zmin = wdata.HOS_zmin;
                 const amrex::Real zmax = wdata.HOS_zmax;
@@ -266,16 +264,26 @@ struct InitDataOp<HOSWaves>
                         ow_vel(i, j, k, 1) = vel(i, j, k, 1);
                         ow_vel(i, j, k, 2) = vel(i, j, k, 2);
                     });
-                // Translate levelset to vof
+            }
+            // Fill boundaries with levelset to be able to calculate normals
+            m_ow_levelset(lev).FillBoundary(geom[lev].periodicity());
+            // Calculate vof using phi, calculate density
+            for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid(); ++mfi) {
+                auto phi = m_ow_levelset(lev).array(mfi);
+                auto volfrac = vof(lev).array(mfi);
+                auto rho = density(lev).array(mfi);
+                const auto& vbx = mfi.validbox();
+
                 const amrex::Real eps = 2. * std::cbrt(dx[0] * dx[1] * dx[2]);
                 amrex::ParallelFor(
                     vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         multiphase::levelset_to_vof(i, j, k, eps, phi, volfrac);
-                        rho(i, j, k) =
-                            rho1 * volfrac(i, j, k) + rho2 * (1.0 - volfrac(i, j, k));
+                        rho(i, j, k) = rho1 * volfrac(i, j, k) +
+                                       rho2 * (1.0 - volfrac(i, j, k));
                     });
             }
         }
+        // Fill boundaries with vof, density
         vof.fillpatch(0.0);
         density.fillpatch(0.0);
     }
