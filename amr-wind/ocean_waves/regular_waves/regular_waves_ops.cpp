@@ -56,12 +56,12 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
         const auto& dx = geom[lev].CellSizeArray();
 
         for (amrex::MFIter mfi(ls); mfi.isValid(); ++mfi) {
-            const auto& vbx = mfi.validbox();
+            const auto& gbx = mfi.growntilebox(1);
             const amrex::Array4<amrex::Real>& phi = ls.array(mfi);
             const amrex::Array4<amrex::Real>& volfrac = target_vof.array(mfi);
             const amrex::Real eps = 2. * std::cbrt(dx[0] * dx[1] * dx[2]);
             amrex::ParallelFor(
-                vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                     multiphase::levelset_to_vof(i, j, k, eps, phi, volfrac);
                 });
         }
@@ -71,8 +71,6 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
     const auto& time = sim.time().new_time();
     amrex::Real ramp =
         (wdata.has_ramp) ? regular_waves::ramp(time, wdata.ramp_period) : 1.0;
-    // Fill ghost and boundary cells before simulation begins
-    m_ow_vof.fillpatch(time);
 
     auto& vof = sim.repo().get_field("vof");
     auto& velocity = sim.repo().get_field("velocity");
@@ -113,21 +111,31 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
                             (1. - Gamma) * target_volfrac(i, j, k) * ramp +
                             Gamma * volfrac(i, j, k);
                         volfrac(i, j, k) = (vf > 1. - 1.e-10) ? 1.0 : vf;
+                        // Conserve momentum when density changes
+                        amrex::Real rho_ = rho1 * volfrac(i, j, k) +
+                                           rho2 * (1.0 - volfrac(i, j, k));
+                        vel(i, j, k, 0) *= rho(i, j, k) / rho_;
+                        vel(i, j, k, 1) *= rho(i, j, k) / rho_;
+                        vel(i, j, k, 2) *= rho(i, j, k) / rho_;
+                        // Force liquid velocity, update according to mom.
                         vel(i, j, k, 0) =
-                            (1. - Gamma) * target_vel(i, j, k, 0) *
-                                volfrac(i, j, k) * ramp +
-                            Gamma * vel(i, j, k, 0) * volfrac(i, j, k) +
-                            (1. - volfrac(i, j, k)) * vel(i, j, k, 0);
+                            (rho1 * volfrac(i, j, k) *
+                                 (ramp * (1. - Gamma) * target_vel(i, j, k, 0) +
+                                  Gamma * vel(i, j, k, 0)) +
+                             rho2 * (1. - volfrac(i, j, k)) * vel(i, j, k, 0)) /
+                            rho_;
                         vel(i, j, k, 1) =
-                            (1. - Gamma) * target_vel(i, j, k, 1) *
-                                volfrac(i, j, k) * ramp +
-                            Gamma * vel(i, j, k, 1) * volfrac(i, j, k) +
-                            (1. - volfrac(i, j, k)) * vel(i, j, k, 1);
+                            (rho1 * volfrac(i, j, k) *
+                                 (ramp * (1. - Gamma) * target_vel(i, j, k, 1) +
+                                  Gamma * vel(i, j, k, 1)) +
+                             rho2 * (1. - volfrac(i, j, k)) * vel(i, j, k, 1)) /
+                            rho_;
                         vel(i, j, k, 2) =
-                            (1. - Gamma) * target_vel(i, j, k, 2) *
-                                volfrac(i, j, k) * ramp +
-                            Gamma * vel(i, j, k, 2) * volfrac(i, j, k) +
-                            (1. - volfrac(i, j, k)) * vel(i, j, k, 2);
+                            (rho1 * volfrac(i, j, k) *
+                                 (ramp * (1. - Gamma) * target_vel(i, j, k, 2) +
+                                  Gamma * vel(i, j, k, 2)) +
+                             rho2 * (1. - volfrac(i, j, k)) * vel(i, j, k, 2)) /
+                            rho_;
                     }
                     // Numerical beach
                     if (x + beach_length >= probhi[0]) {
@@ -151,21 +159,34 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
                                 (1. - Gamma) * target_volfrac(i, j, k) * ramp +
                                 Gamma * volfrac(i, j, k);
                             volfrac(i, j, k) = (vf > 1. - 1.e-10) ? 1.0 : vf;
-                            vel(i, j, k, 0) =
-                                (1. - Gamma) * target_vel(i, j, k, 0) *
-                                    volfrac(i, j, k) * ramp +
-                                Gamma * vel(i, j, k, 0) * volfrac(i, j, k) +
-                                (1. - volfrac(i, j, k)) * vel(i, j, k, 0);
-                            vel(i, j, k, 1) =
-                                (1. - Gamma) * target_vel(i, j, k, 1) *
-                                    volfrac(i, j, k) * ramp +
-                                Gamma * vel(i, j, k, 1) * volfrac(i, j, k) +
-                                (1. - volfrac(i, j, k)) * vel(i, j, k, 1);
-                            vel(i, j, k, 2) =
-                                (1. - Gamma) * target_vel(i, j, k, 2) *
-                                    volfrac(i, j, k) * ramp +
-                                Gamma * vel(i, j, k, 2) * volfrac(i, j, k) +
-                                (1. - volfrac(i, j, k)) * vel(i, j, k, 2);
+                            // Conserve momentum when density changes
+                            amrex::Real rho_ = rho1 * volfrac(i, j, k) +
+                                               rho2 * (1.0 - volfrac(i, j, k));
+                            vel(i, j, k, 0) *= rho(i, j, k) / rho_;
+                            vel(i, j, k, 1) *= rho(i, j, k) / rho_;
+                            vel(i, j, k, 2) *= rho(i, j, k) / rho_;
+                            // Force liquid velocity, update according to mom.
+                            vel(i, j, k, 0) = (rho1 * volfrac(i, j, k) *
+                                                   (ramp * (1. - Gamma) *
+                                                        target_vel(i, j, k, 0) +
+                                                    Gamma * vel(i, j, k, 0)) +
+                                               rho2 * (1. - volfrac(i, j, k)) *
+                                                   vel(i, j, k, 0)) /
+                                              rho_;
+                            vel(i, j, k, 1) = (rho1 * volfrac(i, j, k) *
+                                                   (ramp * (1. - Gamma) *
+                                                        target_vel(i, j, k, 1) +
+                                                    Gamma * vel(i, j, k, 1)) +
+                                               rho2 * (1. - volfrac(i, j, k)) *
+                                                   vel(i, j, k, 1)) /
+                                              rho_;
+                            vel(i, j, k, 2) = (rho1 * volfrac(i, j, k) *
+                                                   (ramp * (1. - Gamma) *
+                                                        target_vel(i, j, k, 2) +
+                                                    Gamma * vel(i, j, k, 2)) +
+                                               rho2 * (1. - volfrac(i, j, k)) *
+                                                   vel(i, j, k, 2)) /
+                                              rho_;
                         }
                     }
 
@@ -176,6 +197,11 @@ void apply_relaxation_zones(CFDSim& sim, RegularWavesBaseData& wdata)
                 });
         }
     }
+    // This helps for having periodic boundaries, but will need to be addressed
+    // for the general case
+    vof.fillpatch(0.0);
+    velocity.fillpatch(0.0);
+    density.fillpatch(0.0);
 }
 
 void prepare_netcdf_file(

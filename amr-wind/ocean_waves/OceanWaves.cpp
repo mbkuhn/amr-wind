@@ -11,10 +11,10 @@ namespace ocean_waves {
 
 OceanWaves::OceanWaves(CFDSim& sim)
     : m_sim(sim)
-    , m_ow_levelset(sim.repo().declare_field("ow_levelset", 1, 1, 1))
+    , m_ow_levelset(sim.repo().declare_field("ow_levelset", 1, 2, 1))
     , m_ow_vof(sim.repo().declare_field("ow_vof", 1, 1, 1))
     , m_ow_velocity(
-          sim.repo().declare_field("ow_velocity", AMREX_SPACEDIM, 1, 1))
+          sim.repo().declare_field("ow_velocity", AMREX_SPACEDIM, 2, 1))
 {
 
     if (!sim.physics_manager().contains("MultiPhase")) {

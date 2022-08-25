@@ -8,6 +8,9 @@
 #include "amr-wind/equation_systems/vof/volume_fractions.H"
 #include "amr-wind/physics/multiphase/MultiPhase.H"
 #include "amr-wind/core/FieldRepo.H"
+#include "amr-wind/core/field_ops.H"
+#include "amr-wind/equation_systems/BCOps.H"
+
 
 namespace amr_wind {
 namespace ocean_waves {
@@ -131,9 +134,19 @@ struct ReadInputsOp<HOSWaves>
         wdata.HOS_n = wdata.HOS_n0;
 
         // Declare fields for HOS
-        data.sim().repo().declare_field("hos_levelset", 1, 1, 1);
-        data.sim().repo().declare_field("hos_velocity", AMREX_SPACEDIM, 1, 1);
+        auto& hos_levelset =
+            data.sim().repo().declare_field("hos_levelset", 1, 2, 1);
+        auto& hos_velocity = data.sim().repo().declare_field(
+            "hos_velocity", AMREX_SPACEDIM, 2, 1);
 
+        // Extrapolation can work well when finer data is available
+        hos_levelset.set_default_fillpatch_bc(data.sim().time());
+        hos_velocity.set_default_fillpatch_bc(data.sim().time());
+        // No operation works better when only coarse data is used
+        /*hos_levelset.register_fill_patch_op<FieldFillPatchOps<FieldBCNoOp>>(
+            data.sim().repo().mesh(), data.sim().time(), 0);
+        hos_velocity.register_fill_patch_op<FieldFillPatchOps<FieldBCNoOp>>(
+            data.sim().repo().mesh(), data.sim().time(), 0);*/
     }
 };
 
@@ -191,36 +204,84 @@ struct InitDataOp<HOSWaves>
                 const amrex::Real HOS_dx = HOS_Lx / HOS_nx;
                 const amrex::Real HOS_dy = HOS_Ly / HOS_ny;
                 const amrex::Real HOS_dz = (HOS_zmax - HOS_zmin) / HOS_nz;
-                const auto& gbx = mfi.growntilebox();
-                const auto& vbx = mfi.validbox();
+                const auto& gbx = mfi.growntilebox(2);
                 amrex::ParallelFor(
                     gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         amrex::Real x = problo[0] + (i + 0.5) * dx[0];
                         amrex::Real y = problo[1] + (j + 0.5) * dx[1];
                         amrex::Real z = problo[2] + (k + 0.5) * dx[2];
-                        // Adjust x,y for periodicity:
-                        if (x > probhi[0]) x -= (probhi[0] - problo[0]);
-                        if (y > probhi[1]) y -= (probhi[1] - problo[1]);
-                        if (x < problo[0]) x += (probhi[0] - problo[0]);
-                        if (y < problo[1]) y += (probhi[1] - problo[1]);
+                        // Adjust x,y for periodicity of HOS domain
+                        if (x > HOS_Lx) x -= HOS_Lx;
+                        if (x < 0.0   ) x += HOS_Lx;
+                        if (y > HOS_Ly) y -= HOS_Ly;
+                        if (y < 0.0   ) y += HOS_Ly;
                         // Determine lateral indices for interpolation
                         // It's best to have the grids line up directly
-                        int ii = 0;
-                        amrex::Real HOS_x = HOS_dx * (ii + 0.5);
+                        int ii1 = 0;
+                        amrex::Real HOS_x = HOS_dx * (ii1 + 0.5);
                         while (HOS_x < x) {
-                            ++ii;
-                            HOS_x = HOS_dx * (ii + 0.5);
+                            ++ii1;
+                            HOS_x = HOS_dx * (ii1 + 0.5);
                         }
-                        int jj = 0;
-                        amrex::Real HOS_y = HOS_dy * (jj + 0.5);
+                        int jj1 = 0;
+                        amrex::Real HOS_y = HOS_dy * (jj1 + 0.5);
                         while (HOS_y < y) {
-                            ++jj;
-                            HOS_y = HOS_dy * (jj + 0.5);
+                            ++jj1;
+                            HOS_y = HOS_dy * (jj1 + 0.5);
                         }
 
+                        // Do interpolation for x, y and get eta
+                        // Shift indices left (because of the finding function)
+                        int ii = ii1 - 1;
+                        int jj = jj1 - 1;
+                        // Reset locations
+                        HOS_x = HOS_dx * (ii + 0.5);
+                        HOS_y = HOS_dy * (jj + 0.5);
+                        // Modify indices to avoid going out of bounds,
+                        // according to periodicity (assumed about HOS data)
+
+                        if (ii  < 0) ii  += HOS_nx;
+                        if (ii1 < 0) ii1 += HOS_nx;
+                        if (jj  < 0) jj  += HOS_ny;
+                        if (jj1 < 0) jj1 += HOS_ny;
+                        if (ii  >= HOS_nx) ii  -= HOS_nx;
+                        if (ii1 >= HOS_nx) ii1 -= HOS_nx;
+                        if (jj  >= HOS_ny) jj  -= HOS_ny;
+                        if (jj1 >= HOS_ny) jj1 -= HOS_ny;
+
+                        // Interpolation factors
+                        amrex::Real wx_hi = (x - HOS_x) / HOS_dx;
+                        amrex::Real wy_hi = (y - HOS_y) / HOS_dy;
+                        amrex::Real wx_lo = 1.0 - wx_hi;
+                        amrex::Real wy_lo = 1.0 - wy_hi;
+
+                        // Get data
+                        const amrex::Real eta_00 =
+                            eta[jj + ii * HOS_ny];
+                        const amrex::Real eta_01 =
+                            eta[jj1 + jj * HOS_ny];
+                        const amrex::Real eta_10 =
+                            eta[jj + ii1 * HOS_ny];
+                        const amrex::Real eta_11 =
+                            eta[jj1 + ii1 * HOS_ny];
+                        const amrex::Real eta_ = wx_lo * wy_lo * eta_00 +
+                                                 wx_lo * wy_hi * eta_01 +
+                                                 wx_hi * wy_lo * eta_10 +
+                                                 wx_hi * wy_hi * eta_11;
+
+                        phi(i, j, k) = eta_ + zsl - z;
+
+                        // Determine z location for interpolation based on phase
+                        if (phi(i, j, k) + 0.5 * dx[2] < 0) {
+                            // Fully gas (exceed range so that velocity = 0)
+                            z = HOS_zmax + 1;
+                        } else if (
+                            amrex::Math::abs(phi(i, j, k)) - 0.5 * dx[2] < 0) {
+                            // Mixed phase (assume liquid is on bottom)
+                            z -= 0.5 * phi(i, j, k);
+                        } // else: Fully liquid, z is unchanged
+
                         if (z > HOS_zmax || z < HOS_zmin) {
-                            phi(i, j, k) =
-                                eta[ii + jj * HOS_nx] + zsl - z;
                             // Assume velocities are zero outside range
                             vel(i, j, k, 0) = 0;
                             vel(i, j, k, 1) = 0;
@@ -235,57 +296,31 @@ struct InitDataOp<HOSWaves>
                                 HOS_z = HOS_zmin + HOS_dz * (kk + 0.5);
                             }
                             // Shift indices left
-                            ii = ii - 1;
-                            jj = jj - 1;
                             kk = kk - 1;
                             // Modify indices to avoid going out of bounds
-                            ii = amrex::max(0,amrex::min(HOS_nx-1,ii));
-                            jj = amrex::max(0,amrex::min(HOS_ny-1,jj));
-                            kk = amrex::max(0,amrex::min(HOS_nz-1,kk));
-                            // Reset locations
-                            HOS_x = HOS_dx * (ii + 0.5);
-                            HOS_y = HOS_dy * (jj + 0.5);
+                            kk = amrex::max(0,amrex::min(HOS_nz-2,kk));
+                            // Reset location
                             HOS_z = HOS_zmin + HOS_dz * (kk + 0.5);
                             // Interpolation factors
-                            amrex::Real wx_hi = (x - HOS_x) / HOS_dx;
-                            amrex::Real wy_hi = (y - HOS_y) / HOS_dy;
                             amrex::Real wz_hi = (z - HOS_z) / HOS_dz;
-                            amrex::Real wx_lo = 1.0 - wx_hi;
-                            amrex::Real wy_lo = 1.0 - wy_hi;
                             amrex::Real wz_lo = 1.0 - wz_hi;
 
-                            // Get data
-                            const amrex::Real eta_00 =
-                                eta[ii + jj * HOS_nx];
-                            const amrex::Real eta_01 =
-                                eta[ii + (jj + 1) * HOS_nx];
-                            const amrex::Real eta_10 =
-                                eta[ii + 1 + jj * HOS_nx];
-                            const amrex::Real eta_11 =
-                                eta[ii + 1 + (jj + 1) * HOS_nx];
-                            const amrex::Real eta_ = wx_lo * wy_lo * eta_00 +
-                                                     wx_lo * wy_hi * eta_01 +
-                                                     wx_hi * wy_lo * eta_10 +
-                                                     wx_hi * wy_hi * eta_11;
-
-                            phi(i, j, k) = eta_ + zsl - z;
-
                             // Set up indices for clarity
-                            const int i000 = (ii + jj * HOS_nx) * HOS_nz + kk;
+                            const int i000 = (jj + ii * HOS_ny) * HOS_nz + kk;
                             const int i001 =
-                                (ii + jj * HOS_nx) * HOS_nz + kk + 1;
+                                (jj + ii * HOS_ny) * HOS_nz + kk + 1;
                             const int i010 =
-                                (ii + (jj + 1) * HOS_nx) * HOS_nz + kk;
+                                (jj1 + ii * HOS_ny) * HOS_nz + kk;
                             const int i100 =
-                                (ii + 1 + jj * HOS_nx) * HOS_nz + kk;
+                                (jj + ii1 * HOS_ny) * HOS_nz + kk;
                             const int i011 =
-                                (ii + (jj + 1) * HOS_nx) * HOS_nz + kk + 1;
+                                (jj1 + ii * HOS_ny) * HOS_nz + kk + 1;
                             const int i101 =
-                                (ii + 1 + jj * HOS_nx) * HOS_nz + kk + 1;
+                                (jj + ii1 * HOS_ny) * HOS_nz + kk + 1;
                             const int i110 =
-                                (ii + 1 + (jj + 1) * HOS_nx) * HOS_nz + kk;
+                                (jj1 + ii1 * HOS_ny) * HOS_nz + kk;
                             const int i111 =
-                                (ii + 1 + (jj + 1) * HOS_nx) * HOS_nz + kk + 1;
+                                (jj1 + ii1 * HOS_ny) * HOS_nz + kk + 1;
                             vel(i, j, k, 0) =
                                 wx_lo * wy_lo * wz_lo * u[i000] +
                                 wx_lo * wy_lo * wz_hi * u[i001] +
@@ -329,16 +364,36 @@ struct InitDataOp<HOSWaves>
 
                 const amrex::Real eps = 2. * std::cbrt(dx[0] * dx[1] * dx[2]);
                 amrex::ParallelFor(
-                    vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                    gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         multiphase::levelset_to_vof(i, j, k, eps, phi, volfrac);
                         rho(i, j, k) = rho1 * volfrac(i, j, k) +
                                        rho2 * (1.0 - volfrac(i, j, k));
                     });
             }
         }
-        // Fill boundaries with vof, density
+        // Average down to get fine information on coarse grid where possible
+        for (int lev = nlevels - 1; lev > 0; --lev) {
+            amrex::average_down(
+                m_ow_velocity(lev), m_ow_velocity(lev - 1), 0, AMREX_SPACEDIM,
+                sim.mesh().refRatio(lev - 1));
+            amrex::average_down(
+                velocity(lev), velocity(lev - 1), 0, AMREX_SPACEDIM,
+                sim.mesh().refRatio(lev - 1));
+            amrex::average_down(
+                m_ow_levelset(lev), m_ow_levelset(lev - 1), 0, 1,
+                sim.mesh().refRatio(lev - 1));
+            amrex::average_down(
+                vof(lev), vof(lev - 1), 0, 1, sim.mesh().refRatio(lev - 1));
+            amrex::average_down(
+                density(lev), density(lev - 1), 0, 1,
+                sim.mesh().refRatio(lev - 1));
+        }
+        // Fill boundaries and interior cells
         vof.fillpatch(0.0);
         density.fillpatch(0.0);
+        velocity.fillpatch(0.0);
+        m_ow_velocity.fillpatch(0.0);
+        m_ow_levelset.fillpatch(0.0);
     }
 };
 
@@ -351,8 +406,8 @@ struct UpdateRelaxZonesOp<HOSWaves>
 
         auto& sim = data.sim();
         // cppcheck-suppress constVariable
-        // Get time at conclusion of current timestep
-        const auto& time = sim.time().new_time();
+        // Nudge the solution toward where it should be at the current time
+        const auto& time = sim.time().current_time();
         // Check if HOS time needs to be incremented
         bool read_flag = false;
         if (time > wdata.HOS_t) {
@@ -361,6 +416,10 @@ struct UpdateRelaxZonesOp<HOSWaves>
             // Increment time
             wdata.HOS_t += wdata.HOS_dt;
             // Flag to store new data
+            read_flag = true;
+        }
+        if (wdata.HOS_n == wdata.HOS_n0) {
+            // Flag to store data in ow zones
             read_flag = true;
         }
 
@@ -373,61 +432,113 @@ struct UpdateRelaxZonesOp<HOSWaves>
 
         auto nlevels = sim.repo().num_active_levels();
         auto geom = sim.mesh().Geom();
-        // Set up variables that are re-written at each level
-        RealList eta, u, v, w;
-        int HOS_nx, HOS_ny, HOS_nz;
-        amrex::Real HOS_Lx, HOS_Ly, HOS_zmin, HOS_zmax;
-        for (int lev = 0; lev < nlevels; ++lev) {
-            const auto& problo = geom[lev].ProbLoArray();
-            const auto& dx = geom[lev].CellSizeArray();
-            // Read HOS data at current level
-            if (read_flag) {
+
+        // Read HOS data if necessary
+        if (read_flag) {
+            // Set up variables that are re-written at each level
+            RealList eta, u, v, w;
+            int HOS_nx, HOS_ny, HOS_nz;
+            amrex::Real HOS_Lx, HOS_Ly, HOS_zmin, HOS_zmax;
+            for (int lev = 0; lev < nlevels; ++lev) {
+                const auto& problo = geom[lev].ProbLoArray();
+                const auto& dx = geom[lev].CellSizeArray();
+                // Read HOS data at current level
                 ReadHOSFileLev(
                     lev, wdata.HOS_prefix, wdata.HOS_n, eta, u, v, w, HOS_nx,
                     HOS_Lx, HOS_ny, HOS_Ly, HOS_nz, HOS_zmin, HOS_zmax);
-            }
-            for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid(); ++mfi) {
-                auto phi = m_ow_levelset(lev).array(mfi);
-                auto vel = m_ow_velocity(lev).array(mfi);
-                auto HOS_phi = hos_levelset(lev).array(mfi);
-                auto HOS_vel = hos_velocity(lev).array(mfi);
 
-                const amrex::Real zsl = wdata.zsl;
-                const amrex::Real HOS_dx = HOS_Lx / HOS_nx;
-                const amrex::Real HOS_dy = HOS_Ly / HOS_ny;
-                const amrex::Real HOS_dz = (HOS_zmax - HOS_zmin) / HOS_nz;
-                const amrex::Real HOS_t = wdata.HOS_t;
-                const amrex::Real t_last = wdata.t_last;
-                const auto& vbx = mfi.validbox();
-                amrex::ParallelFor(
-                    vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                        // Update fields if data has been just read
-                        if (read_flag) {
-                            const amrex::Real x = problo[0] + (i + 0.5) * dx[0];
-                            const amrex::Real y = problo[1] + (j + 0.5) * dx[1];
-                            const amrex::Real z = problo[2] + (k + 0.5) * dx[2];
+                // Loop through multifab to interpolate and store in HOS fields
+                for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid();
+                     ++mfi) {
+                    auto HOS_phi = hos_levelset(lev).array(mfi);
+                    auto HOS_vel = hos_velocity(lev).array(mfi);
+
+                    const amrex::Real zsl = wdata.zsl;
+                    const amrex::Real HOS_dx = HOS_Lx / HOS_nx;
+                    const amrex::Real HOS_dy = HOS_Ly / HOS_ny;
+                    const amrex::Real HOS_dz = (HOS_zmax - HOS_zmin) / HOS_nz;
+                    const auto& gbx = mfi.growntilebox(2);
+                    amrex::ParallelFor(
+                        gbx,
+                        [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                            // Update fields to store data
+                            amrex::Real x = problo[0] + (i + 0.5) * dx[0];
+                            amrex::Real y = problo[1] + (j + 0.5) * dx[1];
+                            amrex::Real z = problo[2] + (k + 0.5) * dx[2];
+                            // Adjust x,y for periodicity of HOS domain
+                            if (x > HOS_Lx) x -= HOS_Lx;
+                            if (x < 0.0   ) x += HOS_Lx;
+                            if (y > HOS_Ly) y -= HOS_Ly;
+                            if (y < 0.0   ) y += HOS_Ly;
                             // Determine lateral indices for interpolation
                             // It's best to have the grids line up directly
-                            int ii = 0;
-                            amrex::Real HOS_x = HOS_dx * (ii + 0.5);
+                            int ii1 = 0;
+                            amrex::Real HOS_x = HOS_dx * (ii1 + 0.5);
                             while (HOS_x < x) {
-                                ++ii;
-                                HOS_x = HOS_dx * (ii + 0.5);
+                                ++ii1;
+                                HOS_x = HOS_dx * (ii1 + 0.5);
                             }
-                            int jj = 0;
-                            amrex::Real HOS_y = HOS_dy * (jj + 0.5);
+                            int jj1 = 0;
+                            amrex::Real HOS_y = HOS_dy * (jj1 + 0.5);
                             while (HOS_y < y) {
-                                ++jj;
-                                HOS_y = HOS_dy * (jj + 0.5);
+                                ++jj1;
+                                HOS_y = HOS_dy * (jj1 + 0.5);
                             }
 
+                            // Do interpolation for x, y and get eta
+                            // Shift indices left (because of the finding
+                            // function)
+                            int ii = ii1 - 1;
+                            int jj = jj1 - 1;
+                            // Reset locations
+                            HOS_x = HOS_dx * (ii + 0.5);
+                            HOS_y = HOS_dy * (jj + 0.5);
+                            // Modify indices to avoid going out of bounds,
+                            // according to periodicity (assumed about HOS data)
+                            if (ii < 0) ii += HOS_nx;
+                            if (ii1 < 0) ii1 += HOS_nx;
+                            if (jj < 0) jj += HOS_ny;
+                            if (jj1 < 0) jj1 += HOS_ny;
+                            if (ii >= HOS_nx) ii -= HOS_nx;
+                            if (ii1 >= HOS_nx) ii1 -= HOS_nx;
+                            if (jj >= HOS_ny) jj -= HOS_ny;
+                            if (jj1 >= HOS_ny) jj1 -= HOS_ny;
+                            // Interpolation factors
+                            amrex::Real wx_hi = (x - HOS_x) / HOS_dx;
+                            amrex::Real wy_hi = (y - HOS_y) / HOS_dy;
+                            amrex::Real wx_lo = 1.0 - wx_hi;
+                            amrex::Real wy_lo = 1.0 - wy_hi;
+
+                            // Get data
+                            const amrex::Real eta_00 = eta[jj + ii * HOS_ny];
+                            const amrex::Real eta_01 = eta[jj1 + ii * HOS_ny];
+                            const amrex::Real eta_10 = eta[jj + ii1 * HOS_ny];
+                            const amrex::Real eta_11 = eta[jj1 + ii1 * HOS_ny];
+                            const amrex::Real eta_ = wx_lo * wy_lo * eta_00 +
+                                                     wx_lo * wy_hi * eta_01 +
+                                                     wx_hi * wy_lo * eta_10 +
+                                                     wx_hi * wy_hi * eta_11;
+
+                            HOS_phi(i, j, k) = eta_ + zsl - z;
+
+                            // Determine z location for interpolation based on
+                            // phase
+                            if (HOS_phi(i, j, k) + 0.5 * dx[2] < 0) {
+                                // Fully gas (exceed range so that velocity = 0)
+                                z = HOS_zmax + 1;
+                            } else if (
+                                amrex::Math::abs(HOS_phi(i, j, k)) -
+                                    0.5 * dx[2] <
+                                0) {
+                                // Mixed phase (assume liquid is on bottom)
+                                z -= 0.5 * HOS_phi(i, j, k);
+                            } // else: Fully liquid, z is unchanged
+
                             if (z > HOS_zmax || z < HOS_zmin) {
-                                HOS_phi(i, j, k) =
-                                    eta[ii + jj * HOS_nx] + zsl - z;
                                 // Assume velocities are zero outside range
-                                HOS_vel(i, j, k, 0) = 0;
-                                HOS_vel(i, j, k, 1) = 0;
-                                HOS_vel(i, j, k, 2) = 0;
+                                HOS_vel(i, j, k, 0) = 0.;
+                                HOS_vel(i, j, k, 1) = 0.;
+                                HOS_vel(i, j, k, 2) = 0.;
                             } else {
                                 // Determine vertical indices
                                 int kk = 0;
@@ -438,103 +549,114 @@ struct UpdateRelaxZonesOp<HOSWaves>
                                     HOS_z = HOS_zmin + HOS_dz * (kk + 0.5);
                                 }
                                 // Shift indices left
-                                ii = ii - 1;
-                                jj = jj - 1;
                                 kk = kk - 1;
                                 // Modify indices to avoid going out of bounds
-                                ii = amrex::max(0, amrex::min(HOS_nx - 1, ii));
-                                jj = amrex::max(0, amrex::min(HOS_ny - 1, jj));
-                                kk = amrex::max(0, amrex::min(HOS_nz - 1, kk));
-                                // Reset locations
-                                HOS_x = HOS_dx * (ii + 0.5);
-                                HOS_y = HOS_dy * (jj + 0.5);
+                                kk = amrex::max(0, amrex::min(HOS_nz - 2, kk));
+                                // Reset location
                                 HOS_z = HOS_zmin + HOS_dz * (kk + 0.5);
                                 // Interpolation factors
-                                amrex::Real wx_hi = (x - HOS_x) / HOS_dx;
-                                amrex::Real wy_hi = (y - HOS_y) / HOS_dy;
                                 amrex::Real wz_hi = (z - HOS_z) / HOS_dz;
-                                amrex::Real wx_lo = 1.0 - wx_hi;
-                                amrex::Real wy_lo = 1.0 - wy_hi;
                                 amrex::Real wz_lo = 1.0 - wz_hi;
-
-                                // Get data
-                                const amrex::Real eta_00 =
-                                    eta[ii + jj * HOS_nx];
-                                const amrex::Real eta_01 =
-                                    eta[ii + (jj + 1) * HOS_nx];
-                                const amrex::Real eta_10 =
-                                    eta[ii + 1 + jj * HOS_nx];
-                                const amrex::Real eta_11 =
-                                    eta[ii + 1 + (jj + 1) * HOS_nx];
-                                const amrex::Real eta_ =
-                                    wx_lo * wy_lo * eta_00 +
-                                    wx_lo * wy_hi * eta_01 +
-                                    wx_hi * wy_lo * eta_10 +
-                                    wx_hi * wy_hi * eta_11;
-
-                                HOS_phi(i, j, k) = eta_ + zsl - z;
 
                                 // Set up indices for clarity
                                 const int i000 =
-                                    (ii + jj * HOS_nx) * HOS_nz + kk;
+                                    (jj + ii * HOS_ny) * HOS_nz + kk;
                                 const int i001 =
-                                    (ii + jj * HOS_nx) * HOS_nz + kk + 1;
+                                    (jj + ii * HOS_ny) * HOS_nz + kk + 1;
                                 const int i010 =
-                                    (ii + (jj + 1) * HOS_nx) * HOS_nz + kk;
+                                    (jj1 + ii * HOS_ny) * HOS_nz + kk;
                                 const int i100 =
-                                    (ii + 1 + jj * HOS_nx) * HOS_nz + kk;
+                                    (jj + ii1 * HOS_ny) * HOS_nz + kk;
                                 const int i011 =
-                                    (ii + (jj + 1) * HOS_nx) * HOS_nz + kk + 1;
+                                    (jj1 + ii * HOS_ny) * HOS_nz + kk + 1;
                                 const int i101 =
-                                    (ii + 1 + jj * HOS_nx) * HOS_nz + kk + 1;
+                                    (jj + ii1 * HOS_ny) * HOS_nz + kk + 1;
                                 const int i110 =
-                                    (ii + 1 + (jj + 1) * HOS_nx) * HOS_nz + kk;
+                                    (jj1 + ii1 * HOS_ny) * HOS_nz + kk;
                                 const int i111 =
-                                    (ii + 1 + (jj + 1) * HOS_nx) * HOS_nz + kk +
-                                    1;
-                                HOS_vel(i,j,k,0) = wx_lo * wy_lo * wz_lo * u[i000] +
-                                        wx_lo * wy_lo * wz_hi * u[i001] +
-                                        wx_lo * wy_hi * wz_lo * u[i010] +
-                                        wx_lo * wy_hi * wz_hi * u[i011] +
-                                        wx_hi * wy_lo * wz_lo * u[i100] +
-                                        wx_hi * wy_lo * wz_hi * u[i101] +
-                                        wx_hi * wy_hi * wz_lo * u[i110] +
-                                        wx_hi * wy_hi * wz_hi * u[i111];
-                                HOS_vel(i,j,k,1) = wx_lo * wy_lo * wz_lo * v[i000] +
-                                        wx_lo * wy_lo * wz_hi * v[i001] +
-                                        wx_lo * wy_hi * wz_lo * v[i010] +
-                                        wx_lo * wy_hi * wz_hi * v[i011] +
-                                        wx_hi * wy_lo * wz_lo * v[i100] +
-                                        wx_hi * wy_lo * wz_hi * v[i101] +
-                                        wx_hi * wy_hi * wz_lo * v[i110] +
-                                        wx_hi * wy_hi * wz_hi * v[i111];
-                                HOS_vel(i,j,k,2) = wx_lo * wy_lo * wz_lo * w[i000] +
-                                        wx_lo * wy_lo * wz_hi * w[i001] +
-                                        wx_lo * wy_hi * wz_lo * w[i010] +
-                                        wx_lo * wy_hi * wz_hi * w[i011] +
-                                        wx_hi * wy_lo * wz_lo * w[i100] +
-                                        wx_hi * wy_lo * wz_hi * w[i101] +
-                                        wx_hi * wy_hi * wz_lo * w[i110] +
-                                        wx_hi * wy_hi * wz_hi * w[i111];
+                                    (jj1 + ii1 * HOS_ny) * HOS_nz + kk + 1;
+                                HOS_vel(i, j, k, 0) =
+                                    wx_lo * wy_lo * wz_lo * u[i000] +
+                                    wx_lo * wy_lo * wz_hi * u[i001] +
+                                    wx_lo * wy_hi * wz_lo * u[i010] +
+                                    wx_lo * wy_hi * wz_hi * u[i011] +
+                                    wx_hi * wy_lo * wz_lo * u[i100] +
+                                    wx_hi * wy_lo * wz_hi * u[i101] +
+                                    wx_hi * wy_hi * wz_lo * u[i110] +
+                                    wx_hi * wy_hi * wz_hi * u[i111];
+                                HOS_vel(i, j, k, 1) =
+                                    wx_lo * wy_lo * wz_lo * v[i000] +
+                                    wx_lo * wy_lo * wz_hi * v[i001] +
+                                    wx_lo * wy_hi * wz_lo * v[i010] +
+                                    wx_lo * wy_hi * wz_hi * v[i011] +
+                                    wx_hi * wy_lo * wz_lo * v[i100] +
+                                    wx_hi * wy_lo * wz_hi * v[i101] +
+                                    wx_hi * wy_hi * wz_lo * v[i110] +
+                                    wx_hi * wy_hi * wz_hi * v[i111];
+                                HOS_vel(i, j, k, 2) =
+                                    wx_lo * wy_lo * wz_lo * w[i000] +
+                                    wx_lo * wy_lo * wz_hi * w[i001] +
+                                    wx_lo * wy_hi * wz_lo * w[i010] +
+                                    wx_lo * wy_hi * wz_hi * w[i011] +
+                                    wx_hi * wy_lo * wz_lo * w[i100] +
+                                    wx_hi * wy_lo * wz_hi * w[i101] +
+                                    wx_hi * wy_hi * wz_lo * w[i110] +
+                                    wx_hi * wy_hi * wz_hi * w[i111];
+
+                                // Set velocity to zero if no liquid present
+                                if (HOS_phi(i, j, k) + 0.5 * dx[2] < 0.0) {
+                                    HOS_vel(i, j, k, 0) = 0.0;
+                                    HOS_vel(i, j, k, 1) = 0.0;
+                                    HOS_vel(i, j, k, 2) = 0.0;
+                                }
                             }
-                        }
+                        });
+                }
+            }
+            // Average down to get fine information on coarse grid where possible
+            for (int lev = nlevels - 1; lev > 0; --lev) {
+                amrex::average_down(
+                    hos_velocity(lev), hos_velocity(lev - 1), 0, AMREX_SPACEDIM,
+                    sim.mesh().refRatio(lev - 1));
+                amrex::average_down(
+                    hos_levelset(lev), hos_levelset(lev - 1), 0, 1,
+                    sim.mesh().refRatio(lev - 1));
+            }
+            // Fill in across internal boundaries
+            hos_velocity.fillpatch(0.0);
+            hos_levelset.fillpatch(0.0);
+        }
+
+        // Temporally interpolate at every timestep to get target solution
+        for (int lev = 0; lev < nlevels; ++lev) {
+            for (amrex::MFIter mfi(m_ow_levelset(lev)); mfi.isValid(); ++mfi) {
+                auto phi = m_ow_levelset(lev).array(mfi);
+                auto vel = m_ow_velocity(lev).array(mfi);
+                auto HOS_phi = hos_levelset(lev).array(mfi);
+                auto HOS_vel = hos_velocity(lev).array(mfi);
+
+                const amrex::Real HOS_t = wdata.HOS_t;
+                const amrex::Real t_last = wdata.t_last;
+                const auto& gbx = mfi.growntilebox(2);
+                amrex::ParallelFor(
+                    gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         // Interpolate temporally every time
-                        phi(i, j, k) += (HOS_phi(i, j, k) - phi(i, j, k)) /
-                                        (HOS_t - t_last) * (time - t_last);
+                        phi(i, j, k) += (HOS_phi(i, j, k) - phi(i, j, k)) *
+                                        (time - t_last) /
+                                        (HOS_t - t_last + 1e-16);
                         vel(i, j, k, 0) +=
-                            (HOS_vel(i, j, k, 0) - vel(i, j, k, 0)) /
-                            (HOS_t - t_last) * (time - t_last);
+                            (HOS_vel(i, j, k, 0) - vel(i, j, k, 0)) *
+                            (time - t_last) / (HOS_t - t_last + 1e-16);
                         vel(i, j, k, 1) +=
-                            (HOS_vel(i, j, k, 1) - vel(i, j, k, 1)) /
-                            (HOS_t - t_last) * (time - t_last);
+                            (HOS_vel(i, j, k, 1) - vel(i, j, k, 1)) *
+                            (time - t_last) / (HOS_t - t_last + 1e-16);
                         vel(i, j, k, 2) +=
-                            (HOS_vel(i, j, k, 2) - vel(i, j, k, 2)) /
-                            (HOS_t - t_last) * (time - t_last);
+                            (HOS_vel(i, j, k, 2) - vel(i, j, k, 2)) *
+                            (time - t_last) / (HOS_t - t_last + 1e-16);
                     });
             }
         }
-        m_ow_levelset.fillpatch(0.0);
-        m_ow_velocity.fillpatch(0.0);
+
         // Record current time as 'last' for next timestep
         wdata.t_last = time;
     }
