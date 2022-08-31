@@ -410,7 +410,7 @@ struct UpdateRelaxZonesOp<HOSWaves>
         const auto& time = sim.time().current_time();
         // Check if HOS time needs to be incremented
         bool read_flag = false;
-        if (time > wdata.HOS_t) {
+        while (time > wdata.HOS_t) {
             // Increment time step
             ++wdata.HOS_n;
             // Increment time
