@@ -20,6 +20,11 @@ struct HOSWavesData : public RegularWavesBaseData
     amrex::Real HOS_t{0.0};
     // Timestep from HOS data
     amrex::Real HOS_dt{0.0};
+
+    // Turbulence model variables
+    amrex::Real m_tke0 = 0.000001;
+    amrex::Real m_sdr0 = 1.0;
+    bool m_laminar = true;
 };
 
 struct HOSWaves : public RegularWavesType

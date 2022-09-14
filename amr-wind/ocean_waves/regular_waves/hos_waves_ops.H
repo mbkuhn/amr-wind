@@ -127,11 +127,24 @@ struct ReadInputsOp<HOSWaves>
     {
         auto& wdata = data.meta();
         auto& info = data.info();
+
+        std::string turbulence_model;
+        amrex::ParmParse pp_turb("turbulence");
+        pp_turb.query("model", turbulence_model);
+        if (turbulence_model == "Laminar") {
+            wdata.m_laminar = true;
+        }
+        
         regular_waves::read_inputs(wdata, info, pp);
 
         pp.get("HOS_files_prefix", wdata.HOS_prefix);
         pp.query("HOS_init_timestep", wdata.HOS_n0);
         wdata.HOS_n = wdata.HOS_n0;
+
+        if (!wdata.m_laminar) {
+            pp.query("tke0", wdata.m_tke0);
+            pp.query("sdr0", wdata.m_sdr0);
+        }
 
         // Declare fields for HOS
         auto& hos_levelset =
@@ -370,6 +383,13 @@ struct InitDataOp<HOSWaves>
                                        rho2 * (1.0 - volfrac(i, j, k));
                     });
             }
+            // Set up turbulence quantities if needed
+            if (!wdata.m_laminar) {
+                auto& tke = sim.repo().get_field("tke")(lev);
+                auto& sdr = sim.repo().get_field("sdr")(lev);
+                tke.setVal(wdata.m_tke0);
+                sdr.setVal(wdata.m_sdr0);
+            }
         }
         // Average down to get fine information on coarse grid where possible
         for (int lev = nlevels - 1; lev > 0; --lev) {
@@ -394,6 +414,7 @@ struct InitDataOp<HOSWaves>
         velocity.fillpatch(0.0);
         m_ow_velocity.fillpatch(0.0);
         m_ow_levelset.fillpatch(0.0);
+
     }
 };
 
