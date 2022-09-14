@@ -24,7 +24,7 @@ struct HOSWavesData : public RegularWavesBaseData
     // Turbulence model variables
     amrex::Real m_tke0 = 0.000001;
     amrex::Real m_sdr0 = 1.0;
-    bool m_laminar = true;
+    bool m_laminar = false;
 };
 
 struct HOSWaves : public RegularWavesType
