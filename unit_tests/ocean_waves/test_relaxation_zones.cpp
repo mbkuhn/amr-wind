@@ -61,23 +61,24 @@ protected:
 namespace {
 
 // Functions for HOS distribution, choose periodic in x and y
-AMREX_FORCE_INLINE amrex::Real eta_def(amrex::Real x, amrex::Real y)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
+eta_def(amrex::Real x, amrex::Real y)
 {
     return (0.75 + 0.25 * std::sin(2.0 * M_PI * x) * std::cos(2.0 * M_PI * y));
 }
-AMREX_FORCE_INLINE amrex::Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
 u_def(amrex::Real x, amrex::Real y, amrex::Real z)
 {
     return (0.1 * std::sin(2.0 * M_PI * x) + 0.0 * y + 0.5 * z);
 }
-AMREX_FORCE_INLINE amrex::Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
 v_def(amrex::Real x, amrex::Real y, amrex::Real z)
 {
     return (
         0.05 * std::sin(2.0 * M_PI * x) + 0.6 * std::cos(2.0 * M_PI * y) +
         0.0 * z);
 }
-AMREX_FORCE_INLINE amrex::Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
 w_def(amrex::Real x, amrex::Real y, amrex::Real z)
 {
     return (0.0 * x + 0.3 * std::cos(2.0 * M_PI * y) + 0.1 * z);
