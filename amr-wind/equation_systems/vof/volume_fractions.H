@@ -495,6 +495,213 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real levelset_to_vof(
     return result;
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
+    amrex::Real xnorm,
+    amrex::Real ynorm,
+    amrex::Real znorm,
+    amrex::Real dist,
+    amrex::Real xm,
+    amrex::Real xp,
+    amrex::Real ym,
+    amrex::Real yp,
+    amrex::Real zm,
+    amrex::Real zp,
+    amrex::Real& surfarea,
+    amrex::Real& xc,
+    amrex::Real& yc,
+    amrex::Real& zc)
+{
+    // Should only be cells with interface
+
+    // Constant vectors for geometry operations
+    const amrex::Vector<const int> verts2tets{0, 3, 2, 6, 0, 1, 3, 5, 0, 4,
+                                              5, 6, 0, 5, 3, 6, 3, 6, 5, 7};
+    const amrex::Vector<const int> cut_v1{
+        -1, -1, -1, -1, 1, 1, 1, -1, 2, 2, 2, -1, 1,  2,  1,  2,
+        3,  3,  3,  -1, 1, 3, 1, 3,  2, 3, 2, 3,  4,  4,  4,  -1,
+        4,  4,  4,  -1, 1, 4, 1, 4,  2, 4, 2, 4,  3,  3,  3,  -1,
+        3,  4,  3,  4,  2, 2, 2, -1, 1, 1, 1, -1, -1, -1, -1, -1};
+    const amrex::Vector<const int> cut_v2{
+        -1, -1, -1, -1, 2, 3, 4, -1, 3, 4, 1, -1, 4,  4,  3,  3,
+        4,  1,  2,  -1, 4, 4, 2, 2,  4, 4, 1, 1,  1,  2,  3,  -1,
+        1,  2,  3,  -1, 3, 3, 2, 2,  3, 3, 1, 1,  4,  1,  2,  -1,
+        2,  2,  1,  1,  3, 4, 1, -1, 2, 3, 4, -1, -1, -1, -1, -1};
+    const amrex::Vector<const int> cut_nvert{0, 3, 3, 4, 3, 4, 4, 3,
+                                             3, 4, 4, 3, 4, 3, 3, 0};
+    // Cell vertices
+    amrex::Vector<amrex::Real> verts(24, 0.);
+    for (int n = 0; n < 8; ++n) {
+        verts[0 + 3 * n] = (n % 2 < 1 ? xm : xp);
+        verts[1 + 3 * n] = (n % 4 < 2 ? ym : yp);
+        verts[2 + 3 * n] = (n % 8 < 4 ? zm : zp);
+    }
+    std::cout << "cell\n";
+    std::cout << verts[0] << " " << verts[1] << " " << verts[2] << std::endl;
+    std::cout << verts[3] << " " << verts[4] << " " << verts[5] << std::endl;
+    std::cout << verts[6] << " " << verts[7] << " " << verts[8] << std::endl;
+    std::cout << verts[9] << " " << verts[10] << " " << verts[11] << std::endl;
+    std::cout << verts[12] << " " << verts[13] << " " << verts[14] << std::endl;
+    std::cout << verts[15] << " " << verts[16] << " " << verts[17] << std::endl;
+    std::cout << verts[18] << " " << verts[19] << " " << verts[20] << std::endl;
+    std::cout << verts[21] << " " << verts[22] << " " << verts[23] << std::endl<< std::endl;
+    // Tet vertices/nodes
+    amrex::Vector<amrex::Real> nodes(12, 0.);
+
+    // Loop over tets
+    surfarea = 0.0;
+    xc = 0.0;
+    yc = 0.0;
+    zc = 0.0;
+    for (int ntet = 0; ntet < 5; ++ntet) {
+        // Create tet and distance
+        amrex::Vector<amrex::Real> mytet(12, 0.);
+        amrex::Vector<amrex::Real> d(4, 0.);
+        for (int n = 0; n < 4; ++n) {
+            mytet[0 + 3 * n] = verts[0 + 3 * verts2tets[n + 4 * ntet]];
+            mytet[1 + 3 * n] = verts[1 + 3 * verts2tets[n + 4 * ntet]];
+            mytet[2 + 3 * n] = verts[2 + 3 * verts2tets[n + 4 * ntet]];
+            d[n] = xnorm * mytet[0 + 3 * n] + ynorm * mytet[1 + 3 * n] +
+                   znorm * mytet[2 + 3 * n] - dist;
+        }
+        // Find cut case
+        int ccase = 0 + (int)(0.5 + amrex::Math::copysign(0.5, d[0])) +
+                    2 * (int)(0.5 + amrex::Math::copysign(0.5, d[1])) +
+                    4 * (int)(0.5 + amrex::Math::copysign(0.5, d[2])) +
+                    8 * (int)(0.5 + amrex::Math::copysign(0.5, d[3]));
+        // Get points on cut plane, store as nodes
+        int npts = cut_nvert[ccase];
+        std::cout << "tet " << ntet << " " << npts << " " << ccase << std::endl;
+        std::cout << mytet[0] << " " << mytet[1] << " " << mytet[2]
+                  << std::endl;
+        std::cout << mytet[3] << " " << mytet[4] << " " << mytet[5]
+                  << std::endl;
+        std::cout << mytet[6] << " " << mytet[7] << " " << mytet[8]
+                  << std::endl;
+        std::cout << mytet[9] << " " << mytet[10] << " " << mytet[11]
+                  << std::endl;
+        std::cout << "end tet\n"<< std::endl;
+        for (int n = 0; n < npts; ++n) {
+            int v1 = cut_v1[n + 4 * ccase] - 1;
+            int v2 = cut_v2[n + 4 * ccase] - 1;
+            amrex::Real mu = amrex::min(
+                1.0,
+                amrex::max(
+                    0.0, -d[v1] / (amrex::Math::copysign(
+                                      amrex::Math::abs(d[v2] - d[v1]) + 1e-12,
+                                      d[v2] - d[v1]))));
+            // Store location of this node
+            for (int nn = 0; nn < 3; ++nn) {
+                nodes[nn + 3 * n] =
+                    (1.0 - mu) * mytet[nn + 3 * v1] + mu * mytet[nn + 3 * v2];
+            }
+        }
+        // Depending on number of surface vertices, get area and centroid
+        switch (npts) {
+        case 3: {
+            // Surface is triangle - get area and centroid directly
+            const amrex::Real a = sqrt(
+                std::pow(nodes[0 + 3 * 0] - nodes[0 + 3 * 1], 2) +
+                std::pow(nodes[1 + 3 * 0] - nodes[1 + 3 * 1], 2) +
+                std::pow(nodes[2 + 3 * 0] - nodes[2 + 3 * 1], 2));
+            const amrex::Real b = sqrt(
+                std::pow(nodes[0 + 3 * 2] - nodes[0 + 3 * 1], 2) +
+                std::pow(nodes[1 + 3 * 2] - nodes[1 + 3 * 1], 2) +
+                std::pow(nodes[2 + 3 * 2] - nodes[2 + 3 * 1], 2));
+            const amrex::Real c = sqrt(
+                std::pow(nodes[0 + 3 * 2] - nodes[0 + 3 * 0], 2) +
+                std::pow(nodes[1 + 3 * 2] - nodes[1 + 3 * 0], 2) +
+                std::pow(nodes[2 + 3 * 2] - nodes[2 + 3 * 0], 2));
+            const amrex::Real s = 0.5 * (a + b + c);
+            // Triangle surface area
+            const amrex::Real tsa = sqrt(s * (s - a) * (s - b) * (s - c));
+            // Store centroid contribution, weighted by surface area
+            xc += tsa / 3.0 *
+                  (nodes[0 + 3 * 0] + nodes[0 + 3 * 1] + nodes[0 + 3 * 2]);
+            yc += tsa / 3.0 *
+                  (nodes[1 + 3 * 0] + nodes[1 + 3 * 1] + nodes[1 + 3 * 2]);
+            zc += tsa / 3.0 *
+                  (nodes[2 + 3 * 0] + nodes[2 + 3 * 1] + nodes[2 + 3 * 2]);
+            // Store surface area contribution
+            surfarea += tsa;
+            std::cout << npts << " " << tsa << std::endl;
+            std::cout << "tri\n";
+            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2] << std::endl;
+            std::cout << nodes[3] << " " << nodes[4] << " " << nodes[5] << std::endl;
+            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8] << std::endl<< std::endl;
+            break;
+        }
+        case 4: {
+            // Surface is quadrilateral - split into triangles and get info
+            amrex::Real a = sqrt(
+                std::pow(nodes[0 + 3 * 0] - nodes[0 + 3 * 1], 2) +
+                std::pow(nodes[1 + 3 * 0] - nodes[1 + 3 * 1], 2) +
+                std::pow(nodes[2 + 3 * 0] - nodes[2 + 3 * 1], 2));
+            const amrex::Real b = sqrt(
+                std::pow(nodes[0 + 3 * 2] - nodes[0 + 3 * 1], 2) +
+                std::pow(nodes[1 + 3 * 2] - nodes[1 + 3 * 1], 2) +
+                std::pow(nodes[2 + 3 * 2] - nodes[2 + 3 * 1], 2));
+            amrex::Real c = sqrt(
+                std::pow(nodes[0 + 3 * 2] - nodes[0 + 3 * 0], 2) +
+                std::pow(nodes[1 + 3 * 2] - nodes[1 + 3 * 0], 2) +
+                std::pow(nodes[2 + 3 * 2] - nodes[2 + 3 * 0], 2));
+            amrex::Real s = 0.5 * (a + b + c);
+            // First triangle surface area
+            amrex::Real tsa = sqrt(s * (s - a) * (s - b) * (s - c));
+            // Store centroid contribution, weighted by surface area
+            xc += tsa / 3.0 *
+                  (nodes[0 + 3 * 0] + nodes[0 + 3 * 1] + nodes[0 + 3 * 2]);
+            yc += tsa / 3.0 *
+                  (nodes[1 + 3 * 0] + nodes[1 + 3 * 1] + nodes[1 + 3 * 2]);
+            zc += tsa / 3.0 *
+                  (nodes[2 + 3 * 0] + nodes[2 + 3 * 1] + nodes[2 + 3 * 2]);
+            // Store surface area contribution
+            surfarea += tsa;
+            std::cout << npts << "-1 " << tsa << std::endl;
+            std::cout << "tri\n";
+            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2] << std::endl;
+            std::cout << nodes[3] << " " << nodes[4] << " " << nodes[5] << std::endl;
+            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8] << std::endl<< std::endl;
+            // Triangle sides not shared
+            a = sqrt(
+                std::pow(nodes[0 + 3 * 3] - nodes[0 + 3 * 1], 2) +
+                std::pow(nodes[1 + 3 * 3] - nodes[1 + 3 * 1], 2) +
+                std::pow(nodes[2 + 3 * 3] - nodes[2 + 3 * 1], 2));
+            c = sqrt(
+                std::pow(nodes[0 + 3 * 2] - nodes[0 + 3 * 3], 2) +
+                std::pow(nodes[1 + 3 * 2] - nodes[1 + 3 * 3], 2) +
+                std::pow(nodes[2 + 3 * 2] - nodes[2 + 3 * 3], 2));
+            s = 0.5 * (a + b + c);
+            // Second triangle surface area
+            tsa = sqrt(s * (s - a) * (s - b) * (s - c));
+            // Store centroid contribution, weighted by surface area
+            xc += tsa / 3.0 *
+                  (nodes[0 + 3 * 3] + nodes[0 + 3 * 1] + nodes[0 + 3 * 2]);
+            yc += tsa / 3.0 *
+                  (nodes[1 + 3 * 3] + nodes[1 + 3 * 1] + nodes[1 + 3 * 2]);
+            zc += tsa / 3.0 *
+                  (nodes[2 + 3 * 3] + nodes[2 + 3 * 1] + nodes[2 + 3 * 2]);
+            std::cout << npts << "-2 " << tsa << std::endl;
+            std::cout << "tri\n";
+            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2] << std::endl;
+            std::cout << nodes[9] << " " << nodes[10] << " " << nodes[11] << std::endl;
+            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8] << std::endl << std::endl;
+            // Store surface area contribution
+            surfarea += tsa;
+            break;
+        }
+        case 0:
+        default: {
+            // Do nothing
+            break;
+        }
+        }
+    }
+    // Normalize centroid coordinates
+    xc /= surfarea;
+    yc /= surfarea;
+    zc /= surfarea;
+}
+
 } // namespace amr_wind::multiphase
 
 #endif // VOLUME_FRACTIONS.H
