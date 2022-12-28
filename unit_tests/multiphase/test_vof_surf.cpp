@@ -241,18 +241,17 @@ TEST_F(VOFSurfTest, simple_half)
     // In x
     {
         // Input quantities: normal vector
-        amrex::Real xnorm = 1.0;
-        amrex::Real ynorm = 0.0;
-        amrex::Real znorm = 0.0;
+        amrex::Real normx = 1.0;
+        amrex::Real normy = 0.0;
+        amrex::Real normz = 0.0;
 
-        // Get dist based on inputs
-        amrex::Real dist =
-            amr_wind::multiphase::volume_intercept(xnorm, ynorm, znorm, VOF);
-        std::cout << dist << std::endl;
+        // Get alpha based on inputs
+        amrex::Real alpha =
+            amr_wind::multiphase::volume_intercept(normx, normy, normz, VOF);
 
         // Perform calculations
         amr_wind::multiphase::surfacearea_center(
-            xnorm, ynorm, znorm, dist, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+            normx, normy, normz, alpha, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
 
         // Check answers
         // centroid should be center of cell
@@ -265,18 +264,17 @@ TEST_F(VOFSurfTest, simple_half)
     // In y
     {
         // Input quantities: normal vector
-        amrex::Real xnorm = 0.0;
-        amrex::Real ynorm = 1.0;
-        amrex::Real znorm = 0.0;
+        amrex::Real normx = 0.0;
+        amrex::Real normy = 1.0;
+        amrex::Real normz = 0.0;
 
-        // Get dist based on inputs
-        amrex::Real dist =
-            amr_wind::multiphase::volume_intercept(xnorm, ynorm, znorm, VOF);
-        std::cout << dist << std::endl;
+        // Get alpha based on inputs
+        amrex::Real alpha =
+            amr_wind::multiphase::volume_intercept(normx, normy, normz, VOF);
 
         // Perform calculations
         amr_wind::multiphase::surfacearea_center(
-            xnorm, ynorm, znorm, dist, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+            normx, normy, normz, alpha, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
 
         // Check answers
         // centroid should be center of cell
@@ -289,18 +287,17 @@ TEST_F(VOFSurfTest, simple_half)
     // In z
     {
         // Input quantities: normal vector
-        amrex::Real xnorm = 0.0;
-        amrex::Real ynorm = 0.0;
-        amrex::Real znorm = 1.0;
+        amrex::Real normx = 0.0;
+        amrex::Real normy = 0.0;
+        amrex::Real normz = 1.0;
 
-        // Get dist based on inputs
-        amrex::Real dist =
-            amr_wind::multiphase::volume_intercept(xnorm, ynorm, znorm, VOF);
-        std::cout << dist << std::endl;
+        // Get alpha based on inputs
+        amrex::Real alpha =
+            amr_wind::multiphase::volume_intercept(normx, normy, normz, VOF);
 
         // Perform calculations
         amr_wind::multiphase::surfacearea_center(
-            xnorm, ynorm, znorm, dist, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+            normx, normy, normz, alpha, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
 
         // Check answers
         // centroid should be center of cell
@@ -322,15 +319,14 @@ TEST_F(VOFSurfTest, other_half)
     const amrex::Real zm = 0.0;
     const amrex::Real zp = 0.25;
     // Input quantities: normal vector and vof
-    amrex::Real xnorm = 0.0;
-    amrex::Real ynorm = 0.0;
-    amrex::Real znorm = 1.0;
+    amrex::Real normx = 0.0;
+    amrex::Real normy = 0.0;
+    amrex::Real normz = 1.0;
     amrex::Real VOF = 0.5;
 
-    // Get dist based on inputs
-    amrex::Real dist =
-        amr_wind::multiphase::volume_intercept(xnorm, ynorm, znorm, VOF);
-    std::cout << dist << std::endl;
+    // Get alpha based on inputs
+    amrex::Real alpha =
+        amr_wind::multiphase::volume_intercept(normx, normy, normz, VOF);
 
     // Output quantities to be reused
     amrex::Real xc = 0.0;
@@ -340,7 +336,7 @@ TEST_F(VOFSurfTest, other_half)
 
     // Perform calculations
     amr_wind::multiphase::surfacearea_center(
-        xnorm, ynorm, znorm, dist, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+        normx, normy, normz, alpha, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
 
     // Check answers
     constexpr amrex::Real tol = 1e-11;

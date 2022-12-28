@@ -539,6 +539,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
         0.5 * (normx * (xm + xp) + normy * (ym + yp) + normz * (zm + zp)) +
         alpha * (amrex::Math::abs(normx) + amrex::Math::abs(normy) +
                  amrex::Math::abs(normz));
+
     // Cell vertices
     amrex::Vector<amrex::Real> verts(24, 0.);
     for (int n = 0; n < 8; ++n) {
@@ -546,16 +547,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
         verts[1 + 3 * n] = (n % 4 < 2 ? ym : yp);
         verts[2 + 3 * n] = (n % 8 < 4 ? zm : zp);
     }
-    std::cout << "cell\n";
-    std::cout << verts[0] << " " << verts[1] << " " << verts[2] << std::endl;
-    std::cout << verts[3] << " " << verts[4] << " " << verts[5] << std::endl;
-    std::cout << verts[6] << " " << verts[7] << " " << verts[8] << std::endl;
-    std::cout << verts[9] << " " << verts[10] << " " << verts[11] << std::endl;
-    std::cout << verts[12] << " " << verts[13] << " " << verts[14] << std::endl;
-    std::cout << verts[15] << " " << verts[16] << " " << verts[17] << std::endl;
-    std::cout << verts[18] << " " << verts[19] << " " << verts[20] << std::endl;
-    std::cout << verts[21] << " " << verts[22] << " " << verts[23] << std::endl
-              << std::endl;
     // Tet vertices/nodes
     amrex::Vector<amrex::Real> nodes(12, 0.);
 
@@ -582,16 +573,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
                     8 * (int)(0.5 + amrex::Math::copysign(0.5, d[3]));
         // Get points on cut plane, store as nodes
         int npts = cut_nvert[ccase];
-        std::cout << "tet " << ntet << " " << npts << " " << ccase << std::endl;
-        std::cout << mytet[0] << " " << mytet[1] << " " << mytet[2]
-                  << std::endl;
-        std::cout << mytet[3] << " " << mytet[4] << " " << mytet[5]
-                  << std::endl;
-        std::cout << mytet[6] << " " << mytet[7] << " " << mytet[8]
-                  << std::endl;
-        std::cout << mytet[9] << " " << mytet[10] << " " << mytet[11]
-                  << std::endl;
-        std::cout << "end tet\n" << std::endl;
         for (int n = 0; n < npts; ++n) {
             int v1 = cut_v1[n + 4 * ccase] - 1;
             int v2 = cut_v2[n + 4 * ccase] - 1;
@@ -635,15 +616,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
                   (nodes[2 + 3 * 0] + nodes[2 + 3 * 1] + nodes[2 + 3 * 2]);
             // Store surface area contribution
             surfarea += tsa;
-            std::cout << npts << " " << tsa << std::endl;
-            std::cout << "tri\n";
-            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2]
-                      << std::endl;
-            std::cout << nodes[3] << " " << nodes[4] << " " << nodes[5]
-                      << std::endl;
-            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8]
-                      << std::endl
-                      << std::endl;
             break;
         }
         case 4: {
@@ -672,15 +644,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
                   (nodes[2 + 3 * 0] + nodes[2 + 3 * 1] + nodes[2 + 3 * 2]);
             // Store surface area contribution
             surfarea += tsa;
-            std::cout << npts << "-1 " << tsa << std::endl;
-            std::cout << "tri\n";
-            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2]
-                      << std::endl;
-            std::cout << nodes[3] << " " << nodes[4] << " " << nodes[5]
-                      << std::endl;
-            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8]
-                      << std::endl
-                      << std::endl;
             // Triangle sides not shared
             a = sqrt(
                 std::pow(nodes[0 + 3 * 3] - nodes[0 + 3 * 1], 2) +
@@ -700,15 +663,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
                   (nodes[1 + 3 * 3] + nodes[1 + 3 * 1] + nodes[1 + 3 * 2]);
             zc += tsa / 3.0 *
                   (nodes[2 + 3 * 3] + nodes[2 + 3 * 1] + nodes[2 + 3 * 2]);
-            std::cout << npts << "-2 " << tsa << std::endl;
-            std::cout << "tri\n";
-            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2]
-                      << std::endl;
-            std::cout << nodes[9] << " " << nodes[10] << " " << nodes[11]
-                      << std::endl;
-            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8]
-                      << std::endl
-                      << std::endl;
             // Store surface area contribution
             surfarea += tsa;
             break;
