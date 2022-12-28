@@ -218,21 +218,17 @@ amrex::Real fit_plane_test_impl_h(
 
 } // namespace*/
 
-TEST_F(VOFSurfTest, surface_quantities)
+TEST_F(VOFSurfTest, simple_half)
 {
     // Structured cell boundaries
-    /*const amrex::Real xm = 0.1;
-    const amrex::Real xp = 0.5;
-    const amrex::Real ym = -0.2;
-    const amrex::Real yp = 0.1;
-    const amrex::Real zm = 0.0;
-    const amrex::Real zp = 0.25;*/
     const amrex::Real xm = 0.0;
     const amrex::Real xp = 1.0;
     const amrex::Real ym = 0.0;
     const amrex::Real yp = 1.0;
     const amrex::Real zm = 0.0;
     const amrex::Real zp = 1.0;
+    // Constant input quantity
+    const amrex::Real VOF = 0.5;
 
     // Output quantities to be reused
     amrex::Real xc = 0.0;
@@ -240,15 +236,107 @@ TEST_F(VOFSurfTest, surface_quantities)
     amrex::Real zc = 0.0;
     amrex::Real sa = 0.0;
 
+    // Tolerance for checks
+    constexpr amrex::Real tol = 1e-11;
+    // In x
+    {
+        // Input quantities: normal vector
+        amrex::Real xnorm = 1.0;
+        amrex::Real ynorm = 0.0;
+        amrex::Real znorm = 0.0;
+
+        // Get dist based on inputs
+        amrex::Real dist =
+            amr_wind::multiphase::volume_intercept(xnorm, ynorm, znorm, VOF);
+        std::cout << dist << std::endl;
+
+        // Perform calculations
+        amr_wind::multiphase::surfacearea_center(
+            xnorm, ynorm, znorm, dist, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+
+        // Check answers
+        // centroid should be center of cell
+        EXPECT_NEAR(xc, 0.5 * (xm + xp), tol);
+        EXPECT_NEAR(yc, 0.5 * (ym + yp), tol);
+        EXPECT_NEAR(zc, 0.5 * (zm + zp), tol);
+        // surface area should be xy area
+        EXPECT_NEAR(sa, (xp - xm) * (yp - ym), tol);
+    }
+    // In y
+    {
+        // Input quantities: normal vector
+        amrex::Real xnorm = 0.0;
+        amrex::Real ynorm = 1.0;
+        amrex::Real znorm = 0.0;
+
+        // Get dist based on inputs
+        amrex::Real dist =
+            amr_wind::multiphase::volume_intercept(xnorm, ynorm, znorm, VOF);
+        std::cout << dist << std::endl;
+
+        // Perform calculations
+        amr_wind::multiphase::surfacearea_center(
+            xnorm, ynorm, znorm, dist, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+
+        // Check answers
+        // centroid should be center of cell
+        EXPECT_NEAR(xc, 0.5 * (xm + xp), tol);
+        EXPECT_NEAR(yc, 0.5 * (ym + yp), tol);
+        EXPECT_NEAR(zc, 0.5 * (zm + zp), tol);
+        // surface area should be xy area
+        EXPECT_NEAR(sa, (xp - xm) * (yp - ym), tol);
+    }
+    // In z
+    {
+        // Input quantities: normal vector
+        amrex::Real xnorm = 0.0;
+        amrex::Real ynorm = 0.0;
+        amrex::Real znorm = 1.0;
+
+        // Get dist based on inputs
+        amrex::Real dist =
+            amr_wind::multiphase::volume_intercept(xnorm, ynorm, znorm, VOF);
+        std::cout << dist << std::endl;
+
+        // Perform calculations
+        amr_wind::multiphase::surfacearea_center(
+            xnorm, ynorm, znorm, dist, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+
+        // Check answers
+        // centroid should be center of cell
+        EXPECT_NEAR(xc, 0.5 * (xm + xp), tol);
+        EXPECT_NEAR(yc, 0.5 * (ym + yp), tol);
+        EXPECT_NEAR(zc, 0.5 * (zm + zp), tol);
+        // surface area should be xy area
+        EXPECT_NEAR(sa, (xp - xm) * (yp - ym), tol);
+    }
+}
+
+TEST_F(VOFSurfTest, other_half)
+{
+    // Structured cell boundaries
+    const amrex::Real xm = 0.1;
+    const amrex::Real xp = 0.5;
+    const amrex::Real ym = -0.2;
+    const amrex::Real yp = 0.1;
+    const amrex::Real zm = 0.0;
+    const amrex::Real zp = 0.25;
     // Input quantities: normal vector and vof
     amrex::Real xnorm = 0.0;
     amrex::Real ynorm = 0.0;
     amrex::Real znorm = 1.0;
     amrex::Real VOF = 0.5;
+
     // Get dist based on inputs
     amrex::Real dist =
         amr_wind::multiphase::volume_intercept(xnorm, ynorm, znorm, VOF);
-        std::cout << dist <<std::endl;
+    std::cout << dist << std::endl;
+
+    // Output quantities to be reused
+    amrex::Real xc = 0.0;
+    amrex::Real yc = 0.0;
+    amrex::Real zc = 0.0;
+    amrex::Real sa = 0.0;
 
     // Perform calculations
     amr_wind::multiphase::surfacearea_center(

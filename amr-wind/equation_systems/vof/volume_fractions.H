@@ -496,10 +496,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real levelset_to_vof(
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
-    amrex::Real xnorm,
-    amrex::Real ynorm,
-    amrex::Real znorm,
-    amrex::Real dist,
+    amrex::Real normx,
+    amrex::Real normy,
+    amrex::Real normz,
+    amrex::Real alpha,
     amrex::Real xm,
     amrex::Real xp,
     amrex::Real ym,
@@ -528,6 +528,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
         2,  2,  1,  1,  3, 4, 1, -1, 2, 3, 4, -1, -1, -1, -1, -1};
     const amrex::Vector<const int> cut_nvert{0, 3, 3, 4, 3, 4, 4, 3,
                                              3, 4, 4, 3, 4, 3, 3, 0};
+    // Convert alpha to global dist
+    // Adjust alpha due to negative norm components
+    alpha = alpha + (normx < 0. ? normx : 0.) + (normy < 0. ? normy : 0.) +
+            (normz < 0. ? normz : 0.);
+    // Write plane with barycenter as origin inside cube
+    alpha = alpha - 0.5 * (normx + normy + normz);
+    // Make distance consistent with original normal, write in global frame
+    const amrex::Real dist =
+        0.5 * (normx * (xm + xp) + normy * (ym + yp) + normz * (zm + zp)) +
+        alpha * (amrex::Math::abs(normx) + amrex::Math::abs(normy) +
+                 amrex::Math::abs(normz));
     // Cell vertices
     amrex::Vector<amrex::Real> verts(24, 0.);
     for (int n = 0; n < 8; ++n) {
@@ -543,7 +554,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
     std::cout << verts[12] << " " << verts[13] << " " << verts[14] << std::endl;
     std::cout << verts[15] << " " << verts[16] << " " << verts[17] << std::endl;
     std::cout << verts[18] << " " << verts[19] << " " << verts[20] << std::endl;
-    std::cout << verts[21] << " " << verts[22] << " " << verts[23] << std::endl<< std::endl;
+    std::cout << verts[21] << " " << verts[22] << " " << verts[23] << std::endl
+              << std::endl;
     // Tet vertices/nodes
     amrex::Vector<amrex::Real> nodes(12, 0.);
 
@@ -560,8 +572,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
             mytet[0 + 3 * n] = verts[0 + 3 * verts2tets[n + 4 * ntet]];
             mytet[1 + 3 * n] = verts[1 + 3 * verts2tets[n + 4 * ntet]];
             mytet[2 + 3 * n] = verts[2 + 3 * verts2tets[n + 4 * ntet]];
-            d[n] = xnorm * mytet[0 + 3 * n] + ynorm * mytet[1 + 3 * n] +
-                   znorm * mytet[2 + 3 * n] - dist;
+            d[n] = normx * mytet[0 + 3 * n] + normy * mytet[1 + 3 * n] +
+                   normz * mytet[2 + 3 * n] - dist;
         }
         // Find cut case
         int ccase = 0 + (int)(0.5 + amrex::Math::copysign(0.5, d[0])) +
@@ -579,7 +591,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
                   << std::endl;
         std::cout << mytet[9] << " " << mytet[10] << " " << mytet[11]
                   << std::endl;
-        std::cout << "end tet\n"<< std::endl;
+        std::cout << "end tet\n" << std::endl;
         for (int n = 0; n < npts; ++n) {
             int v1 = cut_v1[n + 4 * ccase] - 1;
             int v2 = cut_v2[n + 4 * ccase] - 1;
@@ -625,9 +637,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
             surfarea += tsa;
             std::cout << npts << " " << tsa << std::endl;
             std::cout << "tri\n";
-            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2] << std::endl;
-            std::cout << nodes[3] << " " << nodes[4] << " " << nodes[5] << std::endl;
-            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8] << std::endl<< std::endl;
+            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2]
+                      << std::endl;
+            std::cout << nodes[3] << " " << nodes[4] << " " << nodes[5]
+                      << std::endl;
+            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8]
+                      << std::endl
+                      << std::endl;
             break;
         }
         case 4: {
@@ -658,9 +674,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
             surfarea += tsa;
             std::cout << npts << "-1 " << tsa << std::endl;
             std::cout << "tri\n";
-            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2] << std::endl;
-            std::cout << nodes[3] << " " << nodes[4] << " " << nodes[5] << std::endl;
-            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8] << std::endl<< std::endl;
+            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2]
+                      << std::endl;
+            std::cout << nodes[3] << " " << nodes[4] << " " << nodes[5]
+                      << std::endl;
+            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8]
+                      << std::endl
+                      << std::endl;
             // Triangle sides not shared
             a = sqrt(
                 std::pow(nodes[0 + 3 * 3] - nodes[0 + 3 * 1], 2) +
@@ -682,9 +702,13 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
                   (nodes[2 + 3 * 3] + nodes[2 + 3 * 1] + nodes[2 + 3 * 2]);
             std::cout << npts << "-2 " << tsa << std::endl;
             std::cout << "tri\n";
-            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2] << std::endl;
-            std::cout << nodes[9] << " " << nodes[10] << " " << nodes[11] << std::endl;
-            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8] << std::endl << std::endl;
+            std::cout << nodes[0] << " " << nodes[1] << " " << nodes[2]
+                      << std::endl;
+            std::cout << nodes[9] << " " << nodes[10] << " " << nodes[11]
+                      << std::endl;
+            std::cout << nodes[6] << " " << nodes[7] << " " << nodes[8]
+                      << std::endl
+                      << std::endl;
             // Store surface area contribution
             surfarea += tsa;
             break;
