@@ -528,17 +528,25 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
         2,  2,  1,  1,  3, 4, 1, -1, 2, 3, 4, -1, -1, -1, -1, -1};
     const amrex::Vector<const int> cut_nvert{0, 3, 3, 4, 3, 4, 4, 3,
                                              3, 4, 4, 3, 4, 3, 3, 0};
+    // Modify normal vector for non-cubic cells
+    amrex::Real mmx = normx * (xp - xm);
+    amrex::Real mmy = normy * (yp - ym);
+    amrex::Real mmz = normz * (zp - zm);
+    // Normalize normal vector
+    const amrex::Real nmag =
+        (amrex::Math::abs(mmx) + amrex::Math::abs(mmy) + amrex::Math::abs(mmz));
+    mmx /= nmag;
+    mmy /= nmag;
+    mmz /= nmag;
     // Convert alpha to global dist
     // Adjust alpha due to negative norm components
-    alpha = alpha + (normx < 0. ? normx : 0.) + (normy < 0. ? normy : 0.) +
-            (normz < 0. ? normz : 0.);
+    alpha = alpha + (mmx < 0. ? mmx : 0.) + (mmy < 0. ? mmy : 0.) +
+            (mmz < 0. ? mmz : 0.);
     // Write plane with barycenter as origin inside cube
-    alpha = alpha - 0.5 * (normx + normy + normz);
+    alpha = alpha - 0.5 * (mmx + mmy + mmz);
     // Make distance consistent with original normal, write in global frame
-    const amrex::Real dist =
-        0.5 * (normx * (xm + xp) + normy * (ym + yp) + normz * (zm + zp)) +
-        alpha * (amrex::Math::abs(normx) + amrex::Math::abs(normy) +
-                 amrex::Math::abs(normz));
+    const amrex::Real dist = alpha * nmag
+        + 0.5 * (normx * (xm + xp) + normy * (ym + yp) + normz * (zm + zp));
 
     // Cell vertices
     amrex::Vector<amrex::Real> verts(24, 0.);
