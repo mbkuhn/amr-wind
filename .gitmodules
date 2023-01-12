@@ -7,3 +7,6 @@
 [submodule "submods/AMReX-Hydro"]
 	path = submods/AMReX-Hydro
 	url = https://github.com/AMReX-Codes/AMReX-Hydro
+[submodule "eigen"]
+	path = eigen
+	url = https://gitlab.com/libeigen/eigen.git
