@@ -539,9 +539,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
     mmy /= nmag;
     mmz /= nmag;
     // Convert alpha to global dist
-    // Adjust alpha due to negative norm components
-    alpha = alpha + (mmx < 0. ? mmx : 0.) + (mmy < 0. ? mmy : 0.) +
-            (mmz < 0. ? mmz : 0.);
     // Write plane with barycenter as origin inside cube
     alpha = alpha - 0.5 * (mmx + mmy + mmz);
     // Make distance consistent with original normal, write in global frame
