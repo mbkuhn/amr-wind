@@ -691,11 +691,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_onestep_normal(
     int j,
     int k,
     amrex::Array4<amrex::Real const> const& volfrac,
-    amrex::Real& mx,
-    amrex::Real& my,
-    amrex::Real& mz)
+    amrex::Real& mxf,
+    amrex::Real& myf,
+    amrex::Real& mzf)
 {
     // Get initial guess of normal
+    amrex::Real mx, my, mz;
     amr_wind::multiphase::youngs_fd_normal(i, j, k, volfrac, mx, my, mz);
     amrex::Real mag =
         amrex::Math::abs(mx) + amrex::Math::abs(my) + amrex::Math::abs(mz);
@@ -707,9 +708,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_onestep_normal(
     const amrex::Real myr = my;
     const amrex::Real mzr = mz;
     // Get full plane description
-    amrex::Real alpha =
-        amr_wind::multiphase::volume_intercept(mx, my, mz, volfrac(i, j, k));
-
+    amrex::Real alpha = amr_wind::multiphase::volume_intercept(
+        amrex::Math::abs(mx), amrex::Math::abs(my), amrex::Math::abs(mz),
+        volfrac(i, j, k));
+    alpha =
+        alpha + amrex::min(0.0, mx) + amrex::min(0.0, my) + amrex::min(0.0, mz);
     // Use unity cell dimensions
     amrex::Real xm = 0.0;
     amrex::Real ym = 0.0;
@@ -726,9 +729,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_onestep_normal(
     const amrex::Real ycr = yc;
     const amrex::Real zcr = zc;
     // Initialize final normal
-    amrex::Real mxf = 0.0;
-    amrex::Real myf = 0.0;
-    amrex::Real mzf = 0.0;
+    mxf = 0.0;
+    myf = 0.0;
+    mzf = 0.0;
     // Initialize contribution count
     int n = 0;
     // Begin loop through neighbors
@@ -760,7 +763,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_onestep_normal(
                 }
                 // Get remaining plane info
                 alpha = amr_wind::multiphase::volume_intercept(
-                    mx, my, mz, volfrac(i + ii, j + jj, k + kk));
+                    amrex::Math::abs(mx), amrex::Math::abs(my),
+                    amrex::Math::abs(mz), volfrac(i, j, k));
+                alpha = alpha + amrex::min(0.0, mx) + amrex::min(0.0, my) +
+                        amrex::min(0.0, mz);
                 // Calculate cell bounds based on indices
                 xm = (amrex::Real)ii;
                 ym = (amrex::Real)jj;
@@ -792,24 +798,21 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_onestep_normal(
 
     if (n == 0) {
         // If not modified, use reference as result
-        mx = mxr;
-        my = myr;
-        mz = mzr;
+        mxf = mxr;
+        myf = myr;
+        mzf = mzr;
     } else {
         // If modified, use computed answer as result
-        mx = mxf;
-        my = myf;
-        mz = mzf;
         // Normalize contributions before exiting
-        mag = sqrt(mx * mx + my * my + mz * mz);
-        mx /= mag;
-        my /= mag;
-        mz /= mag;
-        mag =
-            amrex::Math::abs(mx) + amrex::Math::abs(my) + amrex::Math::abs(mz);
-        mx /= mag;
-        my /= mag;
-        mz /= mag;
+        mag = sqrt(mxf * mxf + myf * myf + mzf * mzf);
+        mxf /= mag;
+        myf /= mag;
+        mzf /= mag;
+        mag = amrex::Math::abs(mxf) + amrex::Math::abs(myf) +
+              amrex::Math::abs(mzf);
+        mxf /= mag;
+        myf /= mag;
+        mzf /= mag;
     }
 }
 

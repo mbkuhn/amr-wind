@@ -134,8 +134,8 @@ protected:
         auto& repo = sim().repo();
 
         // Initialize volume fraction field with levelset
-        auto& vof = repo.declare_field("vof", 1, 0);
-        auto& lvs = repo.declare_field("levelset", 1, 1);
+        auto& vof = repo.declare_field("vof", 1, 2);
+        auto& lvs = repo.declare_field("levelset", 1, 3);
         const auto& geom = repo.mesh().Geom();
         initialize_levelset(lvs, geom, curv);
         initialize_volume_fractions(vof, lvs, geom);
