@@ -3,6 +3,7 @@
 
 #include <AMReX_FArrayBox.H>
 #include <cmath>
+#include "amr-wind/core/vs/tensorI.H"
 
 namespace amr_wind::multiphase {
 
@@ -683,6 +684,133 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
     xc /= surfarea;
     yc /= surfarea;
     zc /= surfarea;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_onestep_normal(
+    int i,
+    int j,
+    int k,
+    amrex::Array4<amrex::Real const> const& volfrac,
+    amrex::Real& mx,
+    amrex::Real& my,
+    amrex::Real& mz)
+{
+    // Get initial guess of normal
+    amr_wind::multiphase::youngs_fd_normal(i, j, k, volfrac, mx, my, mz);
+    amrex::Real mag =
+        amrex::Math::abs(mx) + amrex::Math::abs(my) + amrex::Math::abs(mz);
+    mx /= mag;
+    my /= mag;
+    mz /= mag;
+    // Store reference normal
+    const amrex::Real mxr = mx;
+    const amrex::Real myr = my;
+    const amrex::Real mzr = mz;
+    // Get full plane description
+    amrex::Real alpha =
+        amr_wind::multiphase::volume_intercept(mx, my, mz, volfrac(i, j, k));
+
+    // Use unity cell dimensions
+    amrex::Real xm = 0.0;
+    amrex::Real ym = 0.0;
+    amrex::Real zm = 0.0;
+    amrex::Real xp = 1.0;
+    amrex::Real yp = 1.0;
+    amrex::Real zp = 1.0;
+    // Get center of polygon (plane within cell)
+    amrex::Real sa, xc, yc, zc;
+    amr_wind::multiphase::surfacearea_center(
+        mx, my, mz, alpha, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+    // Store center of polygon
+    const amrex::Real xcr = xc;
+    const amrex::Real ycr = yc;
+    const amrex::Real zcr = zc;
+    // Initialize final normal
+    amrex::Real mxf = 0.0;
+    amrex::Real myf = 0.0;
+    amrex::Real mzf = 0.0;
+    // Initialize contribution count
+    int n = 0;
+    // Begin loop through neighbors
+    for (int ii = -1; ii <= 1; ++ii) {
+        for (int jj = -1; jj <= 1; ++jj) {
+            for (int kk = -1; kk <= 1; ++kk) {
+                // Skip if no interface or if reference cell
+                if (amrex::Math::abs(ii) + amrex::Math::abs(jj) +
+                            amrex::Math::abs(kk) ==
+                        0 ||
+                    (volfrac(i + ii, j + jj, k + kk) < 1e-12 ||
+                     volfrac(i + ii, j + jj, k + kk) > 1.0 - 1e-12)) {
+                    continue;
+                }
+                // Calculate normal for current cell
+                youngs_fd_normal(i + ii, j + jj, k + kk, volfrac, mx, my, mz);
+                mag = amrex::Math::abs(mx) + amrex::Math::abs(my) +
+                      amrex::Math::abs(mz);
+                mx /= mag;
+                my /= mag;
+                mz /= mag;
+                // Calculate cos(angle) with reference normal
+                amrex::Real cangle = (mx * mxr + my * myr + mz * mzr) /
+                                     sqrt(mx * mx + my * my + mz * mz) /
+                                     sqrt(mxr * mxr + myr * myr + mzr * mzr);
+                // Skip if angle is greater than 30 degrees
+                if (cangle < 0.5 * sqrt(3.0)) {
+                    continue;
+                }
+                // Get remaining plane info
+                alpha = amr_wind::multiphase::volume_intercept(
+                    mx, my, mz, volfrac(i + ii, j + jj, k + kk));
+                // Calculate cell bounds based on indices
+                xm = (amrex::Real)ii;
+                ym = (amrex::Real)jj;
+                zm = (amrex::Real)kk;
+                xp = xm + 1.0;
+                yp = ym + 1.0;
+                zp = zm + 1.0;
+                // Compute center of polygon
+                amr_wind::multiphase::surfacearea_center(
+                    mx, my, mz, alpha, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+                // Calculate r vector
+                vs::Vector xvec{xc, yc, zc};
+                vs::Vector xrvec{xcr, ycr, zcr};
+                vs::Vector mrvec{mxr, myr, mzr};
+                vs::Vector r = (xvec - xrvec) ^ mrvec;
+                // Rotate r vector by pi/2
+                auto q = vs::quaternion(r, 90);
+                auto qconj = vs::quaternion(r, -90);
+                vs::Vector m_add = (q & r) & qconj;
+                // Contribute to final result
+                mxf += m_add.x();
+                myf += m_add.y();
+                mzf += m_add.z();
+                // Increment counter
+                ++n;
+            }
+        }
+    }
+
+    if (n == 0) {
+        // If not modified, use reference as result
+        mx = mxr;
+        my = myr;
+        mz = mzr;
+    } else {
+        // If modified, use computed answer as result
+        mx = mxf;
+        my = myf;
+        mz = mzf;
+        // Normalize contributions before exiting
+        mag = sqrt(mx * mx + my * my + mz * mz);
+        mx /= mag;
+        my /= mag;
+        mz /= mag;
+        mag =
+            amrex::Math::abs(mx) + amrex::Math::abs(my) + amrex::Math::abs(mz);
+        mx /= mag;
+        my /= mag;
+        mz /= mag;
+    }
 }
 
 } // namespace amr_wind::multiphase
