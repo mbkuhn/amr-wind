@@ -543,8 +543,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
     // Write plane with barycenter as origin inside cube
     alpha = alpha - 0.5 * (mmx + mmy + mmz);
     // Make distance consistent with original normal, write in global frame
-    const amrex::Real dist = alpha * nmag
-        + 0.5 * (normx * (xm + xp) + normy * (ym + yp) + normz * (zm + zp));
+    const amrex::Real dist =
+        alpha * nmag +
+        0.5 * (normx * (xm + xp) + normy * (ym + yp) + normz * (zm + zp));
 
     // Cell vertices
     amrex::Vector<amrex::Real> verts(24, 0.);
