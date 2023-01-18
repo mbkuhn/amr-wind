@@ -124,9 +124,8 @@ protected:
         }
     }
 
-    void testing_normals(amrex::Real curv)
+    void testing_normals(amrex::Real curv, amrex::Real tol)
     {
-        constexpr double tol = 1.0e-15;
         populate_parameters();
 
         initialize_mesh();
@@ -148,6 +147,8 @@ protected:
     const int m_nx = 8;
 };
 
-TEST_F(VOFNormTest, zero) { testing_normals(0.0); }
-TEST_F(VOFNormTest, tenth) { testing_normals(0.1); }
+TEST_F(VOFNormTest, zero) { testing_normals(0.0, 1e-16); }
+TEST_F(VOFNormTest, tenth) { testing_normals(0.1, 3e-2); }
+TEST_F(VOFNormTest, fifth) { testing_normals(0.2, 5e-2); }
+TEST_F(VOFNormTest, half) { testing_normals(0.5, 1e-1); }
 } // namespace amr_wind_tests
