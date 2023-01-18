@@ -149,5 +149,5 @@ protected:
 };
 
 TEST_F(VOFNormTest, zero) { testing_normals(0.0); }
-TEST_F(VOFNormTest, half) { testing_normals(0.1); }
+TEST_F(VOFNormTest, tenth) { testing_normals(0.1); }
 } // namespace amr_wind_tests

@@ -781,11 +781,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_onestep_normal(
                 vs::Vector xvec{xc, yc, zc};
                 vs::Vector xrvec{xcr, ycr, zcr};
                 vs::Vector mrvec{mxr, myr, mzr};
-                vs::Vector r = (xvec - xrvec) ^ mrvec;
+                vs::Vector d = (xvec - xrvec);
+                vs::Vector r = d ^ mrvec;
                 // Rotate r vector by pi/2
-                auto q = vs::quaternion(r, 90);
-                auto qconj = vs::quaternion(r, -90);
-                vs::Vector m_add = (q & r) & qconj;
+                auto qmat = vs::quaternion(d, 90);
+                vs::Vector m_add = qmat & r;
                 // Contribute to final result
                 mxf += m_add.x();
                 myf += m_add.y();
