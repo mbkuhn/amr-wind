@@ -387,51 +387,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real cut_volume(
     return FL3D;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void fit_plane(
-    const int i,
-    const int j,
-    const int k,
-    amrex::Array4<amrex::Real const> const& volfrac,
-    amrex::Real& mx,
-    amrex::Real& my,
-    amrex::Real& mz,
-    amrex::Real& alpha)
-{
-
-    mixed_youngs_central_normal(i, j, k, volfrac, mx, my, mz);
-
-    amrex::Real invx = 1.0;
-    amrex::Real invy = 1.0;
-    amrex::Real invz = 1.0;
-
-    if (mx < 0.0) {
-        mx = -mx;
-        invx = -1.0;
-    }
-    if (my < 0.0) {
-        my = -my;
-        invy = -1.0;
-    }
-    if (mz < 0.0) {
-        mz = -mz;
-        invz = -1.0;
-    }
-
-    amrex::Real mm2 = mx + my + mz;
-    mx = mx / mm2;
-    my = my / mm2;
-    mz = mz / mm2;
-
-    alpha = volume_intercept(mx, my, mz, volfrac(i, j, k));
-
-    // Back to the original plane
-    mx = invx * mx;
-    my = invy * my;
-    mz = invz * mz;
-    alpha = alpha + amrex::min<amrex::Real>(0.0, mx) +
-            amrex::min<amrex::Real>(0.0, my) + amrex::min<amrex::Real>(0.0, mz);
-}
-
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool interface_band(
     int i,
     int j,
@@ -815,6 +770,74 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_onestep_normal(
         myf /= mag;
         mzf /= mag;
     }
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void fit_plane(
+    const int i,
+    const int j,
+    const int k,
+    const int method,
+    amrex::Array4<amrex::Real const> const& volfrac,
+    amrex::Real& mx,
+    amrex::Real& my,
+    amrex::Real& mz,
+    amrex::Real& alpha)
+{
+
+    switch (method) {
+    case 1:
+        swartz_onestep_normal(i, j, k, volfrac, mx, my, mz);
+        break;
+    case 0:
+    default:
+        mixed_youngs_central_normal(i, j, k, volfrac, mx, my, mz);
+        break;
+    }
+
+    amrex::Real invx = 1.0;
+    amrex::Real invy = 1.0;
+    amrex::Real invz = 1.0;
+
+    if (mx < 0.0) {
+        mx = -mx;
+        invx = -1.0;
+    }
+    if (my < 0.0) {
+        my = -my;
+        invy = -1.0;
+    }
+    if (mz < 0.0) {
+        mz = -mz;
+        invz = -1.0;
+    }
+
+    amrex::Real mm2 = mx + my + mz;
+    mx = mx / mm2;
+    my = my / mm2;
+    mz = mz / mm2;
+
+    alpha = volume_intercept(mx, my, mz, volfrac(i, j, k));
+
+    // Back to the original plane
+    mx = invx * mx;
+    my = invy * my;
+    mz = invz * mz;
+    alpha = alpha + amrex::min<amrex::Real>(0.0, mx) +
+            amrex::min<amrex::Real>(0.0, my) + amrex::min<amrex::Real>(0.0, mz);
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void fit_plane(
+    const int i,
+    const int j,
+    const int k,
+    amrex::Array4<amrex::Real const> const& volfrac,
+    amrex::Real& mx,
+    amrex::Real& my,
+    amrex::Real& mz,
+    amrex::Real& alpha)
+{
+    // Use swartz as default for now
+    fit_plane(i, j, k, 1, volfrac, mx, my, mz, alpha);
 }
 
 } // namespace amr_wind::multiphase

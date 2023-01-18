@@ -40,7 +40,7 @@ void initialize_volume_fractions(
     // grow the box by 1 so that x,y,z go out of bounds and min(max()) corrects
     // it and it fills the ghosts with wall values
     const int d = dir;
-    amrex::ParallelFor(grow(bx, 1), [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::ParallelFor(grow(bx, 2), [=] AMREX_GPU_DEVICE(int i, int j, int k) {
         int ii = (d != 0 ? i : 0);
         int jj = (d != 1 ? j : 0);
         int kk = (d != 2 ? k : 0);
@@ -75,7 +75,7 @@ void initialize_volume_fractions_horizontal(
     // it and it fills the ghosts with wall values
     const int d = dir;
     const amrex::Real vv = vof_val;
-    amrex::ParallelFor(grow(bx, 1), [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+    amrex::ParallelFor(grow(bx, 2), [=] AMREX_GPU_DEVICE(int i, int j, int k) {
         int ii = (d == 0 ? i : (d == 1 ? j : k));
         if (ii > 1) {
             vof_arr(i, j, k) = 0.0;
