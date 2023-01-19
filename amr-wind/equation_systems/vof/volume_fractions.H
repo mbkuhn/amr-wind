@@ -470,19 +470,19 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
     // Should only be cells with interface
 
     // Constant vectors for geometry operations
-    const amrex::Vector<const int> verts2tets{0, 3, 2, 6, 0, 1, 3, 5, 0, 4,
+    const amrex::Vector<int> verts2tets{0, 3, 2, 6, 0, 1, 3, 5, 0, 4,
                                               5, 6, 0, 5, 3, 6, 3, 6, 5, 7};
-    const amrex::Vector<const int> cut_v1{
+    const amrex::Vector<int> cut_v1{
         -1, -1, -1, -1, 1, 1, 1, -1, 2, 2, 2, -1, 1,  2,  1,  2,
         3,  3,  3,  -1, 1, 3, 1, 3,  2, 3, 2, 3,  4,  4,  4,  -1,
         4,  4,  4,  -1, 1, 4, 1, 4,  2, 4, 2, 4,  3,  3,  3,  -1,
         3,  4,  3,  4,  2, 2, 2, -1, 1, 1, 1, -1, -1, -1, -1, -1};
-    const amrex::Vector<const int> cut_v2{
+    const amrex::Vector<int> cut_v2{
         -1, -1, -1, -1, 2, 3, 4, -1, 3, 4, 1, -1, 4,  4,  3,  3,
         4,  1,  2,  -1, 4, 4, 2, 2,  4, 4, 1, 1,  1,  2,  3,  -1,
         1,  2,  3,  -1, 3, 3, 2, 2,  3, 3, 1, 1,  4,  1,  2,  -1,
         2,  2,  1,  1,  3, 4, 1, -1, 2, 3, 4, -1, -1, -1, -1, -1};
-    const amrex::Vector<const int> cut_nvert{0, 3, 3, 4, 3, 4, 4, 3,
+    const amrex::Vector<int> cut_nvert{0, 3, 3, 4, 3, 4, 4, 3,
                                              3, 4, 4, 3, 4, 3, 3, 0};
     // Modify normal vector for non-cubic cells
     amrex::Real mmx = normx * (xp - xm);
