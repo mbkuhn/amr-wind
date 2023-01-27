@@ -43,6 +43,8 @@ struct AdvectionOp<VOF, fvm::Godunov>
         auto& aa_y = repo.get_field("advalpha_y");
         auto& aa_z = repo.get_field("advalpha_z");
 
+        auto& iplane = repo.get_field("iplane");
+
         // cppcheck-suppress constVariable
         auto& dof_field = fields.field;
         //
@@ -83,15 +85,15 @@ struct AdvectionOp<VOF, fvm::Godunov>
 
         // Split advection step 1, with cmask calculation
         multiphase::split_advection_step(
-            isweep, 0, nlevels, dof_field, fluxes, (*fluxC), advas, u_mac,
+            isweep, 0, nlevels, dof_field, iplane, fluxes, (*fluxC), advas, u_mac,
             v_mac, w_mac, dof_field.bc_type(), geom, dt, m_rm_debris);
         // Split advection step 2
         multiphase::split_advection_step(
-            isweep, 1, nlevels, dof_field, fluxes, (*fluxC), advas, u_mac,
+            isweep, 1, nlevels, dof_field, iplane, fluxes, (*fluxC), advas, u_mac,
             v_mac, w_mac, dof_field.bc_type(), geom, dt, m_rm_debris);
         // Split advection step 3
         multiphase::split_advection_step(
-            isweep, 2, nlevels, dof_field, fluxes, (*fluxC), advas, u_mac,
+            isweep, 2, nlevels, dof_field, iplane, fluxes, (*fluxC), advas, u_mac,
             v_mac, w_mac, dof_field.bc_type(), geom, dt, m_rm_debris);
     }
 

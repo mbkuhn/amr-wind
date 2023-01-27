@@ -1,7 +1,7 @@
 #ifndef SPLIT_ADVECTION_H_
 #define SPLIT_ADVECTION_H_
 
-#include "amr-wind/equation_systems/vof/volume_fractions.H"
+#include "amr-wind/equation_systems/vof/plane_reconstruct.H"
 #include <AMReX_FArrayBox.H>
 #include <AMReX_BCRec.H>
 #include <cmath>
@@ -17,6 +17,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void eulerian_implicit(
     const amrex::Real velL,
     const amrex::Real velR,
     amrex::Array4<amrex::Real const> const& volfrac,
+    amrex::Array4<amrex::Real const> const& iplane,
     amrex::Array4<amrex::Real> const& vofL,
     amrex::Array4<amrex::Real> const& vofR)
 {
@@ -39,7 +40,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void eulerian_implicit(
             vofR(i, j, k) = 1.0;
         }
     } else if (volfrac(i, j, k) > tiny) {
-        fit_plane(i, j, k, volfrac, mx, my, mz, alpha);
+        mx = iplane(i, j, k, 0);
+        my = iplane(i, j, k, 1);
+        mz = iplane(i, j, k, 2);
+        alpha = iplane(i, j, k, 3);
         // Eulerian advection
         x0 = 0.0;
         if (dir == 0) {

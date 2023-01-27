@@ -10,7 +10,7 @@
 namespace amr_wind::free_surface {
 
 FreeSurface::FreeSurface(CFDSim& sim, std::string label)
-    : m_sim(sim), m_label(std::move(label)), m_vof(sim.repo().get_field("vof"))
+    : m_sim(sim), m_label(std::move(label)), m_vof(sim.repo().get_field("vof")), m_iplane(sim.repo().get_field("iplane"))
 {}
 
 FreeSurface::~FreeSurface() = default;
@@ -395,6 +395,7 @@ void FreeSurface::post_advance_work()
                 auto loc_arr = floc(lev).const_array(mfi);
                 auto idx_arr = fidx(lev).const_array(mfi);
                 auto vof_arr = m_vof(lev).const_array(mfi);
+                auto pl_arr = m_iplane(lev).const_array(mfi);
                 const auto& vbx = mfi.validbox();
                 amrex::ParallelFor(
                     vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -458,8 +459,10 @@ void FreeSurface::post_advance_work()
                                 if (vof_arr(i, j, k) < (1.0 - 1e-12) &&
                                     vof_arr(i, j, k) > 1e-12) {
                                     // Get interface reconstruction
-                                    multiphase::fit_plane(
-                                        i, j, k, vof_arr, mx, my, mz, alpha);
+                                    mx = pl_arr(i, j, k, 0);
+                                    my = pl_arr(i, j, k, 1);
+                                    mz = pl_arr(i, j, k, 2);
+                                    alpha = pl_arr(i, j, k, 3);
                                     calc_flag = true;
                                 }
 

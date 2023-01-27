@@ -10,6 +10,7 @@ void split_advection_step(
     int iorder,
     int nlevels,
     Field& dof_field,
+    Field& iplane,
     amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>> const& fluxes,
     ScratchField& fluxC,
     amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>> const& advas,
@@ -26,6 +27,7 @@ void split_compute_fluxes(
     amrex::Box const& bx,
     const int isweep,
     amrex::Array4<amrex::Real const> const& volfrac,
+    amrex::Array4<amrex::Real const> const& iplane,
     amrex::Array4<amrex::Real const> const& umac,
     amrex::Array4<amrex::Real const> const& vmac,
     amrex::Array4<amrex::Real const> const& wmac,
@@ -69,6 +71,7 @@ void sweep_fluxes(
     const amrex::Real dtdx,
     amrex::Array4<amrex::Real const> const& vel_mac,
     amrex::Array4<amrex::Real const> const& volfrac,
+    amrex::Array4<amrex::Real const> const& iplane,
     amrex::Array4<amrex::Real> const& vofL,
     amrex::Array4<amrex::Real> const& vofR);
 

@@ -74,6 +74,9 @@ private:
     // Pointer to VOF
     Field* m_vof{nullptr};
 
+    // Pointer to interface plane
+    Field* m_iplane{nullptr};
+
     // Density value for Fluid 1
     amrex::Real m_rho1{10.0};
 

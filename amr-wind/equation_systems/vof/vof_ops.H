@@ -20,9 +20,11 @@ struct FieldRegOp<VOF, Scheme>
         auto fields = create_fields_instance<VOF, Scheme>(time, repo);
 
         auto& levelset = repo.declare_cc_field("levelset", 1, 3, 1);
+        auto& iplane = repo.declare_cc_field("iplane", 4, 3, 1);
         auto& curvature = repo.declare_cc_field("interface_curvature", 1, 1, 1);
 
         levelset.set_default_fillpatch_bc(sim.time());
+        iplane.set_default_fillpatch_bc(sim.time());
         curvature.set_default_fillpatch_bc(sim.time());
 
         // Register fields for output/restart

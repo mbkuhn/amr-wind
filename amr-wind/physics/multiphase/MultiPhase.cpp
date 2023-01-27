@@ -1,5 +1,5 @@
 #include "amr-wind/physics/multiphase/MultiPhase.H"
-#include "amr-wind/equation_systems/vof/volume_fractions.H"
+#include "amr-wind/equation_systems/vof/plane_reconstruct.H"
 #include "amr-wind/CFDSim.H"
 #include "AMReX_ParmParse.H"
 #include "amr-wind/fvm/filter.H"
@@ -34,6 +34,7 @@ MultiPhase::MultiPhase(CFDSim& sim)
         BCScalar bc_ls(*m_levelset);
         bc_ls(levelset_default);
         m_levelset->fillpatch(sim.time().current_time());
+        m_iplane = &(m_sim.repo().get_field("iplane"));
     } else if (amrex::toLower(m_interface_model) == "levelset") {
         m_interface_capturing_method = amr_wind::InterfaceCapturingMethod::LS;
         auto& levelset_eqn =
@@ -51,6 +52,7 @@ MultiPhase::MultiPhase(CFDSim& sim)
         const amrex::Real levelset_default = 0.0;
         BCScalar bc_ls(*m_levelset);
         bc_ls(levelset_default);
+        m_iplane = &(m_sim.repo().get_field("iplane"));
     }
 }
 
@@ -66,6 +68,7 @@ void MultiPhase::post_init_actions()
     if (!io_mgr.is_restart()) {
         switch (m_interface_capturing_method) {
         case InterfaceCapturingMethod::VOF:
+            amr_wind::multiphase::reconstruct_planes(2, *m_vof, *m_iplane);
             levelset2vof();
             set_density_via_vof();
             break;

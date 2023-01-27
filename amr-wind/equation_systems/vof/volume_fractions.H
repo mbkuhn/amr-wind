@@ -471,7 +471,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
 
     // Constant vectors for geometry operations
     const amrex::Vector<int> verts2tets{0, 3, 2, 6, 0, 1, 3, 5, 0, 4,
-                                              5, 6, 0, 5, 3, 6, 3, 6, 5, 7};
+                                        5, 6, 0, 5, 3, 6, 3, 6, 5, 7};
     const amrex::Vector<int> cut_v1{
         -1, -1, -1, -1, 1, 1, 1, -1, 2, 2, 2, -1, 1,  2,  1,  2,
         3,  3,  3,  -1, 1, 3, 1, 3,  2, 3, 2, 3,  4,  4,  4,  -1,
@@ -483,7 +483,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void surfacearea_center(
         1,  2,  3,  -1, 3, 3, 2, 2,  3, 3, 1, 1,  4,  1,  2,  -1,
         2,  2,  1,  1,  3, 4, 1, -1, 2, 3, 4, -1, -1, -1, -1, -1};
     const amrex::Vector<int> cut_nvert{0, 3, 3, 4, 3, 4, 4, 3,
-                                             3, 4, 4, 3, 4, 3, 3, 0};
+                                       3, 4, 4, 3, 4, 3, 3, 0};
     // Modify normal vector for non-cubic cells
     amrex::Real mmx = normx * (xp - xm);
     amrex::Real mmy = normy * (yp - ym);
@@ -772,72 +772,118 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_onestep_normal(
     }
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void fit_plane(
-    const int i,
-    const int j,
-    const int k,
-    const int method,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void swartz_normal(
+    int i,
+    int j,
+    int k,
     amrex::Array4<amrex::Real const> const& volfrac,
-    amrex::Real& mx,
-    amrex::Real& my,
-    amrex::Real& mz,
-    amrex::Real& alpha)
+    amrex::Array4<amrex::Real const> const& iplane,
+    amrex::Real& mxf,
+    amrex::Real& myf,
+    amrex::Real& mzf)
 {
-
-    switch (method) {
-    case 1:
-        swartz_onestep_normal(i, j, k, volfrac, mx, my, mz);
-        break;
-    case 0:
-    default:
-        mixed_youngs_central_normal(i, j, k, volfrac, mx, my, mz);
-        break;
+    // Get current plane description
+    amrex::Real mx = iplane(i, j, k, 0);
+    amrex::Real my = iplane(i, j, k, 1);
+    amrex::Real mz = iplane(i, j, k, 2);
+    amrex::Real alpha = iplane(i, j, k, 3);
+    // Store reference normal
+    const amrex::Real mxr = mx;
+    const amrex::Real myr = my;
+    const amrex::Real mzr = mz;
+    // Use unity cell dimensions
+    amrex::Real xm = 0.0;
+    amrex::Real ym = 0.0;
+    amrex::Real zm = 0.0;
+    amrex::Real xp = 1.0;
+    amrex::Real yp = 1.0;
+    amrex::Real zp = 1.0;
+    // Get center of polygon (plane within cell)
+    amrex::Real sa, xc, yc, zc;
+    amr_wind::multiphase::surfacearea_center(
+        mx, my, mz, alpha, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+    // Store center of polygon
+    const amrex::Real xcr = xc;
+    const amrex::Real ycr = yc;
+    const amrex::Real zcr = zc;
+    // Initialize final normal
+    mxf = 0.0;
+    myf = 0.0;
+    mzf = 0.0;
+    // Initialize contribution count
+    int n = 0;
+    // Begin loop through neighbors
+    for (int ii = -1; ii <= 1; ++ii) {
+        for (int jj = -1; jj <= 1; ++jj) {
+            for (int kk = -1; kk <= 1; ++kk) {
+                // Skip if no interface or if reference cell
+                if (amrex::Math::abs(ii) + amrex::Math::abs(jj) +
+                            amrex::Math::abs(kk) ==
+                        0 ||
+                    (volfrac(i + ii, j + jj, k + kk) < 1e-12 ||
+                     volfrac(i + ii, j + jj, k + kk) > 1.0 - 1e-12)) {
+                    continue;
+                }
+                // Calculate normal for current cell
+                mx = iplane(i + ii, j + jj, k + kk, 0);
+                my = iplane(i + ii, j + jj, k + kk, 1);
+                mz = iplane(i + ii, j + jj, k + kk, 2);
+                alpha = iplane(i + ii, j + jj, k + kk, 3);
+                // Calculate cos(angle) with reference normal
+                amrex::Real cangle = (mx * mxr + my * myr + mz * mzr) /
+                                     sqrt(mx * mx + my * my + mz * mz) /
+                                     sqrt(mxr * mxr + myr * myr + mzr * mzr);
+                // Skip if angle is greater than 30 degrees
+                if (cangle < 0.5 * sqrt(3.0)) {
+                    continue;
+                }
+                // Calculate cell bounds based on indices
+                xm = (amrex::Real)ii;
+                ym = (amrex::Real)jj;
+                zm = (amrex::Real)kk;
+                xp = xm + 1.0;
+                yp = ym + 1.0;
+                zp = zm + 1.0;
+                // Compute center of polygon
+                amr_wind::multiphase::surfacearea_center(
+                    mx, my, mz, alpha, xm, xp, ym, yp, zm, zp, sa, xc, yc, zc);
+                // Calculate r vector
+                vs::Vector xvec{xc, yc, zc};
+                vs::Vector xrvec{xcr, ycr, zcr};
+                vs::Vector mrvec{mxr, myr, mzr};
+                vs::Vector d = (xvec - xrvec);
+                vs::Vector r = d ^ mrvec;
+                // Rotate r vector by pi/2
+                auto qmat = vs::quaternion(d, 90);
+                vs::Vector m_add = qmat & r;
+                // Contribute to final result
+                mxf += m_add.x();
+                myf += m_add.y();
+                mzf += m_add.z();
+                // Increment counter
+                ++n;
+            }
+        }
     }
 
-    amrex::Real invx = 1.0;
-    amrex::Real invy = 1.0;
-    amrex::Real invz = 1.0;
-
-    if (mx < 0.0) {
-        mx = -mx;
-        invx = -1.0;
+    if (n == 0) {
+        // If not modified, use reference as result
+        mxf = mxr;
+        myf = myr;
+        mzf = mzr;
+    } else {
+        // If modified, use computed answer as result
+        // Normalize contributions before exiting
+        amrex::Real mag = sqrt(mxf * mxf + myf * myf + mzf * mzf);
+        mxf /= mag;
+        myf /= mag;
+        mzf /= mag;
+        mag = amrex::Math::abs(mxf) + amrex::Math::abs(myf) +
+              amrex::Math::abs(mzf);
+        mxf /= mag;
+        myf /= mag;
+        mzf /= mag;
     }
-    if (my < 0.0) {
-        my = -my;
-        invy = -1.0;
-    }
-    if (mz < 0.0) {
-        mz = -mz;
-        invz = -1.0;
-    }
-
-    amrex::Real mm2 = mx + my + mz;
-    mx = mx / mm2;
-    my = my / mm2;
-    mz = mz / mm2;
-
-    alpha = volume_intercept(mx, my, mz, volfrac(i, j, k));
-
-    // Back to the original plane
-    mx = invx * mx;
-    my = invy * my;
-    mz = invz * mz;
-    alpha = alpha + amrex::min<amrex::Real>(0.0, mx) +
-            amrex::min<amrex::Real>(0.0, my) + amrex::min<amrex::Real>(0.0, mz);
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void fit_plane(
-    const int i,
-    const int j,
-    const int k,
-    amrex::Array4<amrex::Real const> const& volfrac,
-    amrex::Real& mx,
-    amrex::Real& my,
-    amrex::Real& mz,
-    amrex::Real& alpha)
-{
-    // Use swartz as default for now
-    fit_plane(i, j, k, 1, volfrac, mx, my, mz, alpha);
 }
 
 } // namespace amr_wind::multiphase

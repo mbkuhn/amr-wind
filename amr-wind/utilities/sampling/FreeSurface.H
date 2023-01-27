@@ -89,6 +89,8 @@ private:
 
     //! reference to VOF
     const Field& m_vof;
+    //! reference to interface planes
+    const Field& m_iplane;
 
     //! Format of the data output (ascii, netcdf, etc.)
 #ifdef AMR_WIND_USE_NETCDF
