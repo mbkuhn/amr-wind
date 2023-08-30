@@ -222,7 +222,6 @@ private:
     //
     ///////////////////////////////////////////////////////////////////////////
 
-    void set_background_pressure();
     void ReadParameters();
     void InitialProjection();
     void InitialIterations();
