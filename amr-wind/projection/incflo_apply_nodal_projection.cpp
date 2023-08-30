@@ -57,7 +57,6 @@ Vector<MultiFab*> incflo::prepare_nodal_projector(
     amr_wind::MLMGOptions& options,
     const bool mesh_mapping,
     const bool variable_density,
-    const amrex::Real rho_0,
     const amrex::Real scaling_factor,
     const amrex::Real time,
     amr_wind::Field& velocity,
@@ -121,7 +120,7 @@ Vector<MultiFab*> incflo::prepare_nodal_projector(
             options.lpinfo());
     } else {
         nodal_projector = std::make_unique<Hydro::NodalProjector>(
-            vel, scaling_factor / rho_0, Geom(0, finest_level),
+            vel, scaling_factor / m_rho0, Geom(0, finest_level),
             options.lpinfo());
     }
 
@@ -319,18 +318,11 @@ void incflo::ApplyProjection(
         velocity.to_uniform_space();
     }
 
-    // This really should be somewhere else
-    amrex::Real rho_0 = 1.0;
-    if (!(variable_density || mesh_mapping)) {
-        amrex::ParmParse pp("incflo");
-        pp.query("density", rho_0);
-    }
-
     std::unique_ptr<Hydro::NodalProjector> nodal_projector;
     amr_wind::MLMGOptions options("nodal_proj");
     // Set up BCs and sigma for nodal projector
     auto vel = prepare_nodal_projector(
-        nodal_projector, options, mesh_mapping, variable_density, rho_0,
+        nodal_projector, options, mesh_mapping, variable_density,
         scaling_factor, time, velocity, density, mesh_fac, mesh_detJ);
 
     // Perform modifications for IB
@@ -478,16 +470,9 @@ void incflo::UpdateGradP(
     std::unique_ptr<Hydro::NodalProjector> nodal_projector;
     amr_wind::MLMGOptions options("nodal_proj");
 
-    // This really should be somewhere else
-    amrex::Real rho_0 = 1.0;
-    if (!(variable_density || mesh_mapping)) {
-        amrex::ParmParse pp("incflo");
-        pp.query("density", rho_0);
-    }
-
     // Set up nodal projector
     prepare_nodal_projector(
-        nodal_projector, options, mesh_mapping, variable_density, rho_0,
+        nodal_projector, options, mesh_mapping, variable_density,
         scaling_factor, time, velocity, density, mesh_fac, mesh_detJ);
 
     // Recalculate gradphi with fluxes

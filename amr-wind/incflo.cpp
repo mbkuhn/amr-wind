@@ -382,6 +382,12 @@ void incflo::init_physics_and_pde()
         }
         pde_mgr.register_transport_pde("Density");
     }
+    // Read density value for constant density sims
+    {
+        // Pressure projection decides whether to use based on bools
+        amrex::ParmParse pp("incflo");
+        pp.query("density", m_rho0);
+    }
 
     m_sim.init_physics();
     {

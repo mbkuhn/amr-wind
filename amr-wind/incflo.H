@@ -141,7 +141,6 @@ public:
         amr_wind::MLMGOptions& options,
         const bool mesh_mapping,
         const bool variable_density,
-        const amrex::Real rho_0,
         const amrex::Real scaling_factor,
         const amrex::Real time,
         amr_wind::Field& velocity,
@@ -190,6 +189,9 @@ private:
     bool m_constant_density = true;
 
     bool m_use_godunov = true;
+
+    // Density value if constant density
+    amrex::Real m_rho0{1.0};
 
     // Prescribe advection velocity
     bool m_prescribe_vel = false;
