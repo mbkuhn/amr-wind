@@ -102,10 +102,6 @@ Vector<MultiFab*> incflo::prepare_nodal_projector(
         }
     }
 
-    // Address boundary conditions
-    auto bclo = get_projection_bc(Orientation::low);
-    auto bchi = get_projection_bc(Orientation::high);
-
     Vector<MultiFab*> vel;
     for (int lev = 0; lev <= finest_level; ++lev) {
         vel.push_back(&(velocity(lev)));
@@ -113,7 +109,7 @@ Vector<MultiFab*> incflo::prepare_nodal_projector(
         set_inflow_velocity(lev, time, *vel[lev], 1);
     }
 
-    // Put sigma, BCs, and option into nodal projector
+    // Put sigma, bndry vel, and options into nodal projector
     if (variable_density || mesh_mapping) {
         nodal_projector = std::make_unique<Hydro::NodalProjector>(
             vel, GetVecOfConstPtrs(sigma), Geom(0, finest_level),
@@ -124,6 +120,15 @@ Vector<MultiFab*> incflo::prepare_nodal_projector(
             options.lpinfo());
     }
 
+    // Set BCs
+    auto bclo = get_projection_bc(Orientation::low);
+    auto bchi = get_projection_bc(Orientation::high);
+    nodal_projector->setDomainBC(bclo, bchi);
+
+    // Pass nodal projector pointer to options
+    options(*nodal_projector);
+
+    // Return bndry vel, has other uses for IB
     return vel;
 }
 
