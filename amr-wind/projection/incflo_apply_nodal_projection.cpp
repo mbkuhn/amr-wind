@@ -1,7 +1,6 @@
 #include <AMReX_BC_TYPES.H>
 #include <memory>
 #include "amr-wind/incflo.H"
-#include "amr-wind/core/MLMGOptions.H"
 #include "amr-wind/utilities/console_io.H"
 #include "amr-wind/core/field_ops.H"
 #include "amr-wind/wind_energy/ABL.H"
@@ -51,6 +50,82 @@ incflo::get_projection_bc(Orientation::Side side) const noexcept
         }
     }
     return r;
+}
+
+Vector<MultiFab*> incflo::prepare_nodal_projector(
+    std::unique_ptr<Hydro::NodalProjector>& nodal_projector,
+    amr_wind::MLMGOptions& options,
+    const bool mesh_mapping,
+    const bool variable_density,
+    const amrex::Real rho_0,
+    const amrex::Real scaling_factor,
+    const amrex::Real time,
+    amr_wind::Field& velocity,
+    Vector<MultiFab const*> density,
+    amr_wind::Field const* mesh_fac,
+    amr_wind::Field const* mesh_detJ)
+{
+
+    // Create sigma while accounting for mesh mapping
+    // sigma = 1/(fac^2)*J * dt/rho
+    Vector<amrex::MultiFab> sigma(finest_level + 1);
+    if (variable_density || mesh_mapping) {
+        int ncomp = mesh_mapping ? AMREX_SPACEDIM : 1;
+        for (int lev = 0; lev <= finest_level; ++lev) {
+            sigma[lev].define(
+                grids[lev], dmap[lev], ncomp, 0, MFInfo(), Factory(lev));
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+            for (MFIter mfi(sigma[lev], TilingIfNotGPU()); mfi.isValid();
+                 ++mfi) {
+                Box const& bx = mfi.tilebox();
+                Array4<Real> const& sig = sigma[lev].array(mfi);
+                Array4<Real const> const& rho = density[lev]->const_array(mfi);
+                amrex::Array4<amrex::Real const> fac =
+                    mesh_mapping ? ((*mesh_fac)(lev).const_array(mfi))
+                                 : amrex::Array4<amrex::Real const>();
+                amrex::Array4<amrex::Real const> detJ =
+                    mesh_mapping ? ((*mesh_detJ)(lev).const_array(mfi))
+                                 : amrex::Array4<amrex::Real const>();
+
+                amrex::ParallelFor(
+                    bx, ncomp,
+                    [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+                        amrex::Real fac_cc =
+                            mesh_mapping ? (fac(i, j, k, n)) : 1.0;
+                        amrex::Real det_j =
+                            mesh_mapping ? (detJ(i, j, k)) : 1.0;
+                        sig(i, j, k, n) = std::pow(fac_cc, -2.) * det_j *
+                                          scaling_factor / rho(i, j, k);
+                    });
+            }
+        }
+    }
+
+    // Address boundary conditions
+    auto bclo = get_projection_bc(Orientation::low);
+    auto bchi = get_projection_bc(Orientation::high);
+
+    Vector<MultiFab*> vel;
+    for (int lev = 0; lev <= finest_level; ++lev) {
+        vel.push_back(&(velocity(lev)));
+        vel[lev]->setBndry(0.0);
+        set_inflow_velocity(lev, time, *vel[lev], 1);
+    }
+
+    // Put sigma, BCs, and option into nodal projector
+    if (variable_density || mesh_mapping) {
+        nodal_projector = std::make_unique<Hydro::NodalProjector>(
+            vel, GetVecOfConstPtrs(sigma), Geom(0, finest_level),
+            options.lpinfo());
+    } else {
+        nodal_projector = std::make_unique<Hydro::NodalProjector>(
+            vel, scaling_factor / rho_0, Geom(0, finest_level),
+            options.lpinfo());
+    }
+
+    return vel;
 }
 
 /** Perform nodal projection
@@ -244,78 +319,21 @@ void incflo::ApplyProjection(
         velocity.to_uniform_space();
     }
 
-    // Create sigma while accounting for mesh mapping
-    // sigma = 1/(fac^2)*J * dt/rho
-    Vector<amrex::MultiFab> sigma(finest_level + 1);
-    if (variable_density || mesh_mapping) {
-        int ncomp = mesh_mapping ? AMREX_SPACEDIM : 1;
-        for (int lev = 0; lev <= finest_level; ++lev) {
-            sigma[lev].define(
-                grids[lev], dmap[lev], ncomp, 0, MFInfo(), Factory(lev));
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-            for (MFIter mfi(sigma[lev], TilingIfNotGPU()); mfi.isValid();
-                 ++mfi) {
-                Box const& bx = mfi.tilebox();
-                Array4<Real> const& sig = sigma[lev].array(mfi);
-                Array4<Real const> const& rho = density[lev]->const_array(mfi);
-                amrex::Array4<amrex::Real const> fac =
-                    mesh_mapping ? ((*mesh_fac)(lev).const_array(mfi))
-                                 : amrex::Array4<amrex::Real const>();
-                amrex::Array4<amrex::Real const> detJ =
-                    mesh_mapping ? ((*mesh_detJ)(lev).const_array(mfi))
-                                 : amrex::Array4<amrex::Real const>();
-
-                amrex::ParallelFor(
-                    bx, ncomp,
-                    [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-                        amrex::Real fac_cc =
-                            mesh_mapping ? (fac(i, j, k, n)) : 1.0;
-                        amrex::Real det_j =
-                            mesh_mapping ? (detJ(i, j, k)) : 1.0;
-                        sig(i, j, k, n) = std::pow(fac_cc, -2.) * det_j *
-                                          scaling_factor / rho(i, j, k);
-                    });
-            }
-        }
-    }
-
-    // Perform projection
-    std::unique_ptr<Hydro::NodalProjector> nodal_projector;
-
-    auto bclo = get_projection_bc(Orientation::low);
-    auto bchi = get_projection_bc(Orientation::high);
-
-    Vector<MultiFab*> vel;
-    for (int lev = 0; lev <= finest_level; ++lev) {
-        vel.push_back(&(velocity(lev)));
-        vel[lev]->setBndry(0.0);
-        if (!proj_for_small_dt and !incremental) {
-            set_inflow_velocity(lev, time, *vel[lev], 1);
-        }
-    }
-
-    amr_wind::MLMGOptions options("nodal_proj");
-
-    if (variable_density || mesh_mapping) {
-        nodal_projector = std::make_unique<Hydro::NodalProjector>(
-            vel, GetVecOfConstPtrs(sigma), Geom(0, finest_level),
-            options.lpinfo());
-    } else {
-        amrex::Real rho_0 = 1.0;
+    // This really should be somewhere else
+    amrex::Real rho_0 = 1.0;
+    if (!(variable_density || mesh_mapping)) {
         amrex::ParmParse pp("incflo");
         pp.query("density", rho_0);
-
-        nodal_projector = std::make_unique<Hydro::NodalProjector>(
-            vel, scaling_factor / rho_0, Geom(0, finest_level),
-            options.lpinfo());
     }
 
-    // Set MLMG and NodalProjector options
-    options(*nodal_projector);
-    nodal_projector->setDomainBC(bclo, bchi);
+    std::unique_ptr<Hydro::NodalProjector> nodal_projector;
+    amr_wind::MLMGOptions options("nodal_proj");
+    // Set up BCs and sigma for nodal projector
+    auto vel = prepare_nodal_projector(
+        nodal_projector, options, mesh_mapping, variable_density, rho_0,
+        scaling_factor, time, velocity, density, mesh_fac, mesh_detJ);
 
+    // Perform modifications for IB
     bool has_ib = m_sim.physics_manager().contains("IB");
     if (has_ib) {
         auto div_vel_rhs =
@@ -341,6 +359,7 @@ void incflo::ApplyProjection(
         }
     }
 
+    // Perform projection
     if (m_sim.has_overset()) {
         auto phif = m_repo.create_scratch_field(1, 1, amr_wind::FieldLoc::NODE);
         if (incremental) {
@@ -441,15 +460,12 @@ void incflo::UpdateGradP(
 {
     BL_PROFILE("amr-wind::incflo::UpdateGradP");
 
+    // Get bools and fields
     bool variable_density =
         (!m_sim.pde_manager().constant_density() ||
          m_sim.physics_manager().contains("MultiPhase"));
-
-    bool mesh_mapping = m_sim.has_mesh_mapping();
-
-    auto& grad_p = m_repo.get_field("gp");
-    auto& pressure = m_repo.get_field("p");
     auto& velocity = icns().fields().field;
+    bool mesh_mapping = m_sim.has_mesh_mapping();
     amr_wind::Field const* mesh_fac =
         mesh_mapping
             ? &(m_repo.get_mesh_mapping_field(amr_wind::FieldLoc::CELL))
@@ -458,80 +474,28 @@ void incflo::UpdateGradP(
         mesh_mapping ? &(m_repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::CELL))
                      : nullptr;
 
-    // Create sigma while accounting for mesh mapping
-    // sigma = 1/(fac^2)*J * dt/rho
-    Vector<amrex::MultiFab> sigma(finest_level + 1);
-    if (variable_density || mesh_mapping) {
-        int ncomp = mesh_mapping ? AMREX_SPACEDIM : 1;
-        for (int lev = 0; lev <= finest_level; ++lev) {
-            sigma[lev].define(
-                grids[lev], dmap[lev], ncomp, 0, MFInfo(), Factory(lev));
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
-#endif
-            for (MFIter mfi(sigma[lev], TilingIfNotGPU()); mfi.isValid();
-                 ++mfi) {
-                Box const& bx = mfi.tilebox();
-                Array4<Real> const& sig = sigma[lev].array(mfi);
-                Array4<Real const> const& rho = density[lev]->const_array(mfi);
-                amrex::Array4<amrex::Real const> fac =
-                    mesh_mapping ? ((*mesh_fac)(lev).const_array(mfi))
-                                 : amrex::Array4<amrex::Real const>();
-                amrex::Array4<amrex::Real const> detJ =
-                    mesh_mapping ? ((*mesh_detJ)(lev).const_array(mfi))
-                                 : amrex::Array4<amrex::Real const>();
-
-                amrex::ParallelFor(
-                    bx, ncomp,
-                    [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-                        amrex::Real fac_cc =
-                            mesh_mapping ? (fac(i, j, k, n)) : 1.0;
-                        amrex::Real det_j =
-                            mesh_mapping ? (detJ(i, j, k)) : 1.0;
-                        sig(i, j, k, n) = std::pow(fac_cc, -2.) * det_j *
-                                          scaling_factor / rho(i, j, k);
-                    });
-            }
-        }
-    }
-
-    // Perform projection
+    // Get projector and options objects
     std::unique_ptr<Hydro::NodalProjector> nodal_projector;
-
-    auto bclo = get_projection_bc(Orientation::low);
-    auto bchi = get_projection_bc(Orientation::high);
-
-    Vector<MultiFab*> vel;
-    for (int lev = 0; lev <= finest_level; ++lev) {
-        vel.push_back(&(velocity(lev)));
-        vel[lev]->setBndry(0.0);
-        set_inflow_velocity(lev, time, *vel[lev], 1);
-    }
-
     amr_wind::MLMGOptions options("nodal_proj");
 
-    if (variable_density || mesh_mapping) {
-        nodal_projector = std::make_unique<Hydro::NodalProjector>(
-            vel, GetVecOfConstPtrs(sigma), Geom(0, finest_level),
-            options.lpinfo());
-    } else {
-        amrex::Real rho_0 = 1.0;
+    // This really should be somewhere else
+    amrex::Real rho_0 = 1.0;
+    if (!(variable_density || mesh_mapping)) {
         amrex::ParmParse pp("incflo");
         pp.query("density", rho_0);
-
-        nodal_projector = std::make_unique<Hydro::NodalProjector>(
-            vel, scaling_factor / rho_0, Geom(0, finest_level),
-            options.lpinfo());
     }
 
-    // Set MLMG and NodalProjector options
-    options(*nodal_projector);
-    nodal_projector->setDomainBC(bclo, bchi);
+    // Set up nodal projector
+    prepare_nodal_projector(
+        nodal_projector, options, mesh_mapping, variable_density, rho_0,
+        scaling_factor, time, velocity, density, mesh_fac, mesh_detJ);
 
     // Recalculate gradphi with fluxes
+    auto& pressure = m_repo.get_field("p");
     auto gradphi = nodal_projector->calcGradPhi(pressure.vec_ptrs());
 
     // Transfer pressure gradient to gp field
+    auto& grad_p = m_repo.get_field("gp");
     for (int lev = 0; lev <= finest_level; lev++) {
 
 #ifdef AMREX_USE_OMP

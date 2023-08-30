@@ -6,6 +6,7 @@
 #include <AMReX_ParmParse.H>
 #include <AMReX_iMultiFab.H>
 #include <hydro_NodalProjector.H>
+#include "amr-wind/core/MLMGOptions.H"
 
 #include "amr-wind/incflo_enums.H"
 #include "amr-wind/CFDSim.H"
@@ -134,6 +135,19 @@ public:
 
     void set_inflow_velocity(
         int lev, amrex::Real time, amrex::MultiFab& vel, int nghost);
+
+    amrex::Vector<amrex::MultiFab*> prepare_nodal_projector(
+        std::unique_ptr<Hydro::NodalProjector>& nodal_projector,
+        amr_wind::MLMGOptions& options,
+        const bool mesh_mapping,
+        const bool variable_density,
+        const amrex::Real rho_0,
+        const amrex::Real scaling_factor,
+        const amrex::Real time,
+        amr_wind::Field& velocity,
+        amrex::Vector<amrex::MultiFab const*> density,
+        amr_wind::Field const* mesh_fac,
+        amr_wind::Field const* mesh_detJ);
 
     void ApplyPredictor(bool incremental_projection = false);
     void ApplyCorrector();
