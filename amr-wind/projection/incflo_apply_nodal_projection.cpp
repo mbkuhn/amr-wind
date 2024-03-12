@@ -126,7 +126,8 @@ void incflo::ApplyProjection(
         }
     }
 
-    bool variable_density =
+    const bool is_anelastic = m_sim.is_anelastic();
+    const bool variable_density =
         (!m_sim.pde_manager().constant_density() ||
          m_sim.physics_manager().contains("MultiPhase"));
 
@@ -143,6 +144,8 @@ void incflo::ApplyProjection(
     amr_wind::Field const* mesh_detJ =
         mesh_mapping ? &(m_repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::CELL))
                      : nullptr;
+    const auto* ref_density =
+        is_anelastic ? &(m_repo.get_field("reference_density")) : nullptr;
 
     // TODO: Mesh mapping doesn't work with immersed boundaries
     // Do the pre pressure correction work -- this applies to IB only
@@ -266,6 +269,9 @@ void incflo::ApplyProjection(
                 amrex::Array4<amrex::Real const> detJ =
                     mesh_mapping ? ((*mesh_detJ)(lev).const_array(mfi))
                                  : amrex::Array4<amrex::Real const>();
+                const auto& ref_rho = is_anelastic
+                                          ? (*ref_density)(lev).const_array(mfi)
+                                          : amrex::Array4<amrex::Real>();
 
                 amrex::ParallelFor(
                     bx, ncomp,
@@ -276,6 +282,9 @@ void incflo::ApplyProjection(
                             mesh_mapping ? (detJ(i, j, k)) : 1.0;
                         sig(i, j, k, n) = std::pow(fac_cc, -2.) * det_j *
                                           scaling_factor / rho(i, j, k);
+                        if (is_anelastic) {
+                            sig(i, j, k, n) *= ref_rho(i, j, k);
+                        }
                     });
             }
         }
@@ -293,6 +302,14 @@ void incflo::ApplyProjection(
         vel[lev]->setBndry(0.0);
         if (!proj_for_small_dt and !incremental) {
             set_inflow_velocity(lev, time, *vel[lev], 1);
+        }
+    }
+
+    if (is_anelastic) {
+        for (int lev = 0; lev <= finest_level; ++lev) {
+            amrex::Multiply(
+                velocity(lev), (*ref_density)(lev), 0, 0, density[lev]->nComp(),
+                0);
         }
     }
 
@@ -356,8 +373,17 @@ void incflo::ApplyProjection(
     } else {
         nodal_projector->project(options.rel_tol, options.abs_tol);
     }
+
     amr_wind::io::print_mlmg_info(
         "Nodal_projection", nodal_projector->getMLMG());
+
+    if (is_anelastic) {
+        for (int lev = 0; lev <= finest_level; ++lev) {
+            amrex::Divide(
+                velocity(lev), (*ref_density)(lev), 0, 0, density[lev]->nComp(),
+                0);
+        }
+    }
 
     // scale U^* back to -> U = fac/J * U^bar
     if (mesh_mapping) {
@@ -413,11 +439,11 @@ void incflo::ApplyProjection(
     }
 
     // Determine if reference pressure should be added back
-    if (m_repo.field_exists("reference_pressure") && time != 0.0) {
+    if (m_reconstruct_true_pressure && time != 0.0) {
         const auto& p0 = m_repo.get_field("reference_pressure");
         for (int lev = 0; lev <= finest_level; lev++) {
             amrex::MultiFab::Add(
-                pressure(lev), p0(lev), 0, 0, 1, pressure.num_grow()[0]);
+                pressure(lev), p0(lev), 0, 0, 1, p0.num_grow()[0]);
         }
     }
 
@@ -434,4 +460,142 @@ void incflo::ApplyProjection(
             PrintMaxValues("after projection");
         }
     }
+}
+
+void incflo::UpdateGradP(
+    Vector<MultiFab const*> density, Real /*time*/, Real scaling_factor)
+{
+    BL_PROFILE("amr-wind::incflo::UpdateGradP");
+
+    // Pressure and sigma are necessary to calculate the pressure gradient
+
+    const bool is_anelastic = m_sim.is_anelastic();
+    const bool variable_density =
+        (!m_sim.pde_manager().constant_density() ||
+         m_sim.physics_manager().contains("MultiPhase"));
+
+    bool mesh_mapping = m_sim.has_mesh_mapping();
+
+    auto& grad_p = m_repo.get_field("gp");
+    auto& pressure = m_repo.get_field("p");
+    auto& velocity = icns().fields().field;
+    amr_wind::Field const* mesh_fac =
+        mesh_mapping
+            ? &(m_repo.get_mesh_mapping_field(amr_wind::FieldLoc::CELL))
+            : nullptr;
+    amr_wind::Field const* mesh_detJ =
+        mesh_mapping ? &(m_repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::CELL))
+                     : nullptr;
+    const auto* ref_density =
+        is_anelastic ? &(m_repo.get_field("reference_density")) : nullptr;
+
+    // ASA does not think we actually need to define sigma here. It
+    // should not be used by calcGradPhi
+
+    // Create sigma while accounting for mesh mapping
+    // sigma = 1/(fac^2)*J * dt/rho
+    Vector<amrex::MultiFab> sigma(finest_level + 1);
+    if (variable_density || mesh_mapping) {
+        int ncomp = mesh_mapping ? AMREX_SPACEDIM : 1;
+        for (int lev = 0; lev <= finest_level; ++lev) {
+            sigma[lev].define(
+                grids[lev], dmap[lev], ncomp, 0, MFInfo(), Factory(lev));
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+            for (MFIter mfi(sigma[lev], TilingIfNotGPU()); mfi.isValid();
+                 ++mfi) {
+                Box const& bx = mfi.tilebox();
+                Array4<Real> const& sig = sigma[lev].array(mfi);
+                Array4<Real const> const& rho = density[lev]->const_array(mfi);
+                amrex::Array4<amrex::Real const> fac =
+                    mesh_mapping ? ((*mesh_fac)(lev).const_array(mfi))
+                                 : amrex::Array4<amrex::Real const>();
+                amrex::Array4<amrex::Real const> detJ =
+                    mesh_mapping ? ((*mesh_detJ)(lev).const_array(mfi))
+                                 : amrex::Array4<amrex::Real const>();
+                const auto& ref_rho = is_anelastic
+                                          ? (*ref_density)(lev).const_array(mfi)
+                                          : amrex::Array4<amrex::Real>();
+
+                amrex::ParallelFor(
+                    bx, ncomp,
+                    [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+                        amrex::Real fac_cc =
+                            mesh_mapping ? (fac(i, j, k, n)) : 1.0;
+                        amrex::Real det_j =
+                            mesh_mapping ? (detJ(i, j, k)) : 1.0;
+                        sig(i, j, k, n) = std::pow(fac_cc, -2.) * det_j *
+                                          scaling_factor / rho(i, j, k);
+                        if (is_anelastic) {
+                            sig(i, j, k, n) *= ref_rho(i, j, k);
+                        }
+                    });
+            }
+        }
+    }
+
+    // Set up projection object
+    std::unique_ptr<Hydro::NodalProjector> nodal_projector;
+
+    auto bclo = get_projection_bc(Orientation::low);
+    auto bchi = get_projection_bc(Orientation::high);
+
+    // Velocity multifab is needed for proper initialization, but only the size
+    // matters for the purpose of calculating gradp, the values do not matter
+    Vector<MultiFab*> vel;
+    for (int lev = 0; lev <= finest_level; ++lev) {
+        vel.push_back(&(velocity(lev)));
+    }
+
+    if (is_anelastic) {
+        for (int lev = 0; lev <= finest_level; ++lev) {
+            amrex::Multiply(
+                velocity(lev), (*ref_density)(lev), 0, 0, density[lev]->nComp(),
+                0);
+        }
+    }
+
+    amr_wind::MLMGOptions options("nodal_proj");
+
+    if (variable_density || mesh_mapping) {
+        nodal_projector = std::make_unique<Hydro::NodalProjector>(
+            vel, GetVecOfConstPtrs(sigma), Geom(0, finest_level),
+            options.lpinfo());
+    } else {
+        amrex::Real rho_0 = 1.0;
+        amrex::ParmParse pp("incflo");
+        pp.query("density", rho_0);
+
+        nodal_projector = std::make_unique<Hydro::NodalProjector>(
+            vel, scaling_factor / rho_0, Geom(0, finest_level),
+            options.lpinfo());
+    }
+
+    // Set MLMG and NodalProjector options
+    options(*nodal_projector);
+    nodal_projector->setDomainBC(bclo, bchi);
+
+    // Recalculate gradphi with fluxes
+    auto gradphi = nodal_projector->calcGradPhi(pressure.vec_ptrs());
+
+    // Transfer pressure gradient to gp field
+    for (int lev = 0; lev <= finest_level; lev++) {
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+        for (MFIter mfi(grad_p(lev), TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+            Box const& tbx = mfi.tilebox();
+            Array4<Real> const& gp_lev = grad_p(lev).array(mfi);
+            Array4<Real const> const& gp_proj = gradphi[lev]->const_array(mfi);
+            amrex::ParallelFor(
+                tbx, AMREX_SPACEDIM,
+                [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+                    gp_lev(i, j, k, n) = gp_proj(i, j, k, n);
+                });
+        }
+    }
+
+    // Average down is unnecessary because it is built into calcGradPhi
 }

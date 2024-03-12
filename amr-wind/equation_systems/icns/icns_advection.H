@@ -25,7 +25,8 @@ public:
         FieldRepo& /*repo*/,
         bool /*has_overset*/,
         bool /*variable_density*/,
-        bool /*mesh_mapping*/);
+        bool /*mesh_mapping*/,
+        bool /*is_anelastic*/);
 
     void operator()(const FieldState fstate, const amrex::Real dt);
 
@@ -51,6 +52,7 @@ private:
     bool m_need_init{true};
     bool m_variable_density{false};
     bool m_mesh_mapping{false};
+    bool m_is_anelastic{false};
     amrex::Real m_rho_0{1.0};
 };
 
@@ -64,12 +66,18 @@ struct AdvectionOp<ICNS, fvm::Godunov>
         PDEFields& fields_in,
         bool has_overset,
         bool variable_density,
-        bool mesh_mapping)
+        bool mesh_mapping,
+        bool is_anelastic)
         : fields(fields_in)
         , u_mac(fields_in.repo.get_field("u_mac"))
         , v_mac(fields_in.repo.get_field("v_mac"))
         , w_mac(fields_in.repo.get_field("w_mac"))
-        , m_macproj_op(fields.repo, has_overset, variable_density, mesh_mapping)
+        , m_macproj_op(
+              fields.repo,
+              has_overset,
+              variable_density,
+              mesh_mapping,
+              is_anelastic)
     {
 
         amrex::ParmParse pp("incflo");
@@ -117,8 +125,7 @@ struct AdvectionOp<ICNS, fvm::Godunov>
         } else if (amrex::toLower(mflux_type) == "upwind") {
             mflux_scheme = godunov::scheme::UPWIND;
         } else {
-            amrex::Print() << "For mflux_type, default is upwind" << std::endl;
-            mflux_scheme = godunov::scheme::UPWIND;
+            amrex::Abort("Invalid argument entered for mflux_type.");
         }
 
         // Formulation of discrete ICNS equation
@@ -552,7 +559,7 @@ struct AdvectionOp<ICNS, fvm::Godunov>
     godunov::scheme godunov_scheme = godunov::scheme::PPM;
     godunov::scheme mflux_scheme = godunov::scheme::UPWIND;
     std::string godunov_type;
-    std::string mflux_type;
+    std::string mflux_type{"upwind"};
     const bool fluxes_are_area_weighted{false};
     bool godunov_use_forces_in_trans{false};
     int m_cons{1};
@@ -571,14 +578,19 @@ struct AdvectionOp<ICNS, fvm::MOL>
         PDEFields& fields_in,
         bool has_overset,
         bool variable_density,
-        bool mesh_mapping)
+        bool mesh_mapping,
+        bool is_anelastic)
         : fields(fields_in)
         , u_mac(fields_in.repo.get_field("u_mac"))
         , v_mac(fields_in.repo.get_field("v_mac"))
         , w_mac(fields_in.repo.get_field("w_mac"))
         , m_mesh_mapping(mesh_mapping)
         , m_macproj_op(
-              fields.repo, has_overset, variable_density, m_mesh_mapping)
+              fields.repo,
+              has_overset,
+              variable_density,
+              m_mesh_mapping,
+              is_anelastic)
     {}
 
     void preadvect(
@@ -643,7 +655,8 @@ struct AdvectionOp<ICNS, fvm::MOL>
                 amrex::Box gbx = grow(bx, fvm::MOL::nghost_state);
 
                 // Set up momentum array
-                amrex::FArrayBox qfab(gbx, ICNS::ndim);
+                amrex::FArrayBox qfab(
+                    gbx, ICNS::ndim, amrex::The_Async_Arena());
                 const auto& q = qfab.array();
                 // Calculate momentum
                 auto rho_arr = rho(lev).const_array(mfi);
@@ -656,13 +669,12 @@ struct AdvectionOp<ICNS, fvm::MOL>
                 // Doing this explicitly, instead of through a Multiply command,
                 // helps avoid floating-point errors with intel compilers and
                 // mimics the implementation in equation_systems/AdvOp_MOL.H
-                amrex::Gpu::streamSynchronize();
 
                 amrex::Box tmpbox = amrex::surroundingNodes(bx);
                 const int tmpcomp = nmaxcomp * AMREX_SPACEDIM;
 
-                amrex::FArrayBox tmpfab(tmpbox, tmpcomp);
-                amrex::Elixir eli = tmpfab.elixir();
+                amrex::FArrayBox tmpfab(
+                    tmpbox, tmpcomp, amrex::The_Async_Arena());
 
                 amrex::Array4<amrex::Real> fx = tmpfab.array(0);
                 amrex::Array4<amrex::Real> fy = tmpfab.array(nmaxcomp);

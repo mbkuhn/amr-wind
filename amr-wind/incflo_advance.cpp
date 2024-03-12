@@ -190,6 +190,13 @@ void incflo::ApplyPredictor(bool incremental_projection)
     const auto& density_old = density_new.state(amr_wind::FieldState::Old);
     auto& density_nph = density_new.state(amr_wind::FieldState::NPH);
 
+    // Recalculate incoming pressure gradient field if overset
+    if (sim().has_overset()) {
+        UpdateGradP(
+            (density_old).vec_const_ptrs(), m_time.current_time(),
+            m_time.deltaT());
+    }
+
     // *************************************************************************************
     // Compute viscosity / diffusive coefficients
     // *************************************************************************************
@@ -281,7 +288,7 @@ void incflo::ApplyPredictor(bool incremental_projection)
     // *************************************************************************************
     // Update density first
     // *************************************************************************************
-    if (m_constant_density) {
+    if (m_sim.pde_manager().constant_density()) {
         amr_wind::field_ops::copy(density_nph, density_old, 0, 0, 1, 1);
     }
 
@@ -557,7 +564,7 @@ void incflo::ApplyCorrector()
     // *************************************************************************************
     // Update density first
     // *************************************************************************************
-    if (m_constant_density) {
+    if (m_sim.pde_manager().constant_density()) {
         amr_wind::field_ops::copy(density_nph, density_old, 0, 0, 1, 1);
     }
 
@@ -707,7 +714,7 @@ void incflo::ApplyPrescribeStep()
     // *************************************************************************************
     // Update density first
     // *************************************************************************************
-    if (m_constant_density) {
+    if (m_sim.pde_manager().constant_density()) {
         amr_wind::field_ops::copy(density_nph, density_old, 0, 0, 1, 1);
     }
 

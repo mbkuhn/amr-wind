@@ -85,8 +85,8 @@ ABLWallFunction::ABLWallFunction(const CFDSim& sim)
         }
     }
 
-    m_mo.alg_type =
-        m_tempflux ? MOData::HEAT_FLUX : MOData::SURFACE_TEMPERATURE;
+    m_mo.alg_type = m_tempflux ? MOData::ThetaCalcType::HEAT_FLUX
+                               : MOData::ThetaCalcType::SURFACE_TEMPERATURE;
     m_mo.gravity = utils::vec_mag(m_gravity.data());
 }
 
@@ -94,8 +94,7 @@ void ABLWallFunction::init_log_law_height()
 {
     if (m_use_fch) {
         const auto& geom = m_mesh.Geom(0);
-        m_mo.zref =
-            (geom.ProbLo(m_direction) + 0.5 * geom.CellSize(m_direction));
+        m_mo.zref = 0.5 * geom.CellSize(m_direction);
     }
 }
 
@@ -130,6 +129,11 @@ void ABLWallFunction::update_umean(
     }
 
     m_mo.update_fluxes();
+}
+
+void ABLWallFunction::update_tflux(const amrex::Real tflux)
+{
+    m_mo.surf_temp_flux = tflux;
 }
 
 ABLVelWallFunc::ABLVelWallFunc(

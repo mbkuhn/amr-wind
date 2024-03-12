@@ -29,7 +29,7 @@ MultiPhase::MultiPhase(CFDSim& sim)
         m_interface_capturing_method = amr_wind::InterfaceCapturingMethod::VOF;
         auto& vof_eqn = sim.pde_manager().register_transport_pde("VOF");
         m_vof = &(vof_eqn.fields().field);
-        // Create levelset as a auxilliary field only !
+        // Create levelset as a auxiliary field only !
         m_levelset = &(m_sim.repo().get_field("levelset"));
         const amrex::Real levelset_default = 0.0;
         BCScalar bc_ls(*m_levelset);
@@ -47,7 +47,7 @@ MultiPhase::MultiPhase(CFDSim& sim)
         m_interface_capturing_method = amr_wind::InterfaceCapturingMethod::VOF;
         auto& vof_eqn = sim.pde_manager().register_transport_pde("VOF");
         m_vof = &(vof_eqn.fields().field);
-        // Create levelset as a auxilliary field only !
+        // Create levelset as a auxiliary field only !
         m_levelset = &(m_sim.repo().get_field("levelset"));
         const amrex::Real levelset_default = 0.0;
         BCScalar bc_ls(*m_levelset);
@@ -56,15 +56,22 @@ MultiPhase::MultiPhase(CFDSim& sim)
 
     // Address pressure approach through input values
     amrex::ParmParse pp_icns("ICNS");
-    pp_icns.query("use_perturb_pressure", is_pptb);
-    pp_icns.query("reconstruct_true_pressure", is_ptrue);
+    pp_icns.query("use_perturb_pressure", m_use_perturb_pressure);
+    pp_icns.query("reconstruct_true_pressure", m_reconstruct_true_pressure);
     // Declare fields
-    if (is_pptb) {
+    if (m_use_perturb_pressure) {
         m_sim.repo().declare_field("reference_density", 1, 0, 1);
-        if (is_ptrue) {
+        if (m_reconstruct_true_pressure) {
             m_sim.repo().declare_nd_field(
                 "reference_pressure", 1, (*m_vof).num_grow()[0], 1);
         }
+    }
+
+    // Warn if density specified in single-phase sense
+    amrex::ParmParse pp_incflo("incflo");
+    if (pp_incflo.contains("density")) {
+        amrex::Print() << "WARNING: single-phase density has been specified "
+                          "but will not be used! (MultiPhase physics)\n";
     }
 }
 
@@ -98,21 +105,23 @@ void MultiPhase::post_init_actions()
     amrex::ParmParse pp_multiphase("MultiPhase");
     bool is_wlev = pp_multiphase.contains("water_level");
     // Abort if no water level specified
-    if (is_pptb && !is_wlev) {
+    if (m_use_perturb_pressure && !is_wlev) {
         amrex::Abort(
             "Perturbational pressure requested, but physics case does not "
             "specify water level.");
     }
-    // Make rho0 field if both are specified
-    if (is_pptb && is_wlev) {
+    if (is_wlev) {
         pp_multiphase.get("water_level", water_level0);
+    }
+    // Make rho0 field if both are specified
+    if (m_use_perturb_pressure && is_wlev) {
         // Initialize rho0 field for perturbational density, pressure
         auto& rho0 = m_sim.repo().get_field("reference_density");
         hydrostatic::define_rho0(
             rho0, m_rho1, m_rho2, water_level0, m_sim.mesh().Geom());
 
         // Make p0 field if requested
-        if (is_ptrue) {
+        if (m_reconstruct_true_pressure) {
             // Initialize p0 field for reconstructing p
             amrex::ParmParse pp("incflo");
             pp.queryarr("gravity", m_gravity);
@@ -127,12 +136,12 @@ void MultiPhase::post_init_actions()
 void MultiPhase::post_regrid_actions()
 {
     // Reinitialize rho0 if needed
-    if (is_pptb) {
+    if (m_use_perturb_pressure) {
         auto& rho0 = m_sim.repo().declare_field("reference_density", 1, 0, 1);
         hydrostatic::define_rho0(
             rho0, m_rho1, m_rho2, water_level0, m_sim.mesh().Geom());
         // Reinitialize p0 if needed
-        if (is_ptrue) {
+        if (m_reconstruct_true_pressure) {
             auto ng = (*m_vof).num_grow();
             auto& p0 = m_sim.repo().declare_nd_field(
                 "reference_pressure", 1, ng[0], 1);
@@ -366,11 +375,8 @@ void MultiPhase::calculate_advected_facedensity()
     amrex::Real c_r2 = m_rho2;
 
     // Get advected vof terms at each face
-    // cppcheck-suppress constVariableReference
     auto& advalpha_x = m_sim.repo().get_field("advalpha_x");
-    // cppcheck-suppress constVariableReference
     auto& advalpha_y = m_sim.repo().get_field("advalpha_y");
-    // cppcheck-suppress constVariableReference
     auto& advalpha_z = m_sim.repo().get_field("advalpha_z");
 
     for (int lev = 0; lev < nlevels; ++lev) {
