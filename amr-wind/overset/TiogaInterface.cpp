@@ -75,6 +75,7 @@ TiogaInterface::TiogaInterface(CFDSim& sim)
     , m_mask_node(sim.repo().declare_int_field(
           "mask_node", 1, sim.pde_manager().num_ghost_state(), 1,
           FieldLoc::NODE))
+    , m_ovst_ops(sim)
 {
     m_sim.io_manager().register_output_int_var(m_iblank_cell.name());
 }
