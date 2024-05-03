@@ -11,14 +11,20 @@ public:
     explicit OversetOps(CFDSim& sim);
 
     void post_init_actions();
-    void parameter_output();
     void pre_advance_actions();
     void post_advance_actions();
 
 private:
-    // Checks and methodology
+    // Functions called within public functions
+    void parameter_output();
+    void sharpen_nalu_data();
+    void replace_masked_gradp();
+
+    // Check for multiphase sim
     bool m_vof_exists{false};
-    bool m_use_hs_pgrad{true};
+
+    // This is the only option for now
+    const bool m_use_hs_pgrad{true};
 
     // Coupling options
     bool m_disable_nodal_proj{false};
