@@ -2,6 +2,8 @@
 #define OVERSETOPS_H
 
 #include "amr-wind/CFDSim.H"
+#include "amr-wind/incflo.H"
+#include "amr-wind/physics/multiphase/MultiPhase.H"
 
 namespace amr_wind {
 
@@ -11,17 +13,21 @@ public:
     explicit OversetOps(CFDSim& sim);
 
     void post_init_actions();
-    void pre_advance_actions();
+    void pre_advance_actions(incflo& solver);
     void post_advance_actions();
 
 private:
     // Functions called within public functions
     void parameter_output();
     void sharpen_nalu_data();
+    void set_hydrostatic_gradp();
     void replace_masked_gradp();
 
     // Check for multiphase sim
     bool m_vof_exists{false};
+    // Check for perturbational pressure
+    // (will be removed soon)
+    bool m_perturb_p{false};
 
     // This is the only option for now
     const bool m_use_hs_pgrad{true};
@@ -41,6 +47,16 @@ private:
     amrex::Real m_rlscale = 1.5;
     amrex::Real m_margin = 0.1;
     amrex::Real m_target_cutoff = 0.0; // proc_tgvof_tol
+
+    // Tolerance for VOF-related bound checks
+    const amrex::Real m_vof_tol = 1e-12;
+    // Small number for approximate signed distance function
+    const amrex::Real m_asdf_tiny = 1e-12;
+
+    // Pointer for pressure gradient copy field
+    amr_wind::Field* m_gp_copy{nullptr};
+    // Pointer for MultiPhase physics
+    amr_wind::MultiPhase* m_mphase{nullptr};
 
     CFDSim& m_sim;
     // Should I include sim, or should I have all of the fields here?

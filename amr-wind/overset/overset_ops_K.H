@@ -1,20 +1,19 @@
 #ifndef OVERSET_OPS_K_H_
 #define OVERSET_OPS_K_H_
 
-// #include "amr-wind/equation_systems/vof/volume_fractions.H"
 #include <AMReX_FArrayBox.H>
 
 namespace amr_wind::overset_ops {
 
 // Approximate signed distance function
 amrex::Real AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
-asdf(const amrex::Real a_vof, const amrex::Real i_th)
+asdf(const amrex::Real a_vof, const amrex::Real i_th, const amrex::Real tiny)
 {
     // function of local vof value and interface thickness
-    return (i_th * log((a_vof + 1e-12) / (1. - a_vof + 1e-12)));
+    return (i_th * log((a_vof + tiny) / (1. - a_vof + tiny)));
 }
 
-amrex::Real AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE alpha_discrete_flux(
+amrex::Real AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE alpha_flux(
     int i,
     int j,
     int k,
@@ -69,7 +68,7 @@ amrex::Real AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE alpha_discrete_flux(
     return dphi_eval;
 }
 
-void AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE velocity_discrete_face(
+void AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE velocity_face(
     int i,
     int j,
     int k,
@@ -98,53 +97,6 @@ void AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE velocity_discrete_face(
     const amrex::Real u_nb = velocity(ii, jj, kk, 0);
     const amrex::Real v_nb = velocity(ii, jj, kk, 1);
     const amrex::Real w_nb = velocity(ii, jj, kk, 2);
-    // Average value when gphi = 0
-    uface = 0.5 * (u_ + u_nb);
-    vface = 0.5 * (v_ + v_nb);
-    wface = 0.5 * (w_ + w_nb);
-    // Use simple upwinding
-    if (gphi > 0.0) {
-        uface = u_nb;
-        vface = v_nb;
-        wface = w_nb;
-    }
-    if (gphi < 0.0) {
-        uface = u_;
-        vface = v_;
-        wface = w_;
-    }
-}
-
-void AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE gp_rho_discrete_face(
-    int i,
-    int j,
-    int k,
-    int dir,
-    amrex::Array4<amrex::Real const> const& vof,
-    amrex::Array4<amrex::Real const> const& gp,
-    amrex::Array4<amrex::Real const> const& rho,
-    amrex::Real& uface,
-    amrex::Real& vface,
-    amrex::Real& wface)
-{
-    // Set up neighbor indices
-    int ii = i;
-    int jj = j;
-    int kk = k;
-    ii += (dir == 0) ? -1 : 0;
-    jj += (dir == 1) ? -1 : 0;
-    kk += (dir == 2) ? -1 : 0;
-
-    // Gradient of phi normal to interface
-    const amrex::Real gphi = (vof(i, j, k) - vof(ii, jj, kk));
-
-    // Get velocities on both sides
-    const amrex::Real u_ = gp(i, j, k, 0) / rho(i, j, k);
-    const amrex::Real v_ = gp(i, j, k, 1) / rho(i, j, k);
-    const amrex::Real w_ = gp(i, j, k, 2) / rho(i, j, k);
-    const amrex::Real u_nb = gp(ii, jj, kk, 0) / rho(ii, jj, kk);
-    const amrex::Real v_nb = gp(ii, jj, kk, 1) / rho(ii, jj, kk);
-    const amrex::Real w_nb = gp(ii, jj, kk, 2) / rho(ii, jj, kk);
     // Average value when gphi = 0
     uface = 0.5 * (u_ + u_nb);
     vface = 0.5 * (v_ + v_nb);

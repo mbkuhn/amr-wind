@@ -20,6 +20,12 @@ OversetOps::OversetOps(CFDSim& sim) : m_sim(sim)
     // Queries for coupling options
     pp.query("disable_coupled_nodal_proj", m_disable_nodal_proj);
     pp.query("disable_coupled_mac_proj", m_disable_mac_proj);
+    pp.query("replace_gradp_postsolve", m_replace_gp);
+
+    // Check for perturbational pressure
+    // (will be removed soon)
+    amrex::ParmParse pp_icns("ICNS");
+    pp_icns.query("use_perturb_pressure", m_perturb_p);
 }
 
 void OversetOps::post_init_actions()
@@ -27,24 +33,64 @@ void OversetOps::post_init_actions()
     // Put vof check here
     m_vof_exists = m_sim.repo().field_exists("vof");
 
+    // Set up pointer to MultiPhase physics
+    if (m_vof_exists) {
+        m_mphase = &m_sim.physics_manager().get<MultiPhase>();
+    }
+
+    // Set up field to store pressure gradient
+    if (m_replace_gp) {
+        m_gp_copy = &m_sim.repo().declare_field("gp_copy", 3);
+    }
+
     // Output parameters if verbose
     parameter_output();
 }
 
-void OversetOps::pre_advance_actions()
+void OversetOps::pre_advance_actions(incflo& solver)
 {
-    // Update pressure gradient
+    // Update pressure gradient using updated overset pressure field
+    if (!(m_vof_exists && m_use_hs_pgrad)) {
+        // Pressure gradient not updated for current multiphase approach
+        solver.UpdateGradP(
+            m_sim.repo()
+                .get_field("density")
+                .state(amr_wind::FieldState::Old)
+                .vec_const_ptrs(),
+            m_sim.time().current_time(), m_sim.time().deltaT());
+    }
 
-    // Reinitialize fields
     if (m_vof_exists) {
+        // Reinitialize fields
         sharpen_nalu_data();
+        if (m_use_hs_pgrad) {
+            // Use hydrostatic pressure gradient
+            set_hydrostatic_gradp();
+        }
+    }
+
+    // If pressure gradient will be replaced, store current pressure gradient
+    if (m_replace_gp) {
+        auto& gp = m_sim.repo().get_field("gp");
+        for (int lev = 0; lev < m_sim.repo().num_active_levels(); ++lev) {
+            amrex::MultiFab::Copy(
+                (*m_gp_copy)(lev), gp(lev), 0, 0, gp(lev).nComp(),
+                (m_gp_copy)->num_grow());
+        }
     }
 }
 
 void OversetOps::post_advance_actions()
 {
     // Replace and reapply pressure gradient if requested
+    if (m_replace_gp) {
+        replace_masked_gradp();
+    }
 }
+
+/* ----------------------------------------------- */
+/* PUBLIC FUNCTIONS ABOVE, PRIVATE FUNCTIONS BELOW */
+/* ----------------------------------------------- */
 
 void OversetOps::parameter_output()
 {
@@ -85,12 +131,6 @@ void OversetOps::sharpen_nalu_data()
     auto nlevels = repo.num_active_levels();
     auto geom = m_sim.mesh().Geom();
 
-    // Get phase densities
-    auto& mphase = m_sim.physics_manager().get<MultiPhase>();
-    const amrex::Real rhol = mphase.rho1();
-    const amrex::Real rhog = mphase.rho2();
-    const amrex::Real grav_z = mphase.gravity()[2];
-
     // Get blanking for cells
     auto& iblank_cell = repo.get_int_field("iblank_cell");
 
@@ -99,16 +139,12 @@ void OversetOps::sharpen_nalu_data()
     auto& levelset = repo.get_field("levelset");
     auto& rho = repo.get_field("density");
     auto& velocity = repo.get_field("velocity");
-    auto& gp = repo.get_field("gp");
-    auto& p = repo.get_field("p");
 
-    // Create scratch fields for fluxes - 5 components are vof, density, and
-    // 3 of velocity (flux_z has 6th component for flag in p_src calc)
-    auto flux_x = repo.create_scratch_field(8, 0, amr_wind::FieldLoc::XFACE);
-    auto flux_y = repo.create_scratch_field(8, 0, amr_wind::FieldLoc::YFACE);
-    auto flux_z = repo.create_scratch_field(9, 1, amr_wind::FieldLoc::ZFACE);
-    // Create scratch field for pressure source term
-    auto p_src = repo.create_scratch_field(1, 0, amr_wind::FieldLoc::NODE);
+    // Create scratch fields for fluxes
+    // 5 components are vof, density, and 3 of velocity
+    auto flux_x = repo.create_scratch_field(5, 0, amr_wind::FieldLoc::XFACE);
+    auto flux_y = repo.create_scratch_field(5, 0, amr_wind::FieldLoc::YFACE);
+    auto flux_z = repo.create_scratch_field(5, 0, amr_wind::FieldLoc::ZFACE);
     // Create scratch field for approximate signed distance function and grad
     // (components 0-2 are gradient, 3 is asdf)
     auto normal_vec = repo.create_scratch_field(3, vof.num_grow()[0] - 1);
@@ -122,11 +158,11 @@ void OversetOps::sharpen_nalu_data()
         const amrex::Real i_th = m_rlscale * std::cbrt(dx[0] * dx[1] * dx[2]);
 
         // Populate approximate signed distance function
-        overset_ops::populate_psi(levelset(lev), vof(lev), i_th);
+        overset_ops::populate_psi(levelset(lev), vof(lev), i_th, m_asdf_tiny);
     }
 
     // Convert levelset to vof to get target_vof
-    mphase.levelset2vof(iblank_cell, *target_vof);
+    m_mphase->levelset2vof(iblank_cell, *target_vof);
 
     // Process target vof for tiny margins from single-phase
     for (int lev = 0; lev < nlevels; ++lev) {
@@ -136,7 +172,8 @@ void OversetOps::sharpen_nalu_data()
 
     // Replace vof with original values in amr domain
     for (int lev = 0; lev < nlevels; ++lev) {
-        overset_ops::harmonize_vof((*target_vof)(lev), vof(lev), iblank_cell(lev));
+        overset_ops::harmonize_vof(
+            (*target_vof)(lev), vof(lev), iblank_cell(lev));
     }
 
     // Put fluxes in vector for averaging down during iterations
@@ -171,15 +208,15 @@ void OversetOps::sharpen_nalu_data()
                 (*normal_vec)(lev), vof(lev), iblank_cell(lev));
 
             // Sharpening fluxes for vof, density, and momentum
-            overset_ops::populate_sharpen_discrete_fluxes(
+            overset_ops::populate_sharpen_fluxes(
                 (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), vof(lev),
-                (*target_vof)(lev), (*normal_vec)(lev), velocity(lev), gp(lev),
-                rho(lev), m_margin, rhol, rhog);
+                (*target_vof)(lev), (*normal_vec)(lev), velocity(lev), m_margin,
+                m_mphase->rho1(), m_mphase->rho2());
 
-            // Process fluxes and get pressure source term
-            overset_ops::process_fluxes_calc_src(
-                (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), (*p_src)(lev),
-                iblank_cell(lev), grav_z);
+            // Process fluxes
+            overset_ops::process_fluxes(
+                (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev),
+                iblank_cell(lev));
 
             // Measure convergence to determine if loop can stop
             if (cconv) {
@@ -204,7 +241,8 @@ void OversetOps::sharpen_nalu_data()
             // Compare vof fluxes to vof in source cells
             // Convergence tolerance determines what size of fluxes matter
             const amrex::Real ptfac_lev = overset_ops::calculate_pseudo_dt_flux(
-                (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), vof(lev), m_tol);
+                (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), vof(lev),
+                m_tol);
             ptfac = amrex::min(ptfac, ptfac_lev);
         }
         amrex::ParallelDescriptor::ReduceRealMin(ptfac);
@@ -214,13 +252,9 @@ void OversetOps::sharpen_nalu_data()
 
         // Apply fluxes
         for (int lev = 0; lev < nlevels; ++lev) {
-            // Height of cell is needed for pressure source
-            auto dx = (geom[lev]).CellSizeArray();
-
             overset_ops::apply_fluxes(
-                (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), (*p_src)(lev),
-                vof(lev), rho(lev), velocity(lev), gp(lev), p(lev), dx, ptfac,
-                false);
+                (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), vof(lev),
+                rho(lev), velocity(lev), ptfac, m_vof_tol);
         }
 
         // Fillpatch for ghost cells
@@ -228,7 +262,7 @@ void OversetOps::sharpen_nalu_data()
         velocity.fillpatch(m_sim.time().current_time());
 
         // Update density (fillpatch built in)
-        mphase.set_density_via_vof();
+        m_mphase->set_density_via_vof();
 
         // Ensure that err is same across processors
         if (cconv) {
@@ -256,13 +290,62 @@ void OversetOps::sharpen_nalu_data()
     amr_wind::field_ops::copy(
         velocity.state(amr_wind::FieldState::Old), velocity, 0, 0,
         velocity.num_comp(), velocity.num_grow());
-
-    // Fillpatch for pressure to make sure pressure stencil has all points
-    p.fillpatch(m_sim.time().current_time());
 }
 
-void OversetOps::replace_masked_gradp() {
+void OversetOps::set_hydrostatic_gradp()
+{
+    auto& repo = m_sim.repo();
+    auto nlevels = repo.num_active_levels();
+    auto geom = m_sim.mesh().Geom();
 
+    // Get blanking for cells
+    auto& iblank_cell = repo.get_int_field("iblank_cell");
+
+    // Get fields that will be modified or used
+    Field* rho0{nullptr};
+    auto& rho = repo.get_field("density");
+    auto& gp = repo.get_field("gp");
+    if (m_perturb_p) {
+        rho0 = &(m_sim.repo().get_field("reference_density"));
+    } else {
+        // Point to existing field, won't be used
+        rho0 = &rho;
+    }
+
+    // Replace initial gp with best guess (hydrostatic)
+    for (int lev = 0; lev < nlevels; ++lev) {
+        overset_ops::replace_gradp_hs(
+            gp(lev), rho(lev), (*rho0)(lev), iblank_cell(lev),
+            m_mphase->gravity()[2], m_perturb_p);
+    }
+}
+
+void OversetOps::replace_masked_gradp()
+{
+    auto& repo = m_sim.repo();
+    auto nlevels = repo.num_active_levels();
+
+    // Get timestep
+    const amrex::Real dt = m_sim.time().deltaT();
+
+    // Get blanking for cells
+    auto& iblank_cell = repo.get_int_field("iblank_cell");
+
+    // Get fields that will be modified or used
+    auto& vel = repo.get_field("velocity");
+    auto& rho = repo.get_field("density");
+    auto& gp = repo.get_field("gp");
+
+    // For iblanked cells, replace gp with original gp, to get original vel
+    for (int lev = 0; lev < nlevels; ++lev) {
+        // Remove pressure gradient term
+        overset_ops::apply_pressure_gradient(vel(lev), rho(lev), gp(lev), -dt);
+        // Modify pressure gradient
+        overset_ops::replace_gradp(
+            gp(lev), (*m_gp_copy)(lev), iblank_cell(lev));
+        // Reapply pressure gradient term
+        overset_ops::apply_pressure_gradient(vel(lev), rho(lev), gp(lev), dt);
+    }
 }
 
 } // namespace amr_wind
