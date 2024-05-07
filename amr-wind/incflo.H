@@ -11,6 +11,7 @@
 #include "amr-wind/CFDSim.H"
 #include "amr-wind/core/SimTime.H"
 #include "amr-wind/core/FieldRepo.H"
+#include "amr-wind/overset/OversetOps.H"
 
 namespace amr_wind {
 namespace pde {
@@ -163,6 +164,7 @@ private:
     amr_wind::CFDSim m_sim;
     amr_wind::SimTime& m_time;
     amr_wind::FieldRepo& m_repo;
+    amr_wind::OversetOps m_ovst_ops;
 
     std::unique_ptr<amr_wind::RefineCriteriaManager> m_mesh_refiner;
 

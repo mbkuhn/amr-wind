@@ -3,11 +3,48 @@
 #include "amr-wind/core/field_ops.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_MultiFabUtil.H"
+#include "amr-wind/core/MLMGOptions.H"
+#include <hydro_NodalProjector.H>
+#include <AMReX_BC_TYPES.H>
 
 namespace amr_wind {
 
-OversetOps::OversetOps(CFDSim& sim) : m_sim(sim)
+namespace {
+amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> get_projection_bc(
+    amrex::Orientation::Side side,
+    amr_wind::Field& pressure,
+    amrex::Geometry& geom0) noexcept
 {
+    const auto& bctype = pressure.bc_type();
+    amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> r;
+    for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+        if (geom0.isPeriodic(dir)) {
+            r[dir] = amrex::LinOpBCType::Periodic;
+        } else {
+            auto bc = bctype[amrex::Orientation(dir, side)];
+            switch (bc) {
+            case BC::pressure_inflow:
+            case BC::pressure_outflow: {
+                r[dir] = amrex::LinOpBCType::Dirichlet;
+                break;
+            }
+            case BC::mass_inflow: {
+                r[dir] = amrex::LinOpBCType::inflow;
+                break;
+            }
+            default:
+                r[dir] = amrex::LinOpBCType::Neumann;
+                break;
+            };
+        }
+    }
+    return r;
+}
+} // namespace
+
+void OversetOps::initialize(CFDSim& sim)
+{
+    m_sim_ptr = &sim;
     // Queries for reinitialization options
     amrex::ParmParse pp("Overset");
     pp.query("reinit_iterations", m_niterations);
@@ -31,34 +68,34 @@ OversetOps::OversetOps(CFDSim& sim) : m_sim(sim)
 void OversetOps::post_init_actions()
 {
     // Put vof check here
-    m_vof_exists = m_sim.repo().field_exists("vof");
+    m_vof_exists = (*m_sim_ptr).repo().field_exists("vof");
 
     // Set up pointer to MultiPhase physics
     if (m_vof_exists) {
-        m_mphase = &m_sim.physics_manager().get<MultiPhase>();
+        m_mphase = &(*m_sim_ptr).physics_manager().get<MultiPhase>();
     }
 
     // Set up field to store pressure gradient
     if (m_replace_gp) {
-        m_gp_copy = &m_sim.repo().declare_field("gp_copy", 3);
+        m_gp_copy = &(*m_sim_ptr).repo().declare_field("gp_copy", 3);
     }
 
     // Output parameters if verbose
     parameter_output();
 }
 
-void OversetOps::pre_advance_actions(incflo& solver)
+void OversetOps::pre_advance_actions() // incflo& solver)
 {
-    // Update pressure gradient using updated overset pressure field
+    /*// Update pressure gradient using updated overset pressure field
     if (!(m_vof_exists && m_use_hs_pgrad)) {
         // Pressure gradient not updated for current multiphase approach
         solver.UpdateGradP(
-            m_sim.repo()
+            (*m_sim_ptr).repo()
                 .get_field("density")
                 .state(amr_wind::FieldState::Old)
                 .vec_const_ptrs(),
-            m_sim.time().current_time(), m_sim.time().deltaT());
-    }
+            (*m_sim_ptr).time().current_time(), (*m_sim_ptr).time().deltaT());
+    }*/
 
     if (m_vof_exists) {
         // Reinitialize fields
@@ -71,8 +108,9 @@ void OversetOps::pre_advance_actions(incflo& solver)
 
     // If pressure gradient will be replaced, store current pressure gradient
     if (m_replace_gp) {
-        auto& gp = m_sim.repo().get_field("gp");
-        for (int lev = 0; lev < m_sim.repo().num_active_levels(); ++lev) {
+        auto& gp = (*m_sim_ptr).repo().get_field("gp");
+        for (int lev = 0; lev < (*m_sim_ptr).repo().num_active_levels();
+             ++lev) {
             amrex::MultiFab::Copy(
                 (*m_gp_copy)(lev), gp(lev), 0, 0, gp(lev).nComp(),
                 (m_gp_copy)->num_grow());
@@ -127,9 +165,9 @@ void OversetOps::parameter_output()
 
 void OversetOps::sharpen_nalu_data()
 {
-    auto& repo = m_sim.repo();
+    auto& repo = (*m_sim_ptr).repo();
     auto nlevels = repo.num_active_levels();
-    auto geom = m_sim.mesh().Geom();
+    auto geom = (*m_sim_ptr).mesh().Geom();
 
     // Get blanking for cells
     auto& iblank_cell = repo.get_int_field("iblank_cell");
@@ -258,8 +296,8 @@ void OversetOps::sharpen_nalu_data()
         }
 
         // Fillpatch for ghost cells
-        vof.fillpatch(m_sim.time().current_time());
-        velocity.fillpatch(m_sim.time().current_time());
+        vof.fillpatch((*m_sim_ptr).time().current_time());
+        velocity.fillpatch((*m_sim_ptr).time().current_time());
 
         // Update density (fillpatch built in)
         m_mphase->set_density_via_vof();
@@ -294,9 +332,9 @@ void OversetOps::sharpen_nalu_data()
 
 void OversetOps::set_hydrostatic_gradp()
 {
-    auto& repo = m_sim.repo();
+    auto& repo = (*m_sim_ptr).repo();
     auto nlevels = repo.num_active_levels();
-    auto geom = m_sim.mesh().Geom();
+    auto geom = (*m_sim_ptr).mesh().Geom();
 
     // Get blanking for cells
     auto& iblank_cell = repo.get_int_field("iblank_cell");
@@ -306,7 +344,7 @@ void OversetOps::set_hydrostatic_gradp()
     auto& rho = repo.get_field("density");
     auto& gp = repo.get_field("gp");
     if (m_perturb_p) {
-        rho0 = &(m_sim.repo().get_field("reference_density"));
+        rho0 = &((*m_sim_ptr).repo().get_field("reference_density"));
     } else {
         // Point to existing field, won't be used
         rho0 = &rho;
@@ -320,13 +358,168 @@ void OversetOps::set_hydrostatic_gradp()
     }
 }
 
+void OversetOps::update_gradp()
+{
+    auto density = (*m_sim_ptr)
+                       .repo()
+                       .get_field("density")
+                       .state(amr_wind::FieldState::Old)
+                       .vec_const_ptrs();
+    // auto time  = (*m_sim_ptr).time().current_time();
+    auto scaling_factor = (*m_sim_ptr).time().deltaT();
+
+    // Pressure and sigma are necessary to calculate the pressure gradient
+
+    const bool is_anelastic = (*m_sim_ptr).is_anelastic();
+    const bool variable_density =
+        (!(*m_sim_ptr).pde_manager().constant_density() ||
+         (*m_sim_ptr).physics_manager().contains("MultiPhase"));
+
+    bool mesh_mapping = (*m_sim_ptr).has_mesh_mapping();
+
+    auto& grad_p = (*m_sim_ptr).repo().get_field("gp");
+    auto& pressure = (*m_sim_ptr).repo().get_field("p");
+    auto& velocity = (*m_sim_ptr).repo().get_field("velocity");
+    amr_wind::Field const* mesh_fac =
+        mesh_mapping ? &((*m_sim_ptr)
+                             .repo()
+                             .get_mesh_mapping_field(amr_wind::FieldLoc::CELL))
+                     : nullptr;
+    amr_wind::Field const* mesh_detJ =
+        mesh_mapping ? &((*m_sim_ptr)
+                             .repo()
+                             .get_mesh_mapping_detJ(amr_wind::FieldLoc::CELL))
+                     : nullptr;
+    const auto* ref_density =
+        is_anelastic ? &((*m_sim_ptr).repo().get_field("reference_density"))
+                     : nullptr;
+
+    // ASA does not think we actually need to define sigma here. It
+    // should not be used by calcGradPhi
+
+    // Create sigma while accounting for mesh mapping
+    // sigma = 1/(fac^2)*J * dt/rho
+    int finest_level = (*m_sim_ptr).mesh().finestLevel();
+    amrex::Vector<amrex::MultiFab> sigma(finest_level + 1);
+    if (variable_density || mesh_mapping) {
+        int ncomp = mesh_mapping ? AMREX_SPACEDIM : 1;
+        for (int lev = 0; lev <= finest_level; ++lev) {
+            sigma[lev].define(
+                (*m_sim_ptr).mesh().boxArray(lev),
+                (*m_sim_ptr).mesh().DistributionMap(lev), ncomp, 0,
+                amrex::MFInfo());
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+            for (amrex::MFIter mfi(sigma[lev], amrex::TilingIfNotGPU());
+                 mfi.isValid(); ++mfi) {
+                amrex::Box const& bx = mfi.tilebox();
+                amrex::Array4<amrex::Real> const& sig = sigma[lev].array(mfi);
+                amrex::Array4<amrex::Real const> const& rho =
+                    density[lev]->const_array(mfi);
+                amrex::Array4<amrex::Real const> fac =
+                    mesh_mapping ? ((*mesh_fac)(lev).const_array(mfi))
+                                 : amrex::Array4<amrex::Real const>();
+                amrex::Array4<amrex::Real const> detJ =
+                    mesh_mapping ? ((*mesh_detJ)(lev).const_array(mfi))
+                                 : amrex::Array4<amrex::Real const>();
+                const auto& ref_rho = is_anelastic
+                                          ? (*ref_density)(lev).const_array(mfi)
+                                          : amrex::Array4<amrex::Real>();
+
+                amrex::ParallelFor(
+                    bx, ncomp,
+                    [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+                        amrex::Real fac_cc =
+                            mesh_mapping ? (fac(i, j, k, n)) : 1.0;
+                        amrex::Real det_j =
+                            mesh_mapping ? (detJ(i, j, k)) : 1.0;
+                        sig(i, j, k, n) = std::pow(fac_cc, -2.) * det_j *
+                                          scaling_factor / rho(i, j, k);
+                        if (is_anelastic) {
+                            sig(i, j, k, n) *= ref_rho(i, j, k);
+                        }
+                    });
+            }
+        }
+    }
+
+    // Set up projection object
+    std::unique_ptr<Hydro::NodalProjector> nodal_projector;
+
+    auto bclo = get_projection_bc(
+        amrex::Orientation::low, pressure, (*m_sim_ptr).mesh().Geom(0));
+    auto bchi = get_projection_bc(
+        amrex::Orientation::high, pressure, (*m_sim_ptr).mesh().Geom(0));
+
+    // Velocity multifab is needed for proper initialization, but only the size
+    // matters for the purpose of calculating gradp, the values do not matter
+    amrex::Vector<amrex::MultiFab*> vel;
+    for (int lev = 0; lev <= finest_level; ++lev) {
+        vel.push_back(&(velocity(lev)));
+    }
+
+    if (is_anelastic) {
+        for (int lev = 0; lev <= finest_level; ++lev) {
+            amrex::Multiply(
+                velocity(lev), (*ref_density)(lev), 0, 0, density[lev]->nComp(),
+                0);
+        }
+    }
+
+    amr_wind::MLMGOptions options("nodal_proj");
+
+    if (variable_density || mesh_mapping) {
+        nodal_projector = std::make_unique<Hydro::NodalProjector>(
+            vel, GetVecOfConstPtrs(sigma),
+            (*m_sim_ptr).mesh().Geom(0, finest_level), options.lpinfo());
+    } else {
+        amrex::Real rho_0 = 1.0;
+        amrex::ParmParse pp("incflo");
+        pp.query("density", rho_0);
+
+        nodal_projector = std::make_unique<Hydro::NodalProjector>(
+            vel, scaling_factor / rho_0,
+            (*m_sim_ptr).mesh().Geom(0, finest_level), options.lpinfo());
+    }
+
+    // Set MLMG and NodalProjector options
+    options(*nodal_projector);
+    nodal_projector->setDomainBC(bclo, bchi);
+
+    // Recalculate gradphi with fluxes
+    auto gradphi = nodal_projector->calcGradPhi(pressure.vec_ptrs());
+
+    // Transfer pressure gradient to gp field
+    for (int lev = 0; lev <= finest_level; lev++) {
+
+#ifdef AMREX_USE_OMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+        for (amrex::MFIter mfi(grad_p(lev), amrex::TilingIfNotGPU());
+             mfi.isValid(); ++mfi) {
+            amrex::Box const& tbx = mfi.tilebox();
+            amrex::Array4<amrex::Real> const& gp_lev = grad_p(lev).array(mfi);
+            amrex::Array4<amrex::Real const> const& gp_proj =
+                gradphi[lev]->const_array(mfi);
+            amrex::ParallelFor(
+                tbx, AMREX_SPACEDIM,
+                [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+                    gp_lev(i, j, k, n) = gp_proj(i, j, k, n);
+                });
+        }
+    }
+
+    // Average down is unnecessary because it is built into calcGradPhi
+}
+
 void OversetOps::replace_masked_gradp()
 {
-    auto& repo = m_sim.repo();
+    auto& repo = (*m_sim_ptr).repo();
     auto nlevels = repo.num_active_levels();
 
     // Get timestep
-    const amrex::Real dt = m_sim.time().deltaT();
+    const amrex::Real dt = (*m_sim_ptr).time().deltaT();
 
     // Get blanking for cells
     auto& iblank_cell = repo.get_int_field("iblank_cell");

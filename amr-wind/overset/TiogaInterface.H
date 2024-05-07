@@ -4,7 +4,6 @@
 #include <vector>
 #include "amr-wind/overset/OversetManager.H"
 #include "amr-wind/overset/overset_types.H"
-#include "amr-wind/overset/OversetOps.H"
 
 namespace amr_wind {
 
@@ -132,8 +131,6 @@ private:
 
     std::vector<std::string> m_cell_vars;
     std::vector<std::string> m_node_vars;
-
-    OversetOps m_ovst_ops;
 };
 
 } // namespace amr_wind

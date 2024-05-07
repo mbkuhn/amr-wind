@@ -2,7 +2,7 @@
 #define OVERSETOPS_H
 
 #include "amr-wind/CFDSim.H"
-#include "amr-wind/incflo.H"
+// #include "amr-wind/incflo.H"
 #include "amr-wind/physics/multiphase/MultiPhase.H"
 
 namespace amr_wind {
@@ -10,16 +10,18 @@ namespace amr_wind {
 class OversetOps
 {
 public:
-    explicit OversetOps(CFDSim& sim);
+    OversetOps() {}
 
+    void initialize(CFDSim& sim);
     void post_init_actions();
-    void pre_advance_actions(incflo& solver);
+    void pre_advance_actions();
     void post_advance_actions();
 
 private:
     // Functions called within public functions
     void parameter_output();
     void sharpen_nalu_data();
+    void update_gradp();
     void set_hydrostatic_gradp();
     void replace_masked_gradp();
 
@@ -58,7 +60,7 @@ private:
     // Pointer for MultiPhase physics
     amr_wind::MultiPhase* m_mphase{nullptr};
 
-    CFDSim& m_sim;
+    CFDSim* m_sim_ptr;
     // Should I include sim, or should I have all of the fields here?
 };
 
