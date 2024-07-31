@@ -77,6 +77,8 @@ public:
 
     amrex::Real rho2() const { return m_rho2; }
 
+    amrex::Real water_level() const { return water_level0; }
+
     amrex::Vector<amrex::Real> gravity() const { return m_gravity; }
 
     bool perturb_p() const { return is_pptb; }

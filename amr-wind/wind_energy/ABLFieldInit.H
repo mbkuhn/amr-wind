@@ -22,6 +22,9 @@ class ABLFieldInit
 public:
     ABLFieldInit();
 
+    void initialize_from_inputfile(); // default
+    void initialize_from_netcdf();    // general wind/temperature profiles
+
     void operator()(
         const amrex::Box& vbx,
         const amrex::Geometry& geom,
@@ -61,11 +64,18 @@ private:
     //! terrain
     amrex::Vector<amrex::Real> m_theta_heights;
     amrex::Vector<amrex::Real> m_theta_values;
+
+    amrex::Vector<amrex::Real> m_u_values;
+    amrex::Vector<amrex::Real> m_v_values;
+
     ///@}
 
     // Device copies of the above arrays
     amrex::Gpu::DeviceVector<amrex::Real> m_thht_d;
     amrex::Gpu::DeviceVector<amrex::Real> m_thvv_d;
+
+    amrex::Gpu::DeviceVector<amrex::Real> m_prof_u_d;
+    amrex::Gpu::DeviceVector<amrex::Real> m_prof_v_d;
 
     //! Initial density field
     amrex::Real m_rho;
@@ -86,7 +96,7 @@ private:
     amrex::Real m_ref_height{50.0};
 
     //! Amplitude of temperature perturbations
-    amrex::Real m_deltaT{0.8};
+    amrex::Real m_delta_t{0.8};
 
     //! Mean for Gaussian number generator
     amrex::Real m_theta_gauss_mean{0.0};
@@ -107,10 +117,10 @@ private:
     amrex::Real m_tke_cutoff_height{250.};
 
     //! Top velocity
-    amrex::RealArray m_top_vel{{20.0, 0.0, 0.0}};
+    amrex::RealArray m_top_vel{20.0};
 
     //! Bottom velocity
-    amrex::RealArray m_bottom_vel{{4.0, 0.0, 0.0}};
+    amrex::RealArray m_bottom_vel{4.0};
 
     //! Initial linear velocity profile boolean
     bool m_linear_profile{false};
@@ -123,6 +133,9 @@ private:
 
     //! Initialize tke profile non-constant
     bool m_tke_init_profile{false};
+
+    //! Profiles of u, v, and theta are read in from a NetCDF File
+    bool m_init_uvtheta_profile{false};
 };
 
 } // namespace amr_wind

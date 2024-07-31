@@ -5,12 +5,16 @@
 #include "amr-wind/utilities/DirectionSelector.H"
 #include "amr-wind/utilities/tensor_ops.H"
 #include "amr-wind/equation_systems/icns/source_terms/ABLForcing.H"
+#include "amr-wind/equation_systems/icns/source_terms/ABLMesoForcingMom.H"
+#include "amr-wind/equation_systems/temperature/source_terms/ABLMesoForcingTemp.H"
 #include "amr-wind/equation_systems/PDEHelpers.H"
 #include "amr-wind/equation_systems/SchemeTraits.H"
 #include "amr-wind/equation_systems/tke/TKE.H"
 
 #include "AMReX_ParmParse.H"
 #include "AMReX_ParallelDescriptor.H"
+#include <AMReX_REAL.H>
+#include <AMReX_Vector.H>
 #include "AMReX_ValLocPair.H"
 
 namespace amr_wind {
@@ -51,11 +55,15 @@ void ABLStats::initialize()
         pp.query("normal_direction", m_normal_dir);
         AMREX_ASSERT((0 <= m_normal_dir) && (m_normal_dir < AMREX_SPACEDIM));
         pp.query("kappa", m_kappa);
-        amrex::Vector<amrex::Real> gravity{{0.0, 0.0, -9.81}};
-        pp.queryarr("gravity", gravity);
-        m_gravity = utils::vec_mag(gravity.data());
         pp.get("reference_temperature", m_ref_theta);
         pp.query("stats_do_energy_budget", m_do_energy_budget);
+    }
+
+    {
+        amrex::ParmParse pp("incflo");
+        amrex::Vector<amrex::Real> gravity{0.0, 0.0, -9.81};
+        pp.queryarr("gravity", gravity);
+        m_gravity = utils::vec_mag(gravity.data());
     }
 
     // Get normal direction and associated stuff
@@ -63,19 +71,15 @@ void ABLStats::initialize()
     amrex::Box const& domain = geom.Domain();
     const auto dlo = amrex::lbound(domain);
     const auto dhi = amrex::ubound(domain);
-    switch (m_normal_dir) {
-    case 0:
+    if (m_normal_dir == 0) {
         m_ncells_h1 = dhi.y - dlo.y + 1;
         m_ncells_h2 = dhi.z - dlo.z + 1;
-        break;
-    case 1:
+    } else if (m_normal_dir == 1) {
         m_ncells_h1 = dhi.x - dlo.x + 1;
         m_ncells_h2 = dhi.z - dlo.z + 1;
-        break;
-    case 2:
+    } else if (m_normal_dir == 2) {
         m_ncells_h1 = dhi.x - dlo.x + 1;
         m_ncells_h2 = dhi.y - dlo.y + 1;
-        break;
     }
     m_dn = geom.CellSize()[m_normal_dir];
 
@@ -292,34 +296,34 @@ void ABLStats::write_ascii()
 {
     BL_PROFILE("amr-wind::ABLStats::write_ascii");
 
-    const std::string stat_dir = "post_processing";
+    const std::string post_dir = m_sim.io_manager().post_processing_directory();
     const auto& time = m_sim.time();
     m_pa_vel.output_line_average_ascii(
-        stat_dir + "/plane_average_velocity.txt", time.time_index(),
+        post_dir + "/plane_average_velocity.txt", time.time_index(),
         time.current_time());
     m_pa_temp.output_line_average_ascii(
-        stat_dir + "/plane_average_temperature.txt", time.time_index(),
+        post_dir + "/plane_average_temperature.txt", time.time_index(),
         time.current_time());
     m_pa_vel_fine.output_line_average_ascii(
-        stat_dir + "/plane_average_velocity_fine.txt", time.time_index(),
+        post_dir + "/plane_average_velocity_fine.txt", time.time_index(),
         time.current_time());
     m_pa_temp_fine.output_line_average_ascii(
-        stat_dir + "/plane_average_temperature_fine.txt", time.time_index(),
+        post_dir + "/plane_average_temperature_fine.txt", time.time_index(),
         time.current_time());
     m_pa_mueff.output_line_average_ascii(
-        stat_dir + "/plane_average_velocity_mueff.txt", time.time_index(),
+        post_dir + "/plane_average_velocity_mueff.txt", time.time_index(),
         time.current_time());
     m_pa_tt.output_line_average_ascii(
-        stat_dir + "/second_moment_temperature_temperature.txt",
+        post_dir + "/second_moment_temperature_temperature.txt",
         time.time_index(), time.current_time());
     m_pa_tu.output_line_average_ascii(
-        stat_dir + "/second_moment_temperature_velocity.txt", time.time_index(),
+        post_dir + "/second_moment_temperature_velocity.txt", time.time_index(),
         time.current_time());
     m_pa_uu.output_line_average_ascii(
-        stat_dir + "/second_moment_velocity_velocity.txt", time.time_index(),
+        post_dir + "/second_moment_velocity_velocity.txt", time.time_index(),
         time.current_time());
     m_pa_uuu.output_line_average_ascii(
-        stat_dir + "/third_moment_velocity_velocity_velocity.txt",
+        post_dir + "/third_moment_velocity_velocity_velocity.txt",
         time.time_index(), time.current_time());
 
     // Only I/O processor handles this file I/O
@@ -327,7 +331,7 @@ void ABLStats::write_ascii()
         return;
     }
 
-    amrex::RealArray abl_forcing = {{0.0, 0.0, 0.0}};
+    amrex::RealArray abl_forcing = {0.0};
     if (m_abl_forcing != nullptr) {
         abl_forcing = m_abl_forcing->abl_forcing();
     }
@@ -368,14 +372,11 @@ void ABLStats::prepare_ascii_file()
         return;
     }
 
-    const std::string stat_dir = "post_processing";
+    const std::string post_dir = m_sim.io_manager().post_processing_directory();
     const std::string sname =
         amrex::Concatenate("abl_statistics", m_sim.time().time_index());
 
-    if (!amrex::UtilCreateDirectory(stat_dir, 0755)) {
-        amrex::CreateDirectoryFailed(stat_dir);
-    }
-    m_ascii_file_name = stat_dir + "/" + sname + ".txt";
+    m_ascii_file_name = post_dir + "/" + sname + ".txt";
 
     std::ofstream outfile;
     outfile.open(m_ascii_file_name.c_str(), std::ios_base::out);
@@ -389,16 +390,16 @@ void ABLStats::prepare_netcdf_file()
 {
 #ifdef AMR_WIND_USE_NETCDF
 
-    const std::string stat_dir = "post_processing";
+    const std::string post_dir = m_sim.io_manager().post_processing_directory();
     const std::string sname =
         amrex::Concatenate("abl_statistics", m_sim.time().time_index());
-    if (!amrex::UtilCreateDirectory(stat_dir, 0755)) {
-        amrex::CreateDirectoryFailed(stat_dir);
-    }
-    m_ncfile_name = stat_dir + "/" + sname + ".nc";
+
+    m_ncfile_name = post_dir + "/" + sname + ".nc";
 
     // Only I/O processor handles NetCDF generation
-    if (!amrex::ParallelDescriptor::IOProcessor()) return;
+    if (!amrex::ParallelDescriptor::IOProcessor()) {
+        return;
+    }
 
     auto ncf = ncutils::NCFile::create(m_ncfile_name, NC_CLOBBER | NC_NETCDF4);
     const std::string nt_name = "num_time_steps";
@@ -430,6 +431,12 @@ void ABLStats::prepare_netcdf_file()
     grp.def_var("w", NC_DOUBLE, two_dim);
     grp.def_var("hvelmag", NC_DOUBLE, two_dim);
     grp.def_var("theta", NC_DOUBLE, two_dim);
+    amrex::ParmParse pp("ABL");
+    if (pp.contains("mesoscale_forcing") || pp.contains("WRFforcing")) {
+        grp.def_var("abl_meso_forcing_mom_x", NC_DOUBLE, two_dim);
+        grp.def_var("abl_meso_forcing_mom_y", NC_DOUBLE, two_dim);
+        grp.def_var("abl_meso_forcing_theta", NC_DOUBLE, two_dim);
+    }
     grp.def_var("mueff", NC_DOUBLE, two_dim);
     grp.def_var("theta'theta'_r", NC_DOUBLE, two_dim);
     grp.def_var("u'theta'_r", NC_DOUBLE, two_dim);
@@ -450,6 +457,9 @@ void ABLStats::prepare_netcdf_file()
     grp.def_var("u'v'_sfs", NC_DOUBLE, two_dim);
     grp.def_var("u'w'_sfs", NC_DOUBLE, two_dim);
     grp.def_var("v'w'_sfs", NC_DOUBLE, two_dim);
+    if (m_sim.repo().field_exists("tke")) {
+        grp.def_var("k_sgs", NC_DOUBLE, two_dim);
+    }
 
     // Energy budget
     if (m_do_energy_budget) {
@@ -495,7 +505,15 @@ void ABLStats::write_netcdf()
         *t_sfs_stress, m_sim.time(), m_normal_dir);
     pa_tsfs();
 
-    if (!amrex::ParallelDescriptor::IOProcessor()) return;
+    if (m_sim.repo().field_exists("tke")) {
+        auto& m_ksgs = m_sim.repo().get_field("tke");
+        FieldPlaneAveraging pa_ksgs(m_ksgs, m_sim.time(), m_normal_dir);
+        pa_ksgs();
+    }
+
+    if (!amrex::ParallelDescriptor::IOProcessor()) {
+        return;
+    }
     auto ncf = ncutils::NCFile::open(m_ncfile_name, NC_WRITE);
     const std::string nt_name = "num_time_steps";
     // Index of the next timestep
@@ -510,17 +528,19 @@ void ABLStats::write_netcdf()
         ncf.var("Q").put(&Q, {nt}, {1});
         auto Tsurf = m_abl_wall_func.mo().surf_temp;
         ncf.var("Tsurf").put(&Tsurf, {nt}, {1});
-        if (Q > 1e-10) wstar = std::cbrt(m_gravity * Q * m_zi / m_ref_theta);
+        if (Q > 1e-10) {
+            wstar = std::cbrt(m_gravity * Q * m_zi / m_ref_theta);
+        }
         ncf.var("wstar").put(&wstar, {nt}, {1});
         double L = m_abl_wall_func.mo().obukhov_len;
         ncf.var("L").put(&L, {nt}, {1});
         ncf.var("zi").put(&m_zi, {nt}, {1});
 
-        amrex::RealArray abl_forcing = {{0.0, 0.0, 0.0}};
+        amrex::RealArray abl_forcing = {0.0};
         if (m_abl_forcing != nullptr) {
             abl_forcing = m_abl_forcing->abl_forcing();
         }
-        ncf.var("abl_forcing_x").put(&abl_forcing[0], {nt}, {1});
+        ncf.var("abl_forcing_x").put(abl_forcing.data(), {nt}, {1});
         ncf.var("abl_forcing_y").put(&abl_forcing[1], {nt}, {1});
 
         auto grp = ncf.group("mean_profiles");
@@ -546,6 +566,28 @@ void ABLStats::write_netcdf()
         {
             auto var = grp.var("theta");
             var.put(m_pa_temp.line_average().data(), start, count);
+        }
+
+        {
+            if (m_abl_meso_mom_forcing != nullptr) {
+                amrex::Vector<amrex::Real> meso_forcing_mom_u(n_levels);
+                amrex::Vector<amrex::Real> meso_forcing_mom_v(n_levels);
+
+                meso_forcing_mom_u = m_abl_meso_mom_forcing->mom_u_error();
+                auto var_x = grp.var("abl_meso_forcing_mom_x");
+                var_x.put(meso_forcing_mom_u.data(), start, count);
+
+                meso_forcing_mom_v = m_abl_meso_mom_forcing->mom_v_error();
+                auto var_y = grp.var("abl_meso_forcing_mom_y");
+                var_y.put(meso_forcing_mom_v.data(), start, count);
+            }
+            if (m_abl_meso_temp_forcing != nullptr) {
+                amrex::Vector<amrex::Real> meso_forcing_theta(n_levels);
+
+                meso_forcing_theta = m_abl_meso_temp_forcing->theta_error();
+                auto var_theta = grp.var("abl_meso_forcing_theta");
+                var_theta.put(meso_forcing_theta.data(), start, count);
+            }
         }
 
         {
@@ -653,6 +695,7 @@ void ABLStats::write_netcdf()
             }
         }
     }
+
     ncf.close();
 #endif
 }

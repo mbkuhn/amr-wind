@@ -7,6 +7,7 @@ target_sources(${amr_wind_unit_test_exe_name}
 add_subdirectory(aw_test_utils)
 add_subdirectory(core)
 add_subdirectory(wind_energy)
+add_subdirectory(offshore_wind)
 add_subdirectory(utilities)
 add_subdirectory(equation_systems)
 add_subdirectory(turbulence)
@@ -32,6 +33,9 @@ target_include_directories(${amr_wind_unit_test_exe_name} SYSTEM PRIVATE
   ${CMAKE_SOURCE_DIR}/submods/googletest/googletest/include)
 
 target_link_libraries(${amr_wind_unit_test_exe_name} PUBLIC ${amr_wind_lib_name} AMReX-Hydro::amrex_hydro_api)
+if (AMR_WIND_ENABLE_W2A)
+  target_link_libraries(${amr_wind_unit_test_exe_name} PUBLIC Waves2AMR::waves_2_amr_api)
+endif()
 
 #Define what we want to be installed during a make install
 install(TARGETS ${amr_wind_unit_test_exe_name}
