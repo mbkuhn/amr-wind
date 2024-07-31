@@ -132,9 +132,6 @@ public:
     void ComputeDt(bool explicit_diffusion);
     void ComputePrescribeDt();
 
-    void set_inflow_velocity(
-        int lev, amrex::Real time, amrex::MultiFab& vel, int nghost);
-
     void ApplyPredictor(bool incremental_projection = false);
     void ApplyCorrector();
     void ApplyPrescribeStep();
@@ -213,9 +210,6 @@ private:
     {
         return (m_use_godunov || (DiffusionType::Implicit != m_diff_type));
     }
-
-    amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM>
-    get_projection_bc(amrex::Orientation::Side side) const noexcept;
 
     ///////////////////////////////////////////////////////////////////////////
     //

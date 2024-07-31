@@ -5,55 +5,39 @@
 #include "amr-wind/utilities/console_io.H"
 #include "amr-wind/core/field_ops.H"
 #include "amr-wind/wind_energy/ABL.H"
+#include "amr-wind/projection/nodal_projection_ops.H"
 
 using namespace amrex;
 
-namespace {
-void apply_dirichlet_vel(
-    amrex::MultiFab& mf_velocity, amrex::iMultiFab& mf_iblank)
+void amr_wind::nodal_projection::set_inflow_velocity(
+    amr_wind::PhysicsMgr& phy_mgr,
+    amr_wind::Field& vel_fld,
+    int lev,
+    amrex::Real time,
+    MultiFab& vel_mfab,
+    int nghost)
 {
-    for (amrex::MFIter mfi(mf_iblank); mfi.isValid(); ++mfi) {
-        const auto& gbx = mfi.growntilebox();
-        const amrex::Array4<amrex::Real>& varr = mf_velocity.array(mfi);
-        const amrex::Array4<const int>& iblank = mf_iblank.const_array(mfi);
-
-        amrex::ParallelFor(
-            gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                // Pure solid-body points
-                if (iblank(i, j, k) == 0) {
-                    // Set velocity to 0 for now
-                    varr(i, j, k, 0) = 0.0;
-                    varr(i, j, k, 1) = 0.0;
-                    varr(i, j, k, 2) = 0.0;
-                }
-            });
-    }
-}
-} // namespace
-
-void incflo::set_inflow_velocity(
-    int lev, amrex::Real time, MultiFab& vel, int nghost)
-{
-    auto& lvelocity = icns().fields().field;
-    lvelocity.set_inflow(lev, time, vel, nghost);
+    vel_fld.set_inflow(lev, time, vel_mfab, nghost);
 
     // TODO fix hack for ABL
-    auto& phy_mgr = m_sim.physics_manager();
     if (phy_mgr.contains("ABL")) {
         auto& abl = phy_mgr.get<amr_wind::ABL>();
         const auto& bndry_plane = abl.bndry_plane();
-        bndry_plane.populate_data(lev, time, lvelocity, vel);
-        abl.abl_mpl().set_velocity(lev, time, lvelocity, vel);
+        bndry_plane.populate_data(lev, time, vel_fld, vel_mfab);
+        abl.abl_mpl().set_velocity(lev, time, vel_fld, vel_mfab);
     }
 }
 
 Array<amrex::LinOpBCType, AMREX_SPACEDIM>
-incflo::get_projection_bc(Orientation::Side side) const noexcept
+amr_wind::nodal_projection::get_projection_bc(
+    Orientation::Side side,
+    amr_wind::Field& pressure,
+    const Array<int, AMREX_SPACEDIM>& is_periodic)
 {
-    const auto& bctype = pressure().bc_type();
+    const auto& bctype = pressure.bc_type();
     Array<LinOpBCType, AMREX_SPACEDIM> r;
     for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-        if (geom[0].isPeriodic(dir)) {
+        if (is_periodic[dir] == 1) {
             r[dir] = LinOpBCType::Periodic;
         } else {
             auto bc = bctype[Orientation(dir, side)];
@@ -74,6 +58,23 @@ incflo::get_projection_bc(Orientation::Side side) const noexcept
         }
     }
     return r;
+}
+
+void amr_wind::nodal_projection::apply_dirichlet_vel(
+    amrex::MultiFab& mf_velocity, amrex::iMultiFab& mf_iblank)
+{
+    const auto& vel = mf_velocity.arrays();
+    const auto& iblank = mf_iblank.const_arrays();
+
+    amrex::ParallelFor(
+        mf_velocity, mf_velocity.n_grow, mf_velocity.n_comp,
+        [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k, int n) noexcept {
+            // Pure solid-body points
+            if (iblank[nbx](i, j, k) == 0) {
+                // Set velocity to 0 for now
+                vel[nbx](i, j, k, n) = 0.0;
+            }
+        });
 }
 
 /** Perform nodal projection
@@ -164,8 +165,9 @@ void incflo::ApplyProjection(
             ? &(m_repo.get_mesh_mapping_field(amr_wind::FieldLoc::CELL))
             : nullptr;
     amr_wind::Field const* mesh_detJ =
-        mesh_mapping ? &(m_repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::CELL))
-                     : nullptr;
+        mesh_mapping
+            ? &(m_repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::CELL))
+            : nullptr;
 
     // TODO: Mesh mapping doesn't work with immersed boundaries
     // Do the pre pressure correction work -- this applies to IB only
@@ -307,15 +309,18 @@ void incflo::ApplyProjection(
     // Perform projection
     std::unique_ptr<Hydro::NodalProjector> nodal_projector;
 
-    auto bclo = get_projection_bc(Orientation::low);
-    auto bchi = get_projection_bc(Orientation::high);
+    auto bclo = amr_wind::nodal_projection::get_projection_bc(
+        Orientation::low, pressure, m_sim.mesh().Geom()[0].isPeriodic());
+    auto bchi = amr_wind::nodal_projection::get_projection_bc(
+        Orientation::high, pressure, m_sim.mesh().Geom()[0].isPeriodic());
 
     Vector<MultiFab*> vel;
     for (int lev = 0; lev <= finest_level; ++lev) {
         vel.push_back(&(velocity(lev)));
         vel[lev]->setBndry(0.0);
         if (!proj_for_small_dt and !incremental) {
-            set_inflow_velocity(lev, time, *vel[lev], 1);
+            amr_wind::nodal_projection::set_inflow_velocity(
+                m_sim.physics_manager(), velocity, lev, time, *vel[lev], 1);
         }
     }
 
@@ -357,7 +362,8 @@ void incflo::ApplyProjection(
     if ((sim().has_overset() && m_disable_onodal)) {
         auto& iblank = m_repo.get_int_field("iblank_cell");
         for (int lev = 0; lev <= finest_level; lev++) {
-            apply_dirichlet_vel(velocity(lev), iblank(lev));
+            amr_wind::nodal_projection::apply_dirichlet_vel(
+                velocity(lev), iblank(lev));
         }
         auto div_vel_rhs =
             sim().repo().create_scratch_field(1, 0, amr_wind::FieldLoc::NODE);
@@ -470,7 +476,8 @@ void incflo::ApplyProjection(
     if (sim().has_overset() && m_disable_onodal) {
         auto& iblank = m_repo.get_int_field("iblank_cell");
         for (int lev = 0; lev <= finest_level; lev++) {
-            apply_dirichlet_vel(velocity(lev), iblank(lev));
+            amr_wind::nodal_projection::apply_dirichlet_vel(
+                velocity(lev), iblank(lev));
         }
     }
 
@@ -505,8 +512,9 @@ void incflo::UpdateGradP(
             ? &(m_repo.get_mesh_mapping_field(amr_wind::FieldLoc::CELL))
             : nullptr;
     amr_wind::Field const* mesh_detJ =
-        mesh_mapping ? &(m_repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::CELL))
-                     : nullptr;
+        mesh_mapping
+            ? &(m_repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::CELL))
+            : nullptr;
 
     // Create sigma while accounting for mesh mapping
     // sigma = 1/(fac^2)*J * dt/rho
@@ -548,8 +556,10 @@ void incflo::UpdateGradP(
     // Set up projection object
     std::unique_ptr<Hydro::NodalProjector> nodal_projector;
 
-    auto bclo = get_projection_bc(Orientation::low);
-    auto bchi = get_projection_bc(Orientation::high);
+    auto bclo = amr_wind::nodal_projection::get_projection_bc(
+        Orientation::low, pressure, m_sim.mesh().Geom()[0].isPeriodic());
+    auto bchi = amr_wind::nodal_projection::get_projection_bc(
+        Orientation::high, pressure, m_sim.mesh().Geom()[0].isPeriodic());
 
     // Velocity multifab is needed for proper initialization, but only the size
     // matters for the purpose of calculating gradp, the values do not matter
