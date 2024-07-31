@@ -182,8 +182,6 @@ private:
     bool m_sharpen_pressure = true;
     bool m_sharpen_replace_gp = false;
 
-    bool m_constant_density = true;
-
     bool m_use_godunov = true;
 
     // Other choices for overset

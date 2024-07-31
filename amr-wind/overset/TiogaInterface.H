@@ -104,8 +104,6 @@ private:
 
     CFDSim& m_sim;
 
-    bool m_disable_pressure_from_nalu{false};
-
     //! IBLANK on cell centered fields
     IntField& m_iblank_cell;
 
@@ -133,6 +131,8 @@ private:
 
     std::vector<std::string> m_cell_vars;
     std::vector<std::string> m_node_vars;
+
+    bool m_disable_nodal_proj{false};
 };
 
 } // namespace amr_wind

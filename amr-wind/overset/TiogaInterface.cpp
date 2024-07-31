@@ -29,19 +29,15 @@ void iblank_to_mask(const IntField& iblank, IntField& maskf)
         const auto& ibl = iblank(lev);
         auto& mask = maskf(lev);
 
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
-#endif
-        for (amrex::MFIter mfi(ibl); mfi.isValid(); ++mfi) {
-            const auto& gbx = mfi.growntilebox();
-            const auto& ibarr = ibl.const_array(mfi);
-            const auto& marr = mask.array(mfi);
-            amrex::ParallelFor(
-                gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                    marr(i, j, k) = amrex::max(ibarr(i, j, k), 0);
-                });
-        }
+        const auto& ibarrs = ibl.const_arrays();
+        const auto& marrs = mask.arrays();
+        amrex::ParallelFor(
+            ibl, ibl.n_grow,
+            [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+                marrs[nbx](i, j, k) = amrex::max(ibarrs[nbx](i, j, k), 0);
+            });
     }
+    amrex::Gpu::synchronize();
 }
 
 void iblank_to_mask_hole(const IntField& iblank, IntField& maskf)
@@ -52,19 +48,15 @@ void iblank_to_mask_hole(const IntField& iblank, IntField& maskf)
         const auto& ibl = iblank(lev);
         auto& mask = maskf(lev);
 
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
-#endif
-        for (amrex::MFIter mfi(ibl); mfi.isValid(); ++mfi) {
-            const auto& gbx = mfi.growntilebox();
-            const auto& ibarr = ibl.const_array(mfi);
-            const auto& marr = mask.array(mfi);
-            amrex::ParallelFor(
-                gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                    marr(i, j, k) = std::abs(ibarr(i, j, k));
-                });
-        }
+        const auto& ibarrs = ibl.const_arrays();
+        const auto& marrs = mask.arrays();
+        amrex::ParallelFor(
+            ibl, ibl.n_grow,
+            [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+                marrs[nbx](i, j, k) = std::abs(ibarrs[nbx](i, j, k));
+            });
     }
+    amrex::Gpu::synchronize();
 }
 } // namespace
 
@@ -103,7 +95,7 @@ TiogaInterface::TiogaInterface(CFDSim& sim)
     m_sim.io_manager().register_output_int_var(m_iblank_cell.name());
 
     amrex::ParmParse pp("Overset");
-    pp.query("ignore_nalu_pressure_field", m_disable_pressure_from_nalu);
+    pp.query("disable_coupled_nodal_proj", m_disable_nodal_proj);
 }
 
 // clang-format on
@@ -160,8 +152,11 @@ void TiogaInterface::post_overset_conn_work()
     }
 
     iblank_to_mask(m_iblank_cell, m_mask_cell);
-    // iblank_to_mask(m_iblank_node, m_mask_node);
-    iblank_to_mask_hole(m_iblank_node, m_mask_node);
+    if (m_disable_nodal_proj) {
+        iblank_to_mask_hole(m_iblank_node, m_mask_node);
+    } else {
+        iblank_to_mask(m_iblank_node, m_mask_node);
+    }
 
     // Update equation systems after a connectivity update
     m_sim.pde_manager().icns().post_regrid_actions();
@@ -313,8 +308,7 @@ void TiogaInterface::update_solution()
     }
 
     // Update nodal variables on device
-    if (!m_disable_pressure_from_nalu) {
-        // Pressure is the only nodal variable - skip copy if requested
+    {
         int icomp = 0;
         for (const auto& cvar : m_node_vars) {
             auto& fld = repo.get_field(cvar);

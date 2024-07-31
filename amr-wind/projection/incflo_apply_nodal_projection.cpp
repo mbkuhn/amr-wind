@@ -150,7 +150,8 @@ void incflo::ApplyProjection(
         }
     }
 
-    bool variable_density =
+    const bool is_anelastic = m_sim.is_anelastic();
+    const bool variable_density =
         (!m_sim.pde_manager().constant_density() ||
          m_sim.physics_manager().contains("MultiPhase"));
 
@@ -498,7 +499,7 @@ void incflo::UpdateGradP(
 
     // Pressure and sigma are necessary to calculate the pressure gradient
 
-    bool variable_density =
+    const bool variable_density =
         (!m_sim.pde_manager().constant_density() ||
          m_sim.physics_manager().contains("MultiPhase"));
 
