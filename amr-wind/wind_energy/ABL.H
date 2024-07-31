@@ -12,6 +12,7 @@
 #include "amr-wind/utilities/FieldPlaneAveraging.H"
 #include "amr-wind/wind_energy/ABLStatsBase.H"
 #include "amr-wind/wind_energy/ABLModulatedPowerLaw.H"
+#include "amr-wind/wind_energy/ABLAnelastic.H"
 
 /**
  *  \defgroup wind Wind energy modeling
@@ -94,6 +95,8 @@ public:
     //! Return the ABL statistics calculator
     const ABLStatsBase& abl_statistics() const { return *m_stats; }
 
+    const ABLAnelastic& anelastic() const { return *m_abl_anelastic; }
+
 private:
     const CFDSim& m_sim;
 
@@ -122,6 +125,9 @@ private:
     std::unique_ptr<ABLStatsBase> m_stats;
 
     mutable pde::icns::ABLMeanBoussinesq* m_abl_mean_bous{nullptr};
+
+    //! ABL anelastic instance
+    std::unique_ptr<ABLAnelastic> m_abl_anelastic;
 
     mutable pde::icns::HurricaneForcing* m_hurricane_forcing{nullptr};
 

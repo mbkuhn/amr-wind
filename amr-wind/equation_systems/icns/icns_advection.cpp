@@ -3,6 +3,7 @@
 #include "amr-wind/equation_systems/icns/icns_advection.H"
 #include "amr-wind/core/MLMGOptions.H"
 #include "amr-wind/utilities/console_io.H"
+#include "amr-wind/wind_energy/ABL.H"
 
 #include "AMReX_MultiFabUtil.H"
 #include "hydro_MacProjector.H"
@@ -41,20 +42,26 @@ amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> get_projection_bc(
 } // namespace
 
 MacProjOp::MacProjOp(
-    FieldRepo& repo, bool has_overset, bool variable_density, bool mesh_mapping)
+    FieldRepo& repo,
+    PhysicsMgr& phy_mgr,
+    bool has_overset,
+    bool variable_density,
+    bool mesh_mapping,
+    bool is_anelastic)
     : m_repo(repo)
+    , m_phy_mgr(phy_mgr)
     , m_options("mac_proj")
     , m_has_overset(has_overset)
     , m_variable_density(variable_density)
     , m_mesh_mapping(mesh_mapping)
+    , m_is_anelastic(is_anelastic)
 {
     amrex::ParmParse pp("incflo");
     pp.query("density", m_rho_0);
-    bool disable_omac{true};
-    pp.query("disable_overset_mac", disable_omac);
-    if (m_has_overset && disable_omac) {
-        m_has_overset = false;
-    }
+    amrex::ParmParse pp_ovst("Overset");
+    bool disable_ovst_mac = false;
+    pp_ovst.query("disable_coupled_mac_proj", disable_ovst_mac);
+    m_has_overset = m_has_overset && !disable_ovst_mac;
 }
 
 void MacProjOp::init_projector(const MacProjOp::FaceFabPtrVec& beta) noexcept
@@ -105,6 +112,32 @@ void MacProjOp::init_projector(const amrex::Real beta) noexcept
     m_need_init = false;
 }
 
+void MacProjOp::set_inflow_velocity(amrex::Real time)
+{
+    // Currently, input boundary planes account for inflow differently
+    // Also, MPL needs to be refactored to do this properly, defer for now
+    if (m_phy_mgr.contains("ABL")) {
+        if (m_phy_mgr.get<amr_wind::ABL>().bndry_plane().mode() ==
+            io_mode::input) {
+            return;
+        }
+        if (m_phy_mgr.get<amr_wind::ABL>().abl_mpl().is_active()) {
+            return;
+        }
+    }
+
+    auto& velocity = m_repo.get_field("velocity");
+    auto& u_mac = m_repo.get_field("u_mac");
+    auto& v_mac = m_repo.get_field("v_mac");
+    auto& w_mac = m_repo.get_field("w_mac");
+
+    for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
+        amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM> mac_vec = {
+            AMREX_D_DECL(&u_mac(lev), &v_mac(lev), &w_mac(lev))};
+        velocity.set_inflow_sibling_fields(lev, time, mac_vec);
+    }
+}
+
 //
 // Computes the following decomposition:
 //
@@ -141,11 +174,24 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
 
     amrex::Real factor = m_has_overset ? 0.5 * dt : 1.0;
 
+    std::unique_ptr<ScratchField> ref_rho_xf, ref_rho_yf, ref_rho_zf;
+    if (m_is_anelastic) {
+        ref_rho_xf =
+            m_repo.create_scratch_field(1, 0, amr_wind::FieldLoc::XFACE);
+        ref_rho_yf =
+            m_repo.create_scratch_field(1, 0, amr_wind::FieldLoc::YFACE);
+        ref_rho_zf =
+            m_repo.create_scratch_field(1, 0, amr_wind::FieldLoc::ZFACE);
+    }
+    amrex::Vector<amrex::Array<amrex::MultiFab*, ICNS::ndim>> ref_rho_face(
+        m_repo.num_active_levels());
+
     // TODO: remove the or in the if statement for m_has_overset
     // For now assume variable viscosity for overset
     // this can be removed once the nsolve overset
     // masking is implemented in cell based AMReX poisson solvers
-    if (m_variable_density || m_has_overset || m_mesh_mapping) {
+    if (m_variable_density || m_has_overset || m_mesh_mapping ||
+        m_is_anelastic) {
         amrex::Vector<amrex::Array<amrex::MultiFab const*, ICNS::ndim>>
             rho_face_const;
         rho_face_const.reserve(m_repo.num_active_levels());
@@ -158,6 +204,9 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
         amrex::Vector<amrex::Array<amrex::MultiFab*, ICNS::ndim>> rho_face(
             m_repo.num_active_levels());
 
+        const auto* ref_density =
+            m_is_anelastic ? &(m_repo.get_field("reference_density")) : nullptr;
+
         for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
             rho_face[lev][0] = &(*rho_xf)(lev);
             rho_face[lev][1] = &(*rho_yf)(lev);
@@ -165,6 +214,19 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
 
             amrex::average_cellcenter_to_face(
                 rho_face[lev], density(lev), geom[lev]);
+
+            if (m_is_anelastic) {
+                ref_rho_face[lev][0] = &(*ref_rho_xf)(lev);
+                ref_rho_face[lev][1] = &(*ref_rho_yf)(lev);
+                ref_rho_face[lev][2] = &(*ref_rho_zf)(lev);
+                amrex::average_cellcenter_to_face(
+                    ref_rho_face[lev], (*ref_density)(lev), geom[lev]);
+                for (int idim = 0; idim < ICNS::ndim; ++idim) {
+                    rho_face[lev][idim]->divide(
+                        *(ref_rho_face[lev][idim]), 0, density.num_comp(),
+                        rho_face[lev][idim]->nGrow());
+                }
+            }
 
             if (m_mesh_mapping) {
                 mac_proj_to_uniform_space(
@@ -192,10 +254,16 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
     }
 
     for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
-
         mac_vec[lev][0] = &u_mac(lev);
         mac_vec[lev][1] = &v_mac(lev);
         mac_vec[lev][2] = &w_mac(lev);
+        if (m_is_anelastic) {
+            for (int idim = 0; idim < ICNS::ndim; ++idim) {
+                amrex::Multiply(
+                    *(mac_vec[lev][idim]), *(ref_rho_face[lev][idim]), 0, 0,
+                    density.num_comp(), 0);
+            }
+        }
     }
 
     m_mac_proj->setUMAC(mac_vec);
@@ -212,6 +280,16 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
 
     } else {
         m_mac_proj->project(m_options.rel_tol, m_options.abs_tol);
+    }
+
+    if (m_is_anelastic) {
+        for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
+            for (int idim = 0; idim < ICNS::ndim; ++idim) {
+                amrex::Divide(
+                    *(mac_vec[lev][idim]), *(ref_rho_face[lev][idim]), 0, 0,
+                    density.num_comp(), 0);
+            }
+        }
     }
 
     io::print_mlmg_info("MAC_projection", m_mac_proj->getMLMG());
@@ -233,11 +311,11 @@ void MacProjOp::mac_proj_to_uniform_space(
     const auto& mesh_fac_zf =
         repo.get_mesh_mapping_field(amr_wind::FieldLoc::ZFACE);
     const auto& mesh_detJ_xf =
-        repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::XFACE);
+        repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::XFACE);
     const auto& mesh_detJ_yf =
-        repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::YFACE);
+        repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::YFACE);
     const auto& mesh_detJ_zf =
-        repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::ZFACE);
+        repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::ZFACE);
 
     // scale U^mac to accommodate for mesh mapping -> U^bar = J/fac *
     // U^mac beta accounted for mesh mapping = J/fac^2 * 1/rho construct

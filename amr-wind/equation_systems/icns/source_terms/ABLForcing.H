@@ -41,7 +41,7 @@ public:
         m_mean_vel[1] = uy;
 
         const auto& current_time = m_time.current_time();
-        const auto& dt = m_time.deltaT();
+        const auto& dt = m_time.delta_t();
 
         if (!m_vel_timetable.empty()) {
             const amrex::Real current_spd = ::amr_wind::interp::linear(

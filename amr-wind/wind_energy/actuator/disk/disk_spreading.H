@@ -46,6 +46,14 @@ public:
         const amrex::Geometry& geom)
     {
         const auto& bx = mfi.tilebox();
+
+        const auto bxa = amr_wind::utils::realbox_to_box(
+            actObj.m_data.info().bound_box, geom);
+        const auto& bxi = bx & bxa;
+        if (bxi.isEmpty()) {
+            return;
+        }
+
         const auto& sarr = actObj.m_act_src(lev).array(mfi);
         const auto& problo = geom.ProbLoArray();
         const auto& dx = geom.CellSizeArray();
@@ -68,7 +76,7 @@ public:
                     problo[2] + (k + 0.5) * dx[2],
                 };
 
-                amrex::Real src_force[AMREX_SPACEDIM]{0.0, 0.0, 0.0};
+                amrex::RealArray src_force = {0.0};
                 for (int ip = 0; ip < npts; ++ip) {
                     const auto& pforce = force[ip] / nForceTheta;
                     const auto pLoc = pos[ip];
@@ -101,6 +109,14 @@ public:
         const amrex::Geometry& geom)
     {
         const auto& bx = mfi.tilebox();
+
+        const auto bxa = amr_wind::utils::realbox_to_box(
+            actObj.m_data.info().bound_box, geom);
+        const auto& bxi = bx & bxa;
+        if (bxi.isEmpty()) {
+            return;
+        }
+
         const auto& sarr = actObj.m_act_src(lev).array(mfi);
         const auto& problo = geom.ProbLoArray();
         const auto& dx = geom.CellSizeArray();
@@ -123,7 +139,7 @@ public:
                     problo[2] + (k + 0.5) * dx[2],
                 };
 
-                amrex::Real src_force[AMREX_SPACEDIM]{0.0, 0.0, 0.0};
+                amrex::RealArray src_force = {0.0};
                 for (int ip = 0; ip < npts; ++ip) {
                     const auto R = utils::delta_pnts_cyl(
                                        m_origin, m_normal, m_origin, pos[ip])
@@ -158,6 +174,14 @@ public:
         const amrex::Geometry& geom)
     {
         const auto& bx = mfi.tilebox();
+
+        const auto bxa = amr_wind::utils::realbox_to_box(
+            actObj.m_data.info().bound_box, geom);
+        const auto& bxi = bx & bxa;
+        if (bxi.isEmpty()) {
+            return;
+        }
+
         const auto& sarr = actObj.m_act_src(lev).array(mfi);
         const auto& problo = geom.ProbLoArray();
         const auto& dx = geom.CellSizeArray();
@@ -182,7 +206,7 @@ public:
                     problo[2] + (k + 0.5) * dx[2],
                 };
 
-                amrex::Real src_force[AMREX_SPACEDIM]{0.0, 0.0, 0.0};
+                amrex::RealArray src_force = {0.0};
                 for (int ip = 0; ip < npts; ++ip) {
                     const auto radius =
                         utils::delta_pnts_cyl(

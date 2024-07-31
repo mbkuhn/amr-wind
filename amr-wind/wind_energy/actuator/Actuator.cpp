@@ -1,9 +1,10 @@
 #include "amr-wind/wind_energy/actuator/Actuator.H"
-#include "amr-wind/wind_energy/actuator/ActuatorModel.H"
 #include "amr-wind/wind_energy/actuator/ActParser.H"
 #include "amr-wind/wind_energy/actuator/ActuatorContainer.H"
 #include "amr-wind/CFDSim.H"
 #include "amr-wind/core/FieldRepo.H"
+#include "amr-wind/utilities/io_utils.H"
+#include "amr-wind/utilities/IOManager.H"
 
 #include <algorithm>
 #include <memory>
@@ -11,20 +12,47 @@
 namespace amr_wind::actuator {
 
 Actuator::Actuator(CFDSim& sim)
-    : m_sim(sim), m_act_source(sim.repo().declare_field("actuator_src_term", 3))
+    : m_sim(sim)
+    , m_act_source(sim.repo().declare_field("actuator_src_term", 3, 1))
 {}
 
 Actuator::~Actuator() = default;
 
 void Actuator::pre_init_actions()
 {
-    BL_PROFILE("amr-wind::actuator::Actuator::post_init_actions");
+    BL_PROFILE("amr-wind::actuator::Actuator::pre_init_actions");
     amrex::ParmParse pp(identifier());
 
     amrex::Vector<std::string> labels;
     pp.getarr("labels", labels);
+    ioutils::assert_with_message(
+        ioutils::all_distinct(labels),
+        "Duplicates in " + identifier() + ".labels");
 
     const int nturbines = static_cast<int>(labels.size());
+
+    if (nturbines > 50) {
+        amrex::Print()
+            << "WARNING: There are many turbines in this case. Please ensure "
+               "you have consolidated common turbine options under a common "
+               "prefix. For example, the following: "
+            << std::endl;
+        amrex::Print() << "  Actuator.Turb1.type            = UniformCtDisk"
+                       << std::endl;
+        amrex::Print() << "  Actuator.Turb1.epsilon         = 5.0 5.0 5.0"
+                       << std::endl;
+        amrex::Print() << "  Actuator.Turb2.type            = UniformCtDisk"
+                       << std::endl;
+        amrex::Print() << "  Actuator.Turb2.epsilon         = 5.0 5.0 5.0"
+                       << std::endl;
+        amrex::Print() << "becomes: " << std::endl;
+        amrex::Print() << "  Actuator.UniformCtDisk.epsilon = 5.0 5.0 5.0"
+                       << std::endl;
+        amrex::Print() << "  Actuator.Turb1.type            = UniformCtDisk"
+                       << std::endl;
+        amrex::Print() << "  Actuator.Turb2.type            = UniformCtDisk"
+                       << std::endl;
+    }
 
     for (int i = 0; i < nturbines; ++i) {
         const std::string& tname = labels[i];
@@ -34,12 +62,6 @@ void Actuator::pre_init_actions()
         std::string type;
         pp.query("type", type);
         pp1.query("type", type);
-        if (type == "TurbineFastLine" || type == "TurbineFastDisk") {
-            // Only one kind of sampling can be chosen. If OpenFAST is involved
-            // in the Actuator type, the default behavior is to sample velocity
-            // at n-1/2 so that forcing is at n+1/2
-            m_sample_nmhalf = true;
-        }
         AMREX_ALWAYS_ASSERT(!type.empty());
 
         auto obj = ActuatorModel::create(type, m_sim, tname, i);
@@ -50,9 +72,6 @@ void Actuator::pre_init_actions()
         obj->read_inputs(inp);
         m_actuators.emplace_back(std::move(obj));
     }
-
-    // Check if sampling should be modified aside from default behavior
-    pp.query("sample_vel_nmhalf", m_sample_nmhalf);
 }
 
 void Actuator::post_init_actions()
@@ -75,6 +94,13 @@ void Actuator::post_init_actions()
         act->init_actuator_source();
     }
 
+    // Ensure velocity fills ghost cells prior to sampling
+    auto& vel = m_sim.repo().get_field("velocity");
+    for (int lev = 0; lev < m_sim.repo().num_active_levels(); ++lev) {
+        // Just need the interior velocity ghost cells updated
+        vel(lev).FillBoundary(m_sim.mesh().Geom()[lev].periodicity());
+    }
+
     setup_container();
     update_positions();
     update_velocities();
@@ -85,6 +111,8 @@ void Actuator::post_init_actions()
 
 void Actuator::post_regrid_actions()
 {
+    BL_PROFILE("amr-wind::actuator::Actuator::post_regrid_actions");
+
     for (auto& act : m_actuators) {
         act->determine_influenced_procs();
     }
@@ -107,6 +135,8 @@ void Actuator::pre_advance_work()
 void Actuator::communicate_turbine_io()
 {
 #ifdef AMR_WIND_USE_HELICS
+    BL_PROFILE("amr-wind::actuator::Actuator::communicate_turbine_io");
+
     if (!m_sim.helics().is_activated()) {
         return;
     }
@@ -145,6 +175,8 @@ void Actuator::communicate_turbine_io()
  */
 void Actuator::setup_container()
 {
+    BL_PROFILE("amr-wind::actuator::Actuator::setup_container");
+
     const int ntotal = num_actuators();
     const int nlocal = static_cast<int>(std::count_if(
         m_actuators.begin(), m_actuators.end(),
@@ -188,19 +220,9 @@ void Actuator::update_positions()
     m_container->update_positions();
 
     // Sample velocities at the new locations
-    if (m_sample_nmhalf &&
-        (m_sim.time().current_time() > m_sim.time().start_time())) {
-        // Avoid using mac velocities if at init or restart
-        const auto& umac = m_sim.repo().get_field("u_mac");
-        const auto& vmac = m_sim.repo().get_field("v_mac");
-        const auto& wmac = m_sim.repo().get_field("w_mac");
-        const auto& density = m_sim.repo().get_field("density");
-        m_container->sample_fields(umac, vmac, wmac, density);
-    } else {
-        const auto& vel = m_sim.repo().get_field("velocity");
-        const auto& density = m_sim.repo().get_field("density");
-        m_container->sample_fields(vel, density);
-    }
+    const auto& vel = m_sim.repo().get_field("velocity");
+    const auto& density = m_sim.repo().get_field("density");
+    m_container->sample_fields(vel, density);
 }
 
 /** Provide updated velocities from container to actuator instances
@@ -257,12 +279,19 @@ void Actuator::compute_source_term()
                 }
             }
         }
+
+        // Ensure actuator src fills ghost cells prior to use (post-processing)
+        // Just need the interior velocity ghost cells updated
+        sfab.FillBoundary(geom.periodicity());
     }
 }
 
 void Actuator::prepare_outputs()
 {
-    const std::string out_dir_prefix = "post_processing/actuator";
+    BL_PROFILE("amr-wind::actuator::Actuator::prepare_outputs");
+
+    const std::string post_dir = m_sim.io_manager().post_processing_directory();
+    const std::string out_dir_prefix = post_dir + "/actuator";
     const std::string sname =
         amrex::Concatenate(out_dir_prefix, m_sim.time().time_index());
     if (!amrex::UtilCreateDirectory(sname, 0755)) {
@@ -278,12 +307,44 @@ void Actuator::prepare_outputs()
 
 void Actuator::post_advance_work()
 {
+    BL_PROFILE("amr-wind::actuator::Actuator::post_advance_work");
+
     const int iproc = amrex::ParallelDescriptor::MyProc();
     for (auto& ac : m_actuators) {
         if (ac->info().root_proc == iproc) {
             ac->write_outputs();
         }
     }
+}
+
+ActuatorModel& Actuator::get_act_bylabel(const std::string& actlabel) const
+{
+    BL_PROFILE("amr-wind::actuator::Actuator::get_act_bylabel");
+    int thisid = 0; // Default to first actuator
+    for (const auto& act : m_actuators) {
+        std::string thislabel = act->label();
+        if (thislabel == actlabel) {
+            thisid = act->id();
+        }
+    }
+
+    return *m_actuators.at(thisid);
+}
+
+template <typename T>
+T* Actuator::get_actuator(std::string& key) const
+{
+    BL_PROFILE("amr-wind::actuator::Actuator::get_actuator");
+    for (const auto& act : m_actuators) {
+        std::string thislabel = act->label();
+        if (thislabel == key) {
+            int thisid = act->id();
+            T* converted = dynamic_cast<T*>(*m_actuators.at(thisid));
+            return converted;
+        }
+    }
+
+    amrex::Abort("Could not find actuator");
 }
 
 } // namespace amr_wind::actuator

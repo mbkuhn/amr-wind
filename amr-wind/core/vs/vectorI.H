@@ -26,6 +26,16 @@ VectorT<T>::operator*=(const T fac)
 
 template <typename T>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>
+VectorT<T>::operator*=(const VectorT<T>& vin)
+{
+    vv[0] *= vin.x();
+    vv[1] *= vin.y();
+    vv[2] *= vin.z();
+    return *this;
+}
+
+template <typename T>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>
 VectorT<T>::operator/=(const T fac)
 {
     vv[0] /= fac;
@@ -125,108 +135,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>& VectorT<T>::normalize()
     return *this;
 }
 
-#if 0
 template <typename T>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>
-operator+(VectorT<T>&& v1, const VectorT<T>& v2)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T> sqrt(const VectorT<T>& v)
 {
-    v1.x() += v2.x();
-    v1.y() += v2.y();
-    v1.z() += v2.z();
-    return v1;
+    return VectorT<T>{std::sqrt(v.x()), std::sqrt(v.y()), std::sqrt(v.z())};
 }
 
-template <typename T>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>
-operator+(const VectorT<T>& v2, VectorT<T>&& v1)
-{
-    v1.x() += v2.x();
-    v1.y() += v2.y();
-    v1.z() += v2.z();
-    return v1;
-}
-
-template <typename T>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>
-operator+(VectorT<T>&& v1, VectorT<T>&& v2)
-{
-    v1.x() += v2.x();
-    v1.y() += v2.y();
-    v1.z() += v2.z();
-    return v1;
-}
-
-template <typename T>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>
-operator-(VectorT<T>&& v1, const VectorT<T>& v2)
-{
-    v1.x() -= v2.x();
-    v1.y() -= v2.y();
-    v1.z() -= v2.z();
-    return v1;
-}
-
-template <typename T>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>
-operator-(const VectorT<T>& v2, VectorT<T>&& v1)
-{
-    v1.x() -= v2.x();
-    v1.y() -= v2.y();
-    v1.z() -= v2.z();
-    return v1;
-}
-
-template <typename T>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>
-operator-(VectorT<T>&& v1, VectorT<T>&& v2)
-{
-    v1.x() -= v2.x();
-    v1.y() -= v2.y();
-    v1.z() -= v2.z();
-    return v1;
-}
-
-template <typename T1, typename T2>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T1>
-operator*(VectorT<T1>&& inp, const T2 fac)
-{
-    inp.x() *= fac;
-    inp.y() *= fac;
-    inp.z() *= fac;
-    return inp;
-}
-
-template <typename T1, typename T2>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T1>
-operator*(const T2 fac, VectorT<T1>&& inp)
-{
-    inp.x() *= fac;
-    inp.y() *= fac;
-    inp.z() *= fac;
-    return inp;
-}
-
-template <typename T1, typename T2>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T1>
-operator/(VectorT<T1>&& inp, const T2 fac)
-{
-    inp.x() /= fac;
-    inp.y() /= fac;
-    inp.z() /= fac;
-    return inp;
-}
-
-template <typename T1, typename T2>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T1>
-operator/(const T2 fac, VectorT<T1>&& inp)
-{
-    inp.x() /= fac;
-    inp.y() /= fac;
-    inp.z() /= fac;
-    return inp;
-}
-
-#endif
 } // namespace amr_wind::vs
 
 #endif /* VS_VECTORI_H */

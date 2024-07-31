@@ -26,15 +26,15 @@ public:
         const amrex::Array4<amrex::Real>& vel_forces) const override;
 
 private:
-    amrex::Vector<amrex::Real> m_gravity{{0.0, 0.0, -9.81}};
+    amrex::Vector<amrex::Real> m_gravity{0.0, 0.0, -9.81};
 
     Field* m_rho{nullptr};
     Field* m_rho0{nullptr};
 
     // Input reference to perturbational form
-    bool is_pptb{false};
+    bool m_use_perturb_pressure{false};
     // Presence of rho0 for perturbational form
-    bool is_rho0{false};
+    bool m_use_reference_density{false};
     // Constant reference density
     amrex::Real m_rho0_const{1.0};
 };

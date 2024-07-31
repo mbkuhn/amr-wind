@@ -49,7 +49,7 @@ struct FieldBCNoOp
     AMREX_GPU_HOST
     constexpr explicit FieldBCNoOp(const Field& /*unused*/) {}
 
-    FunctorType operator()() const { return *this; }
+    FunctorType operator()(const int /*face_dir*/ = -1) const { return *this; }
 
     AMREX_GPU_DEVICE
     void operator()(
@@ -120,24 +120,28 @@ struct DirichletOp
     amrex::GpuArray<BC, AMREX_SPACEDIM * 2> m_bc_type;
     const InflowOpType m_inflow_op;
     const WallOpType m_wall_op;
+    const int m_face_dir;
 
     AMREX_GPU_HOST
-    constexpr explicit DirichletOp(const Field& fld)
+    constexpr explicit DirichletOp(const Field& fld, const int face_dir)
         : m_ncomp(fld.num_comp())
         , m_bc_type(fld.bc_type())
         , m_inflow_op(fld)
         , m_wall_op(fld)
+        , m_face_dir(face_dir)
     {}
 
     AMREX_GPU_HOST
     DirichletOp(
         const Field& fld,
         const InflowOpType& inflow_op,
-        const WallOpType& wall_op)
+        const WallOpType& wall_op,
+        const int face_dir)
         : m_ncomp(fld.num_comp())
         , m_bc_type(fld.bc_type())
         , m_inflow_op(inflow_op)
         , m_wall_op(wall_op)
+        , m_face_dir{face_dir}
     {}
 
     AMREX_GPU_DEVICE
@@ -169,9 +173,11 @@ struct DirichletOp
                 }
 
                 // Check if the point in question is on the boundary
+                const int big_end =
+                    domain_box.bigEnd(idir) + ((idir == m_face_dir) ? 1 : 0);
                 const bool is_bndry =
                     (ori.isLow() ? (iv[idir] < domain_box.smallEnd(idir))
-                                 : (iv[idir] > domain_box.bigEnd(idir)));
+                                 : (iv[idir] > big_end));
                 if (!is_bndry) {
                     continue;
                 }
@@ -183,41 +189,6 @@ struct DirichletOp
                     m_wall_op(iv, field, geom, time, ori, n, dcomp, orig_comp);
                 }
             }
-
-#if 0
-            if (bc.lo(0) == amrex::BCType::ext_dir and
-                i < domain_box.smallEnd(0)) {
-                field(i, j, k, n) = m_bcv[amrex::Orientation(
-                    amrex::Direction::x, amrex::Orientation::low)][n];
-            } else if (
-                bc.hi(0) == amrex::BCType::ext_dir and
-                i > domain_box.bigEnd(0)) {
-                field(i, j, k, n) = m_bcv[amrex::Orientation(
-                    amrex::Direction::x, amrex::Orientation::high)][n];
-            }
-
-            if (bc.lo(1) == amrex::BCType::ext_dir and
-                j < domain_box.smallEnd(1)) {
-                field(i, j, k, n) = m_bcv[amrex::Orientation(
-                    amrex::Direction::y, amrex::Orientation::low)][n];
-            } else if (
-                bc.hi(1) == amrex::BCType::ext_dir and
-                j > domain_box.bigEnd(1)) {
-                field(i, j, k, n) = m_bcv[amrex::Orientation(
-                    amrex::Direction::y, amrex::Orientation::high)][n];
-            }
-
-            if (bc.lo(2) == amrex::BCType::ext_dir and
-                k < domain_box.smallEnd(2)) {
-                field(i, j, k, n) = m_bcv[amrex::Orientation(
-                    amrex::Direction::z, amrex::Orientation::low)][n];
-            } else if (
-                bc.hi(2) == amrex::BCType::ext_dir and
-                k > domain_box.bigEnd(2)) {
-                field(i, j, k, n) = m_bcv[amrex::Orientation(
-                    amrex::Direction::z, amrex::Orientation::high)][n];
-            }
-#endif
         }
     }
 
@@ -242,7 +213,10 @@ struct FieldBCDirichlet
 
     explicit FieldBCDirichlet(const Field& fld) : m_field(fld) {}
 
-    inline FunctorType operator()() const { return FunctorType(m_field); }
+    inline FunctorType operator()(const int face_dir = -1) const
+    {
+        return FunctorType(m_field, face_dir);
+    }
 
     const Field& m_field;
 };
@@ -263,11 +237,11 @@ struct BCOpCreator
         : m_field(fld), m_inflow_op(inflow_op), m_wall_op(wall_op)
     {}
 
-    inline FunctorType operator()() const
+    inline FunctorType operator()(const int face_dir = -1) const
     {
         return FunctorType{
-            m_field, m_inflow_op.device_instance(),
-            m_wall_op.device_instance()};
+            m_field, m_inflow_op.device_instance(), m_wall_op.device_instance(),
+            face_dir};
     }
 
     const Field& m_field;

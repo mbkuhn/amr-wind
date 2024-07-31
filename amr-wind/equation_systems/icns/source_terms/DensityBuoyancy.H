@@ -33,9 +33,9 @@ public:
         const amrex::Array4<amrex::Real>& vel_forces) const override;
 
 private:
-    amrex::Vector<amrex::Real> m_gravity{{0.0, 0.0, -9.81}};
+    amrex::Vector<amrex::Real> m_gravity{0.0, 0.0, -9.81};
 
-    amrex::Real rho_0{1.0};
+    amrex::Real m_rho_0{1.0};
 
     Field& m_density;
 };

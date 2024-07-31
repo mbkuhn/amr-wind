@@ -48,6 +48,9 @@ ABL::ABL(CFDSim& sim)
     // Instantiate the ABL Modulated Power Law
     m_abl_mpl = std::make_unique<ABLModulatedPowerLaw>(sim);
 
+    // Instantiate the ABL anelastic module
+    m_abl_anelastic = std::make_unique<ABLAnelastic>(sim);
+
     // Instantiate the file-based field initializer
     if (m_file_input) {
         m_field_init_file = std::make_unique<ABLFieldInitFile>();

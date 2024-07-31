@@ -29,7 +29,8 @@ void compute_fluxes(
     amrex::Real* p,
     amrex::Vector<amrex::Geometry> geom,
     amrex::Real dt,
-    godunov::scheme godunov_scheme);
+    godunov::scheme godunov_scheme,
+    bool godunov_use_forces_in_trans);
 
 void predict_weno(
     int lev,
@@ -47,23 +48,6 @@ void predict_weno(
     amrex::Real dt,
     amrex::Gpu::DeviceVector<amrex::BCRec>& bcrec_device,
     bool weno_js);
-
-void predict_ppm(
-    int lev,
-    amrex::Box const& bx,
-    int ncomp,
-    amrex::Array4<amrex::Real> const& Imx,
-    amrex::Array4<amrex::Real> const& Ipx,
-    amrex::Array4<amrex::Real> const& Imy,
-    amrex::Array4<amrex::Real> const& Ipy,
-    amrex::Array4<amrex::Real> const& Imz,
-    amrex::Array4<amrex::Real> const& Ipz,
-    amrex::Array4<amrex::Real const> const& q,
-    amrex::Array4<amrex::Real const> const& vel,
-    amrex::Vector<amrex::Geometry> geom,
-    amrex::Real dt,
-    amrex::Gpu::DeviceVector<amrex::BCRec>& bcrec_device,
-    bool use_limiter);
 
 void make_trans_velocities(
     int lev,

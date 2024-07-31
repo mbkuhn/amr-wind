@@ -4,6 +4,7 @@
 #include <utility>
 #include "amr-wind/utilities/ncutils/nc_interface.H"
 #include "amr-wind/equation_systems/vof/volume_fractions.H"
+#include "amr-wind/utilities/IOManager.H"
 
 #include "AMReX_ParmParse.H"
 
@@ -108,7 +109,8 @@ void FreeSurface::initialize()
         if (lev < finest_level) {
             level_mask = makeFineMask(
                 m_sim.mesh().boxArray(lev), m_sim.mesh().DistributionMap(lev),
-                m_sim.mesh().boxArray(lev + 1), amrex::IntVect(2), 1, 0);
+                m_sim.mesh().boxArray(lev + 1), m_sim.mesh().refRatio(lev), 1,
+                0);
         } else {
             level_mask.define(
                 m_sim.mesh().boxArray(lev), m_sim.mesh().DistributionMap(lev),
@@ -221,7 +223,8 @@ void FreeSurface::initialize()
         if (lev < finest_level) {
             level_mask = makeFineMask(
                 m_sim.mesh().boxArray(lev), m_sim.mesh().DistributionMap(lev),
-                m_sim.mesh().boxArray(lev + 1), amrex::IntVect(2), 1, 0);
+                m_sim.mesh().boxArray(lev + 1), m_sim.mesh().refRatio(lev), 1,
+                0);
         } else {
             level_mask.define(
                 m_sim.mesh().boxArray(lev), m_sim.mesh().DistributionMap(lev),
@@ -414,24 +417,13 @@ void FreeSurface::post_advance_work()
                                 amrex::Real loc1 = loc_arr(i, j, k, 2 * n + 1);
 
                                 // Indices and slope variables
-                                amrex::Real mx = 0.0;
-                                amrex::Real my = 0.0;
-                                amrex::Real mz = 0.0;
-                                amrex::Real alpha = 1.0;
                                 // Get modified indices for checking up
                                 // and down and orient normal in search
                                 // direction
-                                switch (dir) {
-                                case 0:
-                                    mx = 1.0;
-                                    break;
-                                case 1:
-                                    my = 1.0;
-                                    break;
-                                case 2:
-                                    mz = 1.0;
-                                    break;
-                                }
+                                amrex::Real mx = (dir == 0) ? 1.0 : 0.0;
+                                amrex::Real my = (dir == 1) ? 1.0 : 0.0;
+                                amrex::Real mz = (dir == 2) ? 1.0 : 0.0;
+                                amrex::Real alpha = 1.0;
                                 // If cell is full of single phase
                                 // (accounts for when interface is at
                                 // intersection of cells but lower one
@@ -464,26 +456,13 @@ void FreeSurface::post_advance_work()
                                     // Initialize height measurement
                                     amrex::Real ht = plo[dir];
                                     // Reassign slope coefficients
-                                    amrex::Real mdr = 0.0;
-                                    amrex::Real mg1 = 0.0;
-                                    amrex::Real mg2 = 0.0;
-                                    switch (dir) {
-                                    case 0:
-                                        mdr = mx;
-                                        mg1 = my;
-                                        mg2 = mz;
-                                        break;
-                                    case 1:
-                                        mdr = my;
-                                        mg1 = mx;
-                                        mg2 = mz;
-                                        break;
-                                    case 2:
-                                        mdr = mz;
-                                        mg1 = mx;
-                                        mg2 = my;
-                                        break;
-                                    }
+                                    const amrex::Real mdr =
+                                        (dir == 0) ? mx
+                                                   : ((dir == 1) ? my : mz);
+                                    const amrex::Real mg1 =
+                                        (dir == 0) ? my : mx;
+                                    const amrex::Real mg2 =
+                                        (dir == 2) ? my : mz;
                                     // Get height of interface
                                     if (mdr == 0) {
                                         // If slope is undefined in z,
@@ -534,9 +513,10 @@ void FreeSurface::post_advance_work()
             amrex::Gpu::hostToDevice, &m_out[static_cast<long>(ni) * m_npts],
             &m_out[(ni + 1) * m_npts - 1] + 1, dout_last.begin());
         // Reset current output device vector
-        for (int n = 0; n < m_npts; n++) {
-            dout_ptr[n] = plo0[m_coorddir];
-        }
+        const auto coorddir = m_coorddir;
+        amrex::ParallelFor(m_npts, [=] AMREX_GPU_DEVICE(int n) {
+            dout_ptr[n] = plo0[coorddir];
+        });
     }
 
     process_output();
@@ -571,7 +551,8 @@ void FreeSurface::post_regrid_actions()
         if (lev < finest_level) {
             level_mask = makeFineMask(
                 m_sim.mesh().boxArray(lev), m_sim.mesh().DistributionMap(lev),
-                m_sim.mesh().boxArray(lev + 1), amrex::IntVect(2), 1, 0);
+                m_sim.mesh().boxArray(lev + 1), m_sim.mesh().refRatio(lev), 1,
+                0);
         } else {
             level_mask.define(
                 m_sim.mesh().boxArray(lev), m_sim.mesh().DistributionMap(lev),
@@ -702,13 +683,10 @@ void FreeSurface::write_ascii()
         << "WARNING: FreeSurface: ASCII output will impact performance"
         << std::endl;
 
-    const std::string post_dir = "post_processing";
+    const std::string post_dir = m_sim.io_manager().post_processing_directory();
     const std::string sname =
         amrex::Concatenate(m_label, m_sim.time().time_index());
 
-    if (!amrex::UtilCreateDirectory(post_dir, 0755)) {
-        amrex::CreateDirectoryFailed(post_dir);
-    }
     const std::string fname = post_dir + "/" + sname + ".txt";
 
     if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -771,16 +749,16 @@ void FreeSurface::prepare_netcdf_file()
 {
 #ifdef AMR_WIND_USE_NETCDF
 
-    const std::string post_dir = "post_processing";
+    const std::string post_dir = m_sim.io_manager().post_processing_directory();
     const std::string sname =
         amrex::Concatenate(m_label, m_sim.time().time_index());
-    if (!amrex::UtilCreateDirectory(post_dir, 0755)) {
-        amrex::CreateDirectoryFailed(post_dir);
-    }
+
     m_ncfile_name = post_dir + "/" + sname + ".nc";
 
     // Only I/O processor handles NetCDF generation
-    if (!amrex::ParallelDescriptor::IOProcessor()) return;
+    if (!amrex::ParallelDescriptor::IOProcessor()) {
+        return;
+    }
 
     auto ncf = ncutils::NCFile::create(m_ncfile_name, NC_CLOBBER | NC_NETCDF4);
     const std::string nt_name = "num_time_steps";
@@ -815,7 +793,7 @@ void FreeSurface::prepare_netcdf_file()
     std::vector<size_t> count{0, 2};
     count[0] = m_npts;
     auto xy = ncf.var("coordinates2D");
-    xy.put(&m_locs[0][0], start, count);
+    xy.put(m_locs[0].data(), start, count);
 
 #else
     amrex::Abort(
@@ -829,7 +807,9 @@ void FreeSurface::write_netcdf()
 {
 #ifdef AMR_WIND_USE_NETCDF
 
-    if (!amrex::ParallelDescriptor::IOProcessor()) return;
+    if (!amrex::ParallelDescriptor::IOProcessor()) {
+        return;
+    }
     auto ncf = ncutils::NCFile::open(m_ncfile_name, NC_WRITE);
     const std::string nt_name = "num_time_steps";
     // Index of the next timestep
@@ -846,7 +826,9 @@ void FreeSurface::write_netcdf()
     count[2] = m_npts;
     auto var = ncf.var("heights");
     for (int ni = 0; ni < m_ninst; ++ni) {
-        var.put(&m_out[ni * m_npts], start, count);
+        var.put(
+            &m_out[static_cast<size_t>(ni) * static_cast<size_t>(m_npts)],
+            start, count);
         ++start[1];
     }
 

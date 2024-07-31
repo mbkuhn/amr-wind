@@ -15,8 +15,8 @@ ABLFillMPL::ABLFillMPL(
 ABLFillMPL::~ABLFillMPL() = default;
 
 void ABLFillMPL::fillpatch(
-    int lev,
-    amrex::Real time,
+    const int lev,
+    const amrex::Real time,
     amrex::MultiFab& mfab,
     const amrex::IntVect& nghost,
     const FieldState fstate)
@@ -32,8 +32,8 @@ void ABLFillMPL::fillpatch(
 }
 
 void ABLFillMPL::fillpatch_from_coarse(
-    int lev,
-    amrex::Real time,
+    const int lev,
+    const amrex::Real time,
     amrex::MultiFab& mfab,
     const amrex::IntVect& nghost,
     const FieldState fstate)
@@ -49,8 +49,8 @@ void ABLFillMPL::fillpatch_from_coarse(
 }
 
 void ABLFillMPL::fillphysbc(
-    int lev,
-    amrex::Real time,
+    const int lev,
+    const amrex::Real time,
     amrex::MultiFab& mfab,
     const amrex::IntVect& nghost,
     const FieldState fstate)
@@ -66,15 +66,14 @@ void ABLFillMPL::fillphysbc(
 }
 
 void ABLFillMPL::fillpatch_sibling_fields(
-    int lev,
-    amrex::Real time,
+    const int lev,
+    const amrex::Real time,
     amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& mfabs,
     amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& ffabs,
     amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& cfabs,
     const amrex::IntVect& nghost,
     const amrex::Vector<amrex::BCRec>& bcrec,
-    const FieldState fstate,
-    const FieldInterpolator itype)
+    const FieldState fstate)
 {
     if (m_field.base_name() == "velocity") {
         // For an ABL MPL, we first just foextrap the mac velocities
@@ -103,7 +102,7 @@ void ABLFillMPL::fillpatch_sibling_fields(
         }
 
         FieldFillPatchOps<FieldBCDirichlet>::fillpatch_sibling_fields(
-            lev, time, mfabs, ffabs, cfabs, nghost, lbcrec, fstate, itype);
+            lev, time, mfabs, ffabs, cfabs, nghost, lbcrec, fstate);
 
         for (int i = 0; i < static_cast<int>(mfabs.size()); i++) {
             m_abl_mpl.set_velocity(lev, time, m_field, *mfabs[i], 0, i);

@@ -5,6 +5,7 @@ target_sources(${amr_wind_lib_name}
       io.cpp
       bc_ops.cpp
       console_io.cpp
+      index_operations.cpp
       IOManager.cpp
       FieldPlaneAveraging.cpp
       FieldPlaneAveragingFine.cpp
@@ -14,6 +15,8 @@ target_sources(${amr_wind_lib_name}
       PostProcessing.cpp
       DerivedQuantity.cpp
       DerivedQtyDefs.cpp
+
+      MultiLevelVector.cpp
    )
 
 add_subdirectory(tagging)

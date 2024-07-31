@@ -7,31 +7,6 @@
 
 namespace amr_wind::actuator::wing {
 
-void read_inputs(WingBaseData& wdata, ActInfo& info, const utils::ActParser& pp)
-{
-    pp.get("num_points", wdata.num_pts);
-    pp.get("start", wdata.start);
-    pp.get("end", wdata.end);
-    pp.get("epsilon", wdata.eps_inp);
-    pp.get("pitch", wdata.pitch);
-
-    amrex::Real max_eps =
-        *std::max_element(wdata.eps_inp.begin(), wdata.eps_inp.end());
-    amrex::Real search_radius = max_eps * 3.0;
-    const auto& p1 = wdata.start;
-    const auto& p2 = wdata.end;
-    // clang-format off
-    info.bound_box = amrex::RealBox(
-        amrex::min(p1.x(), p2.x()) - search_radius,
-        amrex::min(p1.y(), p2.y()) - search_radius,
-        amrex::min(p1.z(), p2.z()) - search_radius,
-        amrex::max(p1.x(), p2.x()) + search_radius,
-        amrex::max(p1.y(), p2.y()) + search_radius,
-        amrex::max(p1.z(), p2.z()) + search_radius
-    );
-    // clang-format on
-}
-
 void init_data_structures(WingBaseData& wdata, ActGrid& grid)
 {
     int npts = wdata.num_pts;
@@ -79,7 +54,9 @@ void prepare_netcdf_file(
 {
 #ifdef AMR_WIND_USE_NETCDF
     // Only root process handles I/O
-    if (info.root_proc != amrex::ParallelDescriptor::MyProc()) return;
+    if (info.root_proc != amrex::ParallelDescriptor::MyProc()) {
+        return;
+    }
 
     auto ncf = ncutils::NCFile::create(ncfile, NC_CLOBBER | NC_NETCDF4);
     const std::string nt_name = "num_time_steps";
@@ -94,7 +71,6 @@ void prepare_netcdf_file(
     ncf.def_dim("ndim", AMREX_SPACEDIM);
 
     auto grp = ncf.def_group(info.label);
-    grp.put_attr("angle_of_attack", std::vector<double>{meta.pitch});
     // clang-format off
     grp.put_attr("epsilon",
         std::vector<double>{meta.eps_inp.x(),
@@ -102,6 +78,7 @@ void prepare_netcdf_file(
     // clang-format on
     grp.def_dim(np_name, meta.num_pts);
     grp.def_var("time", NC_DOUBLE, {nt_name});
+    grp.def_var("pitch", NC_DOUBLE, {nt_name});
     grp.def_var("integrated_lift", NC_DOUBLE, {nt_name});
     grp.def_var("integrated_drag", NC_DOUBLE, {nt_name});
     grp.def_var("xyz", NC_DOUBLE, {np_name, "ndim"});
@@ -116,15 +93,15 @@ void prepare_netcdf_file(
     ncf.exit_def_mode();
 
     {
-        const size_t npts = static_cast<size_t>(meta.num_pts);
+        const auto npts = static_cast<size_t>(meta.num_pts);
         const std::vector<size_t> start{0, 0};
         const std::vector<size_t> count{npts, AMREX_SPACEDIM};
         auto xyz = grp.var("xyz");
-        xyz.put(&(grid.pos[0][0]), start, count);
+        xyz.put(grid.pos[0].data(), start, count);
         auto chord = grp.var("chord");
-        chord.put(&(meta.chord[0]), {0}, {npts});
+        chord.put(meta.chord.data(), {0}, {npts});
         auto dx = grp.var("dx");
-        dx.put(&(meta.dx[0]), {0}, {npts});
+        dx.put(meta.dx.data(), {0}, {npts});
     }
 #else
     amrex::ignore_unused(ncfile, meta, info, grid);
@@ -140,32 +117,87 @@ void write_netcdf(
 {
 #ifdef AMR_WIND_USE_NETCDF
     // Only root process handles I/O
-    if (info.root_proc != amrex::ParallelDescriptor::MyProc()) return;
+    if (info.root_proc != amrex::ParallelDescriptor::MyProc()) {
+        return;
+    }
 
     auto ncf = ncutils::NCFile::open(ncfile, NC_WRITE);
     const std::string nt_name = "num_time_steps";
     // Index of next timestep
     const size_t nt = ncf.dim(nt_name).len();
-    const size_t npts = static_cast<size_t>(meta.num_pts);
+    const auto npts = static_cast<size_t>(meta.num_pts);
 
     std::vector<size_t> start{nt, 0};
     std::vector<size_t> count{1, npts};
     auto grp = ncf.group(info.label);
     grp.var("time").put(&time, {nt}, {1});
+    grp.var("pitch").put(&meta.pitch, {nt}, {1});
     grp.var("integrated_lift").put(&meta.lift, {nt}, {1});
     grp.var("integrated_drag").put(&meta.drag, {nt}, {1});
     grp.var("vrel").put(
-        &(meta.vel_rel[0][0]), {nt, 0, 0}, {1, npts, AMREX_SPACEDIM});
+        meta.vel_rel[0].data(), {nt, 0, 0}, {1, npts, AMREX_SPACEDIM});
     grp.var("veff").put(
-        &(grid.vel[0][0]), {nt, 0, 0}, {1, npts, AMREX_SPACEDIM});
+        grid.vel[0].data(), {nt, 0, 0}, {1, npts, AMREX_SPACEDIM});
     grp.var("body_force")
-        .put(&(grid.force[0][0]), {nt, 0, 0}, {1, npts, AMREX_SPACEDIM});
-    grp.var("aoa").put(&(meta.aoa[0]), start, count);
-    grp.var("cl").put(&(meta.cl[0]), start, count);
-    grp.var("cd").put(&(meta.cd[0]), start, count);
+        .put(grid.force[0].data(), {nt, 0, 0}, {1, npts, AMREX_SPACEDIM});
+    grp.var("aoa").put(meta.aoa.data(), start, count);
+    grp.var("cl").put(meta.cl.data(), start, count);
+    grp.var("cd").put(meta.cd.data(), start, count);
 #else
     amrex::ignore_unused(ncfile, meta, info, grid, time);
 #endif
+}
+
+void refresh_wing_position(VecList& vpoints, VecList fpoints, const int npts)
+{
+    for (int ip = 0; ip < npts; ++ip) {
+        // Move velocity points to latest force points
+        vpoints[ip].x() = fpoints[ip].x();
+        vpoints[ip].y() = fpoints[ip].y();
+        vpoints[ip].z() = fpoints[ip].z();
+    }
+}
+
+void new_wing_position_velocity(
+    VecList& points,
+    vs::Vector& vtr,
+    const int npts,
+    const amrex::Real tn,
+    const amrex::Real tnp1,
+    const std::string& motion,
+    const amrex::Real period,
+    const vs::Vector svec)
+{
+    // Get displacement of points from n to n+1
+    // Also, if translation velocity changes, update it
+    vs::Vector disp{0.0, 0.0, 0.0};
+    // Do nothing for "none"
+    if (amrex::toLower(motion) == "linear") {
+        // Use velocity to get displacement
+        disp.x() = vtr.x() * (tnp1 - tn);
+        disp.y() = vtr.y() * (tnp1 - tn);
+        disp.z() = vtr.z() * (tnp1 - tn);
+        // Velocity is unchanged
+    } else if (amrex::toLower(motion) == "sine") {
+        // Calculate displacement using sine
+        disp.x() = svec.x() * (std::sin(2.0 * M_PI * tnp1 / period) -
+                               std::sin(2.0 * M_PI * tn / period));
+        disp.y() = svec.y() * (std::sin(2.0 * M_PI * tnp1 / period) -
+                               std::sin(2.0 * M_PI * tn / period));
+        disp.z() = svec.z() * (std::sin(2.0 * M_PI * tnp1 / period) -
+                               std::sin(2.0 * M_PI * tn / period));
+        // The translational velocity over the time step is disp/dt
+        vtr.x() = disp.x() / (tnp1 - tn + 1e-20);
+        vtr.y() = disp.y() / (tnp1 - tn + 1e-20);
+        vtr.z() = disp.z() / (tnp1 - tn + 1e-20);
+        // The tiny number in the denominator is important for initialization
+    }
+    for (int ip = 0; ip < npts; ++ip) {
+        // Move points according to displacement
+        points[ip].x() = points[ip].x() + disp.x();
+        points[ip].y() = points[ip].y() + disp.y();
+        points[ip].z() = points[ip].z() + disp.z();
+    }
 }
 
 } // namespace amr_wind::actuator::wing

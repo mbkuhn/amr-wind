@@ -91,7 +91,7 @@ TEST_F(ABLMeshTest, abl_forcing)
         auto& time = sim().time();
         time.new_timestep();
         time.set_current_cfl(2.0, 0.0, 0.0);
-        EXPECT_NEAR(time.deltaT(), 0.1, tol);
+        EXPECT_NEAR(time.delta_t(), 0.1, tol);
 
         src_term.setVal(0.0);
         abl_forcing.set_mean_velocities(10.0, 5.0);

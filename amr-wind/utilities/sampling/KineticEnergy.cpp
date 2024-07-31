@@ -42,7 +42,8 @@ amrex::Real KineticEnergy::calculate_kinetic_energy()
         if (lev < finest_level) {
             level_mask = makeFineMask(
                 m_sim.mesh().boxArray(lev), m_sim.mesh().DistributionMap(lev),
-                m_sim.mesh().boxArray(lev + 1), amrex::IntVect(2), 1, 0);
+                m_sim.mesh().boxArray(lev + 1), m_sim.mesh().refRatio(lev), 1,
+                0);
         } else {
             level_mask.define(
                 m_sim.mesh().boxArray(lev), m_sim.mesh().DistributionMap(lev),
@@ -104,13 +105,10 @@ void KineticEnergy::prepare_ascii_file()
 {
     BL_PROFILE("amr-wind::KineticEnergy::prepare_ascii_file");
 
-    const std::string post_dir = "post_processing";
+    const std::string post_dir = m_sim.io_manager().post_processing_directory();
     const std::string sname =
         amrex::Concatenate(m_label, m_sim.time().time_index());
 
-    if (!amrex::UtilCreateDirectory(post_dir, 0755)) {
-        amrex::CreateDirectoryFailed(post_dir);
-    }
     m_out_fname = post_dir + "/" + sname + ".txt";
 
     if (amrex::ParallelDescriptor::IOProcessor()) {

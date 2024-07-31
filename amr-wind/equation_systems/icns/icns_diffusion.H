@@ -1,6 +1,8 @@
 #ifndef ICNS_DIFFUSION_H
 #define ICNS_DIFFUSION_H
 
+#include <memory>
+
 #include "amr-wind/equation_systems/PDETraits.H"
 #include "amr-wind/equation_systems/PDEOps.H"
 #include "amr-wind/equation_systems/PDEHelpers.H"
@@ -38,38 +40,9 @@ public:
                              ? FieldState::New
                              : fstate;
         auto& divtau = this->m_pdefields.diff_term.state(tau_state);
-        bool diff_for_RHS(fstate == amr_wind::FieldState::New);
 
         amrex::MLMG mlmg(*this->m_applier);
         mlmg.apply(divtau.vec_ptrs(), this->m_pdefields.field.vec_ptrs());
-
-        const auto& repo = this->m_pdefields.repo;
-        const int nlevels = repo.num_active_levels();
-        const auto& density = m_density.state(fstate);
-
-        // Do not divide by density if solving for icns RHS
-        if (!diff_for_RHS) {
-
-            for (int lev = 0; lev < nlevels; ++lev) {
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
-#endif
-                for (amrex::MFIter mfi(divtau(lev), amrex::TilingIfNotGPU());
-                     mfi.isValid(); ++mfi) {
-                    const auto& bx = mfi.tilebox();
-                    const auto& divtau_arr = divtau(lev).array(mfi);
-                    const auto& rho_arr = density(lev).const_array(mfi);
-
-                    amrex::ParallelFor(
-                        bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                            amrex::Real rhoinv = 1.0 / rho_arr(i, j, k);
-                            divtau_arr(i, j, k, 0) *= rhoinv;
-                            divtau_arr(i, j, k, 1) *= rhoinv;
-                            divtau_arr(i, j, k, 2) *= rhoinv;
-                        });
-                }
-            }
-        }
     }
 };
 
@@ -98,29 +71,38 @@ public:
             m_pdefields.field, amrex::Orientation::high);
 
         if (!has_overset) {
-            m_solver_scalar.reset(new amrex::MLABecLaplacian(
+
+            m_solver_scalar = std::make_unique<amrex::MLABecLaplacian>(
                 mesh.Geom(0, mesh.finestLevel()),
                 mesh.boxArray(0, mesh.finestLevel()),
-                mesh.DistributionMap(0, mesh.finestLevel()), isolve, {},
-                AMREX_SPACEDIM));
-            m_applier_scalar.reset(new amrex::MLABecLaplacian(
+                mesh.DistributionMap(0, mesh.finestLevel()), isolve,
+                amrex::Vector<
+                    amrex::FabFactory<amrex::MLABecLaplacian::FAB> const*>(),
+                AMREX_SPACEDIM);
+            m_applier_scalar = std::make_unique<amrex::MLABecLaplacian>(
                 mesh.Geom(0, mesh.finestLevel()),
                 mesh.boxArray(0, mesh.finestLevel()),
-                mesh.DistributionMap(0, mesh.finestLevel()), iapply, {},
-                AMREX_SPACEDIM));
+                mesh.DistributionMap(0, mesh.finestLevel()), iapply,
+                amrex::Vector<
+                    amrex::FabFactory<amrex::MLABecLaplacian::FAB> const*>(),
+                AMREX_SPACEDIM);
         } else {
             auto imask =
                 fields.repo.get_int_field("mask_cell").vec_const_ptrs();
-            m_solver_scalar.reset(new amrex::MLABecLaplacian(
+            m_solver_scalar = std::make_unique<amrex::MLABecLaplacian>(
                 mesh.Geom(0, mesh.finestLevel()),
                 mesh.boxArray(0, mesh.finestLevel()),
-                mesh.DistributionMap(0, mesh.finestLevel()), imask, isolve, {},
-                AMREX_SPACEDIM));
-            m_applier_scalar.reset(new amrex::MLABecLaplacian(
+                mesh.DistributionMap(0, mesh.finestLevel()), imask, isolve,
+                amrex::Vector<
+                    amrex::FabFactory<amrex::MLABecLaplacian::FAB> const*>(),
+                AMREX_SPACEDIM);
+            m_applier_scalar = std::make_unique<amrex::MLABecLaplacian>(
                 mesh.Geom(0, mesh.finestLevel()),
                 mesh.boxArray(0, mesh.finestLevel()),
-                mesh.DistributionMap(0, mesh.finestLevel()), imask, iapply, {},
-                AMREX_SPACEDIM));
+                mesh.DistributionMap(0, mesh.finestLevel()), imask, iapply,
+                amrex::Vector<
+                    amrex::FabFactory<amrex::MLABecLaplacian::FAB> const*>(),
+                AMREX_SPACEDIM);
         }
 
         m_solver_scalar->setMaxOrder(m_options.max_order);
@@ -145,7 +127,7 @@ public:
         const auto& density = m_density.state(fstate);
         const auto& viscosity = m_pdefields.mueff;
         Field const* mesh_detJ =
-            m_mesh_mapping ? &(repo.get_mesh_mapping_detJ(FieldLoc::CELL))
+            m_mesh_mapping ? &(repo.get_mesh_mapping_det_j(FieldLoc::CELL))
                            : nullptr;
         std::unique_ptr<ScratchField> rho_times_detJ =
             m_mesh_mapping ? repo.create_scratch_field(
@@ -217,7 +199,7 @@ public:
         auto rhs_ptr = repo.create_scratch_field("rhs", field.num_comp(), 0);
         const auto& viscosity = m_pdefields.mueff;
         Field const* mesh_detJ =
-            m_mesh_mapping ? &(repo.get_mesh_mapping_detJ(FieldLoc::CELL))
+            m_mesh_mapping ? &(repo.get_mesh_mapping_det_j(FieldLoc::CELL))
                            : nullptr;
         std::unique_ptr<ScratchField> rho_times_detJ =
             m_mesh_mapping ? repo.create_scratch_field(
@@ -318,27 +300,25 @@ public:
 
         for (int i = 0; i < AMREX_SPACEDIM; ++i) {
             if (!has_overset) {
-                m_solver_scalar[i].reset(new amrex::MLABecLaplacian(
+                m_solver_scalar[i] = std::make_unique<amrex::MLABecLaplacian>(
                     mesh.Geom(0, mesh.finestLevel()),
                     mesh.boxArray(0, mesh.finestLevel()),
-                    mesh.DistributionMap(0, mesh.finestLevel()), isolve));
-                m_applier_scalar[i].reset(new amrex::MLABecLaplacian(
+                    mesh.DistributionMap(0, mesh.finestLevel()), isolve);
+                m_applier_scalar[i] = std::make_unique<amrex::MLABecLaplacian>(
                     mesh.Geom(0, mesh.finestLevel()),
                     mesh.boxArray(0, mesh.finestLevel()),
-                    mesh.DistributionMap(0, mesh.finestLevel()), iapply));
+                    mesh.DistributionMap(0, mesh.finestLevel()), iapply);
             } else {
                 auto imask =
                     fields.repo.get_int_field("mask_cell").vec_const_ptrs();
-                m_solver_scalar[i].reset(new amrex::MLABecLaplacian(
+                m_solver_scalar[i] = std::make_unique<amrex::MLABecLaplacian>(
                     mesh.Geom(0, mesh.finestLevel()),
                     mesh.boxArray(0, mesh.finestLevel()),
-                    mesh.DistributionMap(0, mesh.finestLevel()), imask,
-                    isolve));
-                m_applier_scalar[i].reset(new amrex::MLABecLaplacian(
+                    mesh.DistributionMap(0, mesh.finestLevel()), imask, isolve);
+                m_applier_scalar[i] = std::make_unique<amrex::MLABecLaplacian>(
                     mesh.Geom(0, mesh.finestLevel()),
                     mesh.boxArray(0, mesh.finestLevel()),
-                    mesh.DistributionMap(0, mesh.finestLevel()), imask,
-                    iapply));
+                    mesh.DistributionMap(0, mesh.finestLevel()), imask, iapply);
             }
 
             m_solver_scalar[i]->setMaxOrder(m_options.max_order);
@@ -364,7 +344,7 @@ public:
         const auto& density = m_density.state(fstate);
         const auto& viscosity = m_pdefields.mueff;
         Field const* mesh_detJ =
-            m_mesh_mapping ? &(repo.get_mesh_mapping_detJ(FieldLoc::CELL))
+            m_mesh_mapping ? &(repo.get_mesh_mapping_det_j(FieldLoc::CELL))
                            : nullptr;
         std::unique_ptr<ScratchField> rho_times_detJ =
             m_mesh_mapping ? repo.create_scratch_field(
@@ -452,7 +432,7 @@ public:
         const auto& geom = repo.mesh().Geom();
 
         Field const* mesh_detJ =
-            m_mesh_mapping ? &(repo.get_mesh_mapping_detJ(FieldLoc::CELL))
+            m_mesh_mapping ? &(repo.get_mesh_mapping_det_j(FieldLoc::CELL))
                            : nullptr;
         std::unique_ptr<ScratchField> rho_times_detJ =
             m_mesh_mapping ? repo.create_scratch_field(

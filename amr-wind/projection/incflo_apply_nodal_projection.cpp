@@ -139,7 +139,7 @@ void incflo::ApplyProjection(
     // projects (U^*-U^n + dt Gp) rather than (U^* + dt Gp)
 
     bool proj_for_small_dt =
-        (time > 0.0 and m_time.deltaT() < 0.1 * m_time.deltaTNm1());
+        (time > 0.0 and m_time.delta_t() < 0.1 * m_time.delta_t_nm1());
 
     if (m_verbose > 2) {
         if (proj_for_small_dt) {
@@ -164,7 +164,7 @@ void incflo::ApplyProjection(
             ? &(m_repo.get_mesh_mapping_field(amr_wind::FieldLoc::CELL))
             : nullptr;
     amr_wind::Field const* mesh_detJ =
-        mesh_mapping ? &(m_repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::CELL))
+        mesh_mapping ? &(m_repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::CELL))
                      : nullptr;
 
     // TODO: Mesh mapping doesn't work with immersed boundaries
@@ -505,7 +505,7 @@ void incflo::UpdateGradP(
             ? &(m_repo.get_mesh_mapping_field(amr_wind::FieldLoc::CELL))
             : nullptr;
     amr_wind::Field const* mesh_detJ =
-        mesh_mapping ? &(m_repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::CELL))
+        mesh_mapping ? &(m_repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::CELL))
                      : nullptr;
 
     // Create sigma while accounting for mesh mapping

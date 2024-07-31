@@ -137,7 +137,7 @@ void fixup_eta_on_domain_faces(
         mfi_info.SetDynamic(true);
     }
 #ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
+#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
     for (MFIter mfi(cc, mfi_info); mfi.isValid(); ++mfi) {
         Box const& bx = mfi.validbox();
@@ -214,11 +214,11 @@ void viscosity_to_uniform_space(
     const auto& mesh_fac_zf =
         repo.get_mesh_mapping_field(amr_wind::FieldLoc::ZFACE);
     const auto& mesh_detJ_xf =
-        repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::XFACE);
+        repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::XFACE);
     const auto& mesh_detJ_yf =
-        repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::YFACE);
+        repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::YFACE);
     const auto& mesh_detJ_zf =
-        repo.get_mesh_mapping_detJ(amr_wind::FieldLoc::ZFACE);
+        repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::ZFACE);
 
     // beta accounted for mesh mapping (x-face) = J/fac^2 * mu
     for (amrex::MFIter mfi(b[0]); mfi.isValid(); ++mfi) {

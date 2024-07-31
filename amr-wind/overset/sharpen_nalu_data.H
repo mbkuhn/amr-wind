@@ -1368,7 +1368,7 @@ void ReapplyModifiedGradP(CFDSim& sim)
     const bool is_pptb = mphase.perturb_p();
 
     // Get timestep
-    const amrex::Real dt = sim.time().deltaT();
+    const amrex::Real dt = sim.time().delta_t();
 
     // Get blanking for cells
     auto& iblank_cell = repo.get_int_field("iblank_cell");
@@ -1412,7 +1412,7 @@ void ReapplyOversetGradP(ScratchField& gp_copy, CFDSim& sim)
     auto nlevels = repo.num_active_levels();
 
     // Get timestep
-    const amrex::Real dt = sim.time().deltaT();
+    const amrex::Real dt = sim.time().delta_t();
 
     // Get blanking for cells
     auto& iblank_cell = repo.get_int_field("iblank_cell");

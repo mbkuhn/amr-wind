@@ -163,8 +163,8 @@ amrex::Vector<const amrex::MultiFab*> Field::vec_const_ptrs() const noexcept
 }
 
 void Field::fillpatch(
-    int lev,
-    amrex::Real time,
+    const int lev,
+    const amrex::Real time,
     amrex::MultiFab& mfab,
     const amrex::IntVect& nghost) noexcept
 {
@@ -177,8 +177,8 @@ void Field::fillpatch(
 }
 
 void Field::fillpatch_from_coarse(
-    int lev,
-    amrex::Real time,
+    const int lev,
+    const amrex::Real time,
     amrex::MultiFab& mfab,
     const amrex::IntVect& nghost) noexcept
 {
@@ -190,7 +190,7 @@ void Field::fillpatch_from_coarse(
     fop.fillpatch_from_coarse(lev, time, mfab, nghost, field_state());
 }
 
-void Field::fillpatch(amrex::Real time, amrex::IntVect ng) noexcept
+void Field::fillpatch(const amrex::Real time, const amrex::IntVect ng) noexcept
 {
     BL_PROFILE("amr-wind::Field::fillpatch");
     BL_ASSERT(m_info->m_fillpatch_op);
@@ -203,14 +203,14 @@ void Field::fillpatch(amrex::Real time, amrex::IntVect ng) noexcept
     }
 }
 
-void Field::fillpatch(amrex::Real time) noexcept
+void Field::fillpatch(const amrex::Real time) noexcept
 {
     fillpatch(time, num_grow());
 }
 
 void Field::fillpatch_sibling_fields(
-    amrex::Real time,
-    amrex::IntVect ng,
+    const amrex::Real time,
+    const amrex::IntVect ng,
     amrex::Array<Field*, AMREX_SPACEDIM>& fields) const noexcept
 {
     BL_PROFILE("amr-wind::Field::fillpatch array");
@@ -235,8 +235,8 @@ void Field::fillpatch_sibling_fields(
 }
 
 void Field::fillphysbc(
-    int lev,
-    amrex::Real time,
+    const int lev,
+    const amrex::Real time,
     amrex::MultiFab& mfab,
     const amrex::IntVect& ng) noexcept
 {
@@ -247,7 +247,7 @@ void Field::fillphysbc(
     fop.fillphysbc(lev, time, mfab, ng, field_state());
 }
 
-void Field::fillphysbc(amrex::Real time, amrex::IntVect ng) noexcept
+void Field::fillphysbc(const amrex::Real time, const amrex::IntVect ng) noexcept
 {
     BL_PROFILE("amr-wind::Field::fillphysbc");
     BL_ASSERT(m_info->m_fillpatch_op);
@@ -260,7 +260,7 @@ void Field::fillphysbc(amrex::Real time, amrex::IntVect ng) noexcept
     }
 }
 
-void Field::fillphysbc(amrex::Real time) noexcept
+void Field::fillphysbc(const amrex::Real time) noexcept
 {
     fillphysbc(time, num_grow());
 }
@@ -274,8 +274,8 @@ void Field::apply_bc_funcs(const FieldState rho_state) noexcept
 }
 
 void Field::set_inflow(
-    int lev,
-    amrex::Real time,
+    const int lev,
+    const amrex::Real time,
     amrex::MultiFab& mfab,
     const amrex::IntVect& ng) noexcept
 {
@@ -284,6 +284,18 @@ void Field::set_inflow(
     BL_ASSERT(m_info->bc_initialized() && m_info->m_bc_copied_to_device);
     auto& fop = *(m_info->m_fillpatch_op);
     fop.set_inflow(lev, time, mfab, ng, field_state());
+}
+
+void Field::set_inflow_sibling_fields(
+    const int lev,
+    const amrex::Real time,
+    const amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM> mfabs) noexcept
+{
+    BL_PROFILE("amr-wind::Field::set_inflow_sibling_fields");
+    BL_ASSERT(m_info->m_fillpatch_op);
+    BL_ASSERT(m_info->bc_initialized() && m_info->m_bc_copied_to_device);
+    auto& fop = *(m_info->m_fillpatch_op);
+    fop.set_inflow_sibling_fields(lev, time, mfabs);
 }
 
 void Field::advance_states() noexcept
@@ -387,26 +399,21 @@ void Field::to_uniform_space() noexcept
     }
 
     const auto& mesh_fac = m_repo.get_mesh_mapping_field(m_info->m_floc);
-    const auto& mesh_detJ = m_repo.get_mesh_mapping_detJ(m_info->m_floc);
+    const auto& mesh_detJ = m_repo.get_mesh_mapping_det_j(m_info->m_floc);
 
     // scale velocity to accommodate for mesh mapping -> U^bar = U * J/fac
     for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
-        for (amrex::MFIter mfi(mesh_fac(lev)); mfi.isValid(); ++mfi) {
-
-            amrex::Array4<amrex::Real> const& field = operator()(lev).array(
-                mfi);
-            amrex::Array4<amrex::Real const> const& fac =
-                mesh_fac(lev).const_array(mfi);
-            amrex::Array4<amrex::Real const> const& detJ =
-                mesh_detJ(lev).const_array(mfi);
-
-            amrex::ParallelFor(
-                mfi.growntilebox(), AMREX_SPACEDIM,
-                [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-                    field(i, j, k, n) *= detJ(i, j, k) / fac(i, j, k, n);
-                });
-        }
+        const auto& fac = mesh_fac(lev).const_arrays();
+        const auto& detJ = mesh_detJ(lev).const_arrays();
+        const auto& field = operator()(lev).arrays();
+        amrex::ParallelFor(
+            mesh_fac(lev), num_grow(), operator()(lev).nComp(),
+            [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k, int n) noexcept {
+                field[nbx](i, j, k, n) *=
+                    detJ[nbx](i, j, k) / fac[nbx](i, j, k, n);
+            });
     }
+    amrex::Gpu::synchronize();
     m_mesh_mapped = true;
 }
 
@@ -422,25 +429,22 @@ void Field::to_stretched_space() noexcept
     }
 
     const auto& mesh_fac = m_repo.get_mesh_mapping_field(m_info->m_floc);
-    const auto& mesh_detJ = m_repo.get_mesh_mapping_detJ(m_info->m_floc);
+    const auto& mesh_detJ = m_repo.get_mesh_mapping_det_j(m_info->m_floc);
 
     // scale field back to stretched mesh -> U = U^bar * fac/J
     for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
-        for (amrex::MFIter mfi(mesh_fac(lev)); mfi.isValid(); ++mfi) {
-            amrex::Array4<amrex::Real> const& field = operator()(lev).array(
-                mfi);
-            amrex::Array4<amrex::Real const> const& fac =
-                mesh_fac(lev).const_array(mfi);
-            amrex::Array4<amrex::Real const> const& detJ =
-                mesh_detJ(lev).const_array(mfi);
 
-            amrex::ParallelFor(
-                mfi.growntilebox(), AMREX_SPACEDIM,
-                [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-                    field(i, j, k, n) *= fac(i, j, k, n) / detJ(i, j, k);
-                });
-        }
+        const auto& fac = mesh_fac(lev).const_arrays();
+        const auto& detJ = mesh_detJ(lev).const_arrays();
+        const auto& field = operator()(lev).arrays();
+        amrex::ParallelFor(
+            mesh_fac(lev), num_grow(), operator()(lev).nComp(),
+            [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k, int n) noexcept {
+                field[nbx](i, j, k, n) *=
+                    fac[nbx](i, j, k, n) / detJ[nbx](i, j, k);
+            });
     }
+    amrex::Gpu::synchronize();
     m_mesh_mapped = false;
 }
 

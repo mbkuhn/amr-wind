@@ -11,7 +11,7 @@ namespace amr_wind::vs {
 template <typename T>
 struct VectorT
 {
-    T vv[3]{Traits::zero(), Traits::zero(), Traits::zero()};
+    amrex::GpuArray<T, 3> vv = {Traits::zero(), Traits::zero(), Traits::zero()};
 
     //! Number of components
     static constexpr int ncomp = 3;
@@ -85,6 +85,9 @@ struct VectorT
     //! Normalize the vector to unit vector
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>& normalize();
 
+    //! Sqrt of each component
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T> sqrt(const VectorT&);
+
     //! Return the unit vector parallel to this vector
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T> unit() const
     {
@@ -111,6 +114,9 @@ struct VectorT
 
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T> operator*=(const T val);
 
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T>
+    operator*=(const VectorT<T>& valvec);
+
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE VectorT<T> operator/=(const T val);
 
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE T& operator[](size_type pos) &
@@ -123,16 +129,19 @@ struct VectorT
         return vv[pos];
     }
 
-    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE T* data() noexcept { return vv; }
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE T* data() noexcept
+    {
+        return vv.data();
+    }
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE const T* data() const noexcept
     {
-        return vv;
+        return vv.data();
     }
 
-    iterator begin() noexcept { return vv; }
-    iterator end() noexcept { return vv + ncomp; }
-    const_iterator cbegin() const noexcept { return vv; }
-    const_iterator cend() const noexcept { return vv + ncomp; }
+    iterator begin() noexcept { return vv.begin(); }
+    iterator end() noexcept { return vv.end(); }
+    const_iterator cbegin() const noexcept { return vv.cbegin(); }
+    const_iterator cend() const noexcept { return vv.cend(); }
     size_type size() const noexcept { return ncomp; }
 };
 

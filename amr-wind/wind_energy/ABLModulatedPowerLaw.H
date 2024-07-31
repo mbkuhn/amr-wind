@@ -42,6 +42,8 @@ public:
         const Field& fld,
         amrex::MultiFab& mfab) const;
 
+    bool is_active() const { return m_activate_mpl; }
+
 private:
     const CFDSim& m_sim;
     const amr_wind::SimTime& m_time;
@@ -59,7 +61,7 @@ private:
     amrex::Real m_shearlayer_smear_thickness{30.0};
     amrex::Real m_wind_speed{8.0};
     amrex::Real m_wind_direction{270.0};
-    amrex::Vector<amrex::Real> m_uvec{{8.0, 0.0, 0.0}};
+    amrex::Vector<amrex::Real> m_uvec{8.0, 0.0, 0.0};
 
     amrex::Real m_start_time{0.0};
     amrex::Real m_stop_time{std::numeric_limits<amrex::Real>::max()};
@@ -76,7 +78,7 @@ private:
     amrex::Gpu::DeviceVector<amrex::Real> m_thht_d;
     amrex::Gpu::DeviceVector<amrex::Real> m_thvv_d;
 
-    amrex::Real m_deltaT{0.8};
+    amrex::Real m_delta_t{0.8};
     amrex::Real m_theta_cutoff_height{250.0};
     amrex::Real m_theta_gauss_mean{0.0};
     amrex::Real m_theta_gauss_var{1.0};

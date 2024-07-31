@@ -37,8 +37,8 @@ public:
     amrex::Real weight(const int iRadius) const;
 
 private:
-    const amrex::Real area;
-    const amrex::Real geometry_factor;
+    const amrex::Real m_area;
+    const amrex::Real m_geometry_factor;
 };
 
 vs::Vector compute_coplanar_vector(const vs::Vector& normal);
@@ -137,7 +137,7 @@ template <typename ActTrait>
 struct UpdateVelOp<
     ActTrait,
     ActSrcDisk,
-    std::enable_if_t<std::is_base_of<DiskType, ActTrait>::value>>
+    std::enable_if_t<std::is_base_of_v<DiskType, ActTrait>>>
 {
     void operator()(typename ActTrait::DataType& data)
     {
@@ -170,7 +170,7 @@ template <typename ActTrait>
 struct UpdatePosOp<
     ActTrait,
     ActSrcDisk,
-    std::enable_if_t<std::is_base_of<DiskType, ActTrait>::value>>
+    std::enable_if_t<std::is_base_of_v<DiskType, ActTrait>>>
 {
     void operator()(typename ActTrait::DataType& /*data*/) {}
 };

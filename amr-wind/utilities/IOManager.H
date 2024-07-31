@@ -91,6 +91,15 @@ public:
         return m_chk_fields;
     }
 
+    //! Name of the post processing directory
+    const std::string& post_processing_directory()
+    {
+        if (!amrex::UtilCreateDirectory(m_post_dir, 0755)) {
+            amrex::CreateDirectoryFailed(m_post_dir);
+        }
+        return m_post_dir;
+    }
+
 private:
     void write_header(
         const std::string& /*chkname*/,
@@ -106,7 +115,7 @@ private:
     //! Default output variables registered automatically in the code
     std::set<std::string> m_pltvars_default;
 
-    //! Default output integer variales registered automatically in the code
+    //! Default output integer variables registered automatically in the code
     std::set<std::string> m_int_pltvars_default;
 
     //! Variables for output in checkpoint/restart files
@@ -129,6 +138,9 @@ private:
 
     //! Prefix used for the restart file directories
     std::string m_chk_prefix{"chk"};
+
+    //! Name for the post_processing directory
+    std::string m_post_dir{"post_processing"};
 
     //! Restart file name
     std::string m_restart_file;

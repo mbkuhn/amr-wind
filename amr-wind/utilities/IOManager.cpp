@@ -42,6 +42,7 @@ void IOManager::initialize_io()
     pp.query("output_default_variables", m_output_default_vars);
     pp.query("plot_file", m_plt_prefix);
     pp.query("check_file", m_chk_prefix);
+    pp.query("post_processing_directory", m_post_dir);
     pp.query("restart_file", m_restart_file);
     pp.query("allow_missing_restart_fields", m_allow_missing_restart_fields);
 #ifdef AMR_WIND_USE_HDF5
@@ -114,6 +115,7 @@ void IOManager::initialize_io()
 
     if (!out_derived_vars.empty()) {
         m_derived_mgr->create(out_derived_vars);
+        m_derived_mgr->filter(outputs);
         m_plt_num_comp += m_derived_mgr->num_comp();
         m_derived_mgr->var_names(m_plt_var_names);
     }
@@ -325,9 +327,9 @@ void IOManager::write_header(
         << end_level - start_level << "\n"
         << time.time_index() << "\n"
         << time.new_time() << "\n"
-        << time.deltaT() << "\n"
-        << time.deltaTNm1() << "\n"
-        << time.deltaTNm2() << "\n";
+        << time.delta_t() << "\n"
+        << time.delta_t_nm1() << "\n"
+        << time.delta_t_nm2() << "\n";
 
     const auto geom = mesh.Geom(0);
     for (int i = 0; i < AMREX_SPACEDIM; ++i) {
