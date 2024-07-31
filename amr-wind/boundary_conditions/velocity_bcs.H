@@ -8,6 +8,8 @@
 #include "amr-wind/physics/udfs/LinearProfile.H"
 #include "amr-wind/physics/udfs/PowerLawProfile.H"
 #include "amr-wind/physics/udfs/BurggrafLid.H"
+#include "amr-wind/physics/udfs/Rankine.H"
+#include "amr-wind/physics/udfs/CustomVelocity.H"
 
 namespace amr_wind::vel_bc {
 
@@ -30,6 +32,14 @@ void register_inflow_vel_dirichlet(
         using InflowOp = BCOpCreator<udf::BurggrafLid, WallOp>;
         field.register_fill_patch_op<FieldFillPatchOps<InflowOp>>(
             mesh, time, InflowOp(field));
+    } else if (inflow_udf == "Rankine") {
+        using InflowOp = BCOpCreator<udf::Rankine, WallOp>;
+        field.register_fill_patch_op<FieldFillPatchOps<InflowOp>>(
+            mesh, time, InflowOp(field));
+    } else if (inflow_udf == "CustomVelocity") {
+        using InflowOp = BCOpCreator<udf::CustomVelocity, WallOp>;
+        field.register_fill_patch_op<FieldFillPatchOps<InflowOp>>(
+            mesh, time, InflowOp(field));
     } else {
         amrex::Abort("Velocity BC: Invalid dirichlet BC type = " + inflow_udf);
     }
@@ -39,7 +49,7 @@ void register_velocity_dirichlet(
     Field& field,
     const amrex::AmrCore& mesh,
     const SimTime& time,
-    std::pair<const std::string, const std::string> udfs)
+    const std::pair<const std::string, const std::string>& udfs)
 {
     const std::string inflow_udf = udfs.first;
     const std::string wall_udf = udfs.second;
