@@ -33,7 +33,7 @@ protected:
         }
     }
 
-    amrex::Real dx = 0.25;
+    amrex::Real m_dx = 0.25;
 };
 
 namespace {
@@ -47,23 +47,19 @@ void initialize_levelset(
     const int s = shape;
     const amrex::Real dx = deltax;
     amrex::ParallelFor(gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-        switch (s) {
-        case 0:
+        if (s == 0) {
             // Horizontal line
             lvs_arr(i, j, k) = 1.7 * dx;
-            break;
-        case 1:
+        } else if (s == 1) {
             // Parabola
             lvs_arr(i, j, k) =
                 1.9 * dx + 0.1 * dx * std::pow((amrex::Real)j - 0.3, 2);
-            break;
-        case 2:
+        } else if (s == 2) {
             // Cosine profile
             lvs_arr(i, j, k) =
                 2.0 * dx *
                 (1.0 +
                  std::cos(((amrex::Real)i - 1.2) / amr_wind::utils::pi()));
-            break;
         }
         // Subtract from local height
         lvs_arr(i, j, k) -= dx * ((amrex::Real)k + 0.5);
@@ -287,18 +283,18 @@ TEST_F(VOFToolTest, levelset_to_vof)
 
     amrex::Real error_total = 0.0;
     // profile 0: horizontal
-    init_lvs(0, dx, levelset);
-    error_total = levelset_to_vof_test_impl(dx, levelset);
+    init_lvs(0, m_dx, levelset);
+    error_total = levelset_to_vof_test_impl(m_dx, levelset);
     amrex::ParallelDescriptor::ReduceRealSum(error_total);
     EXPECT_NEAR(error_total, 0.0, 1e-12);
     //  profile 1: parabola
-    init_lvs(1, dx, levelset);
-    error_total = levelset_to_vof_test_impl(dx, levelset);
+    init_lvs(1, m_dx, levelset);
+    error_total = levelset_to_vof_test_impl(m_dx, levelset);
     amrex::ParallelDescriptor::ReduceRealSum(error_total);
     EXPECT_NEAR(error_total, 0.0, 0.011);
     // profile 2: cosine
-    init_lvs(2, dx, levelset);
-    error_total = levelset_to_vof_test_impl(dx, levelset);
+    init_lvs(2, m_dx, levelset);
+    error_total = levelset_to_vof_test_impl(m_dx, levelset);
     amrex::ParallelDescriptor::ReduceRealSum(error_total);
     EXPECT_NEAR(error_total, 0.0, 0.016);
 }

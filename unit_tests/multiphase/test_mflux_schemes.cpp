@@ -121,25 +121,18 @@ void get_output_minmod(
             amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
                 amrex::Real im_tmp = 0.0;
                 amrex::Real ip_tmp = 0.0;
-                switch (dir) {
-                case 0: {
+                if (dir == 0) {
                     Godunov_minmod_fpu_x(
                         i, j, k, 0, dt, dx[0], im_tmp, ip_tmp, farr, vel_mac,
                         pbc[0], dlo.x, dhi.x);
-                    break;
-                }
-                case 1: {
+                } else if (dir == 1) {
                     Godunov_minmod_fpu_y(
                         i, j, k, 0, dt, dx[1], im_tmp, ip_tmp, farr, vel_mac,
                         pbc[0], dlo.y, dhi.y);
-                    break;
-                }
-                case 2: {
+                } else if (dir == 2) {
                     Godunov_minmod_fpu_z(
                         i, j, k, 0, dt, dx[2], im_tmp, ip_tmp, farr, vel_mac,
                         pbc[0], dlo.z, dhi.z);
-                    break;
-                }
                 }
                 if (i == ii && j == jj && k == kk) {
                     dout_ptr[0] = im_tmp;
@@ -164,22 +157,22 @@ protected:
 
         {
             amrex::ParmParse pp("amr");
-            amrex::Vector<int> ncell{{nx, nx, nx}};
+            amrex::Vector<int> ncell{{m_nx, m_nx, m_nx}};
             pp.add("max_level", 0);
-            pp.add("max_grid_size", nx);
+            pp.add("max_grid_size", m_nx);
             pp.addarr("n_cell", ncell);
         }
         {
             amrex::ParmParse pp("geometry");
-            pp.addarr("prob_lo", problo);
-            pp.addarr("prob_hi", probhi);
+            pp.addarr("prob_lo", m_problo);
+            pp.addarr("prob_hi", m_probhi);
         }
     }
     // Parameters
-    const amrex::Vector<amrex::Real> problo{{0.0, -1.0, 0.0}};
-    const amrex::Vector<amrex::Real> probhi{{2.0, +1.0, 2.0}};
-    const int nx = 5;
-    const amrex::Real tol = 1e-12;
+    const amrex::Vector<amrex::Real> m_problo{{0.0, -1.0, 0.0}};
+    const amrex::Vector<amrex::Real> m_probhi{{2.0, +1.0, 2.0}};
+    const int m_nx = 5;
+    const amrex::Real m_tol = 1e-12;
 };
 
 TEST_F(MFluxSchemeTest, upwind)
@@ -199,13 +192,13 @@ TEST_F(MFluxSchemeTest, upwind)
     amrex::Real sc_cst = 1.5;
     init_scalar_uniform(sc, sc_cst);
     // Compute interpolated quantities at each face
-    int i = nx / 2;
-    int j = nx / 2;
-    int k = nx / 2;
+    int i = m_nx / 2;
+    int j = m_nx / 2;
+    int k = m_nx / 2;
     get_output_upwind(sc, i, j, k, Im, Ip);
     // Check values
-    EXPECT_NEAR(sc_cst, Im, tol);
-    EXPECT_NEAR(sc_cst, Ip, tol);
+    EXPECT_NEAR(sc_cst, Im, m_tol);
+    EXPECT_NEAR(sc_cst, Ip, m_tol);
 
     /* -- Increasing in slope: x, y, z -- */
     for (int n = 0; n < 3; ++n) {
@@ -214,8 +207,8 @@ TEST_F(MFluxSchemeTest, upwind)
         // Compute interpolated quantities at each face
         get_output_upwind(sc, i, j, k, Im, Ip);
         // Check values
-        EXPECT_NEAR(i * i, Im, tol);
-        EXPECT_NEAR(i * i, Ip, tol);
+        EXPECT_NEAR(i * i, Im, m_tol);
+        EXPECT_NEAR(i * i, Ip, m_tol);
     }
 
     /* -- Change in sign of slope: x, y, z -- */
@@ -225,8 +218,8 @@ TEST_F(MFluxSchemeTest, upwind)
         // Compute interpolated quantities at each face
         get_output_upwind(sc, i, j, k, Im, Ip);
         // Check values
-        EXPECT_NEAR(0, Im, tol);
-        EXPECT_NEAR(0, Ip, tol);
+        EXPECT_NEAR(0, Im, m_tol);
+        EXPECT_NEAR(0, Ip, m_tol);
     }
 }
 
@@ -260,13 +253,13 @@ TEST_F(MFluxSchemeTest, minmod)
     amrex::Real sc_cst = 1.5;
     init_scalar_uniform(sc, sc_cst);
     // Compute interpolated quantities at each face
-    int i = nx / 2;
-    int j = nx / 2;
-    int k = nx / 2;
+    int i = m_nx / 2;
+    int j = m_nx / 2;
+    int k = m_nx / 2;
     get_output_minmod(sc, umac, dt, i, j, k, 0, Im, Ip);
     // Check values
-    EXPECT_NEAR(sc_cst, Im, tol);
-    EXPECT_NEAR(sc_cst, Ip, tol);
+    EXPECT_NEAR(sc_cst, Im, m_tol);
+    EXPECT_NEAR(sc_cst, Ip, m_tol);
 
     /* -- Increasing in slope: x, y, z -- */
     // Values for checking
@@ -279,20 +272,20 @@ TEST_F(MFluxSchemeTest, minmod)
     init_scalar_increasing(sc, 0);
     // Compute interpolated quantities at each face
     get_output_minmod(sc, umac, dt, i, j, k, 0, Im, Ip);
-    EXPECT_NEAR(i * i, Im, tol);
-    EXPECT_NEAR(val_p, Ip, tol);
+    EXPECT_NEAR(i * i, Im, m_tol);
+    EXPECT_NEAR(val_p, Ip, m_tol);
     // Set up field (y)
     init_scalar_increasing(sc, 1);
     // Compute interpolated quantities at each face
     get_output_minmod(sc, vmac, dt, i, j, k, 1, Im, Ip);
-    EXPECT_NEAR(i * i, Im, tol);
-    EXPECT_NEAR(val_p, Ip, tol);
+    EXPECT_NEAR(i * i, Im, m_tol);
+    EXPECT_NEAR(val_p, Ip, m_tol);
     // Set up field (z)
     init_scalar_increasing(sc, 2);
     // Compute interpolated quantities at each face
     get_output_minmod(sc, wmac, dt, i, j, k, 2, Im, Ip);
-    EXPECT_NEAR(val_n, Im, tol);
-    EXPECT_NEAR(i * i, Ip, tol);
+    EXPECT_NEAR(val_n, Im, m_tol);
+    EXPECT_NEAR(i * i, Ip, m_tol);
 
     /* -- Change in sign of slope -- */
     // Set up field (x)
@@ -300,8 +293,8 @@ TEST_F(MFluxSchemeTest, minmod)
     // Compute interpolated quantities at each face
     get_output_minmod(sc, umac, dt, i, j, k, 0, Im, Ip);
     // Check values
-    EXPECT_NEAR(0, Im, tol);
-    EXPECT_NEAR(0, Ip, tol);
+    EXPECT_NEAR(0, Im, m_tol);
+    EXPECT_NEAR(0, Ip, m_tol);
 }
 
 TEST_F(MFluxSchemeTest, minmodbdy)
@@ -338,8 +331,8 @@ TEST_F(MFluxSchemeTest, minmodbdy)
     {
         // Look at lo boundary behavior
         int i = 0;
-        int j = nx / 2;
-        int k = nx / 2;
+        int j = m_nx / 2;
+        int k = m_nx / 2;
         // Values for checking
         auto ir = (amrex::Real)i;
         amrex::Real dx = sc.repo().mesh().Geom(0).CellSizeArray()[0];
@@ -349,14 +342,14 @@ TEST_F(MFluxSchemeTest, minmodbdy)
         init_scalar_increasing(sc, 0);
         // Compute interpolated quantities at each face
         get_output_minmod(sc, umac, dt, i, j, k, 0, Im, Ip);
-        EXPECT_NEAR(val_n, Im, tol);
-        EXPECT_NEAR(ir * ir, Ip, tol);
+        EXPECT_NEAR(val_n, Im, m_tol);
+        EXPECT_NEAR(ir * ir, Ip, m_tol);
     }
     {
         // Look at hi boundary behavior
-        int i = nx / 2;
-        int j = nx - 1;
-        int k = nx / 2;
+        int i = m_nx / 2;
+        int j = m_nx - 1;
+        int k = m_nx / 2;
         // Values for checking
         auto ir = (amrex::Real)j;
         amrex::Real dx = sc.repo().mesh().Geom(0).CellSizeArray()[0];
@@ -366,8 +359,8 @@ TEST_F(MFluxSchemeTest, minmodbdy)
         init_scalar_increasing(sc, 1);
         // Compute interpolated quantities at each face
         get_output_minmod(sc, vmac, dt, i, j, k, 1, Im, Ip);
-        EXPECT_NEAR(ir * ir, Im, tol);
-        EXPECT_NEAR(val_p, Ip, tol);
+        EXPECT_NEAR(ir * ir, Im, m_tol);
+        EXPECT_NEAR(val_p, Ip, m_tol);
     }
 }
 

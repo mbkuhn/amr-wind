@@ -29,19 +29,7 @@ void initialize_volume_fractions(
                     }
                 }
             } else {
-                int icheck = 0;
-                // Left half is liquid, right half is gas
-                switch (dir) {
-                case 0:
-                    icheck = i;
-                    break;
-                case 1:
-                    icheck = j;
-                    break;
-                case 2:
-                    icheck = k;
-                    break;
-                }
+                const int icheck = (dir == 0) ? i : ((dir == 1) ? j : k);
                 if (2 * icheck + 1 == nx) {
                     vof_arr(i, j, k) = 0.5;
                 } else {
@@ -79,42 +67,26 @@ void initialize_adv_velocities(
     });
 }
 
-void check_accuracy(int dir, int nx, amrex::Real tol, amr_wind::Field& vof)
+void get_accuracy(
+    amr_wind::ScratchField& err_fld, int dir, int nx, amr_wind::Field& vof)
 {
     run_algorithm(vof, [&](const int lev, const amrex::MFIter& mfi) {
+        auto err_arr = err_fld(lev).array(mfi);
         const auto& vof_arr = vof(lev).const_array(mfi);
-
-        // Loop manually through cells to check values
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < nx; ++j) {
-                for (int k = 0; k < nx; ++k) {
-
-                    int icheck = 0;
-                    switch (dir) {
-                    case 0:
-                        icheck = i;
-                        break;
-                    case 1:
-                        icheck = j;
-                        break;
-                    case 2:
-                        icheck = k;
-                        break;
-                    }
-                    // Check if current solution matches initial
-                    // solution
-                    if (2 * icheck + 1 == nx) {
-                        EXPECT_NEAR(vof_arr(i, j, k), 0.5, tol);
-                    } else {
-                        if (2 * icheck + 1 < nx) {
-                            EXPECT_NEAR(vof_arr(i, j, k), 1.0, tol);
-                        } else {
-                            EXPECT_NEAR(vof_arr(i, j, k), 0.0, tol);
-                        }
-                    }
+        const auto& bx = mfi.validbox();
+        amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+            const int icheck = (dir == 0) ? i : ((dir == 1) ? j : k);
+            // Check if current solution matches initial solution
+            if (2 * icheck + 1 == nx) {
+                err_arr(i, j, k) = std::abs(vof_arr(i, j, k) - 0.5);
+            } else {
+                if (2 * icheck + 1 < nx) {
+                    err_arr(i, j, k) = std::abs(vof_arr(i, j, k) - 1.0);
+                } else {
+                    err_arr(i, j, k) = std::abs(vof_arr(i, j, k) - 0.0);
                 }
             }
-        }
+        });
     });
 }
 } // namespace
@@ -154,7 +126,7 @@ protected:
         }
         {
             amrex::ParmParse pp("time");
-            pp.add("fixed_dt", dt);
+            pp.add("fixed_dt", m_dt);
         }
         {
             amrex::ParmParse pp("VOF");
@@ -170,11 +142,11 @@ protected:
         const amrex::Real ft_time = 1.0 / m_vel;
 
         // Set timestep according to input
-        dt = ft_time / ((amrex::Real)m_nx) * CFL;
+        m_dt = ft_time / ((amrex::Real)m_nx) * CFL;
         // Round to nearest integer timesteps
-        int niter = (int)round(ft_time / dt);
+        int niter = (int)round(ft_time / m_dt);
         // Modify dt to fit niter
-        dt = ft_time / ((amrex::Real)niter);
+        m_dt = ft_time / ((amrex::Real)niter);
 
         populate_parameters();
         {
@@ -264,14 +236,29 @@ protected:
         }
 
         if (dir >= 0) {
-            check_accuracy(dir, m_nx, tol, vof);
+            // Create scratch field to store error
+            auto error_ptr = repo.create_scratch_field(1, 0);
+            auto& error_fld = *error_ptr;
+            // Initialize at 0
+            for (int lev = 0; lev < repo.num_active_levels(); ++lev) {
+                error_fld(lev).setVal(0.0);
+            }
+
+            get_accuracy(error_fld, dir, m_nx, vof);
+
+            // Check error in each mfab
+            constexpr amrex::Real vofsol_check = 0.0;
+            for (int lev = 0; lev < repo.num_active_levels(); ++lev) {
+                // Sum error and check
+                EXPECT_NEAR(error_fld(lev).max(0), vofsol_check, tol);
+            }
         }
     }
     const amrex::Real m_rho1 = 1000.0;
     const amrex::Real m_rho2 = 1.0;
     const amrex::Real m_vel = 5.0;
     const int m_nx = 3;
-    amrex::Real dt = 0.0; // will be set according to CFL
+    amrex::Real m_dt = 0.0; // will be set according to CFL
 };
 
 TEST_F(VOFConsTest, X) { testing_coorddir(0, 0.45); }

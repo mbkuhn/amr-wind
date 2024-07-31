@@ -24,7 +24,7 @@ void init_vel_z(amr_wind::Field& vel, const amrex::Real w_const)
 
 void init_ref_p(
     amr_wind::Field& ref_p,
-    const amrex::Vector<amrex::Geometry> geom,
+    const amrex::Vector<amrex::Geometry>& geom,
     const amrex::Real F_g,
     const amrex::Real rho_0)
 {
@@ -180,6 +180,11 @@ TEST_F(ProjPerturb, full_p_perturb)
 {
     // High-level setup
     populate_parameters();
+    {
+        amrex::ParmParse pp("ICNS");
+        pp.add("reconstruct_true_pressure", (bool)true);
+    }
+
     // Test with gravity term omitted, then added as reference pressure
     ptest_kernel(m_rho_0, 0.0, -m_Fg, (m_nx + 1) * (m_ny + 1), m_Fg);
 }
