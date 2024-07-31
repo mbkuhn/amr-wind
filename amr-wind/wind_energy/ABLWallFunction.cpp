@@ -16,6 +16,11 @@ namespace amr_wind {
 ABLWallFunction::ABLWallFunction(const CFDSim& sim)
     : m_sim(sim), m_mesh(sim.mesh())
 {
+    {
+        amrex::ParmParse pp("incflo");
+        pp.queryarr("gravity", m_gravity);
+    }
+
     amrex::ParmParse pp("ABL");
 
     pp.query("kappa", m_mo.kappa);
@@ -25,7 +30,6 @@ ABLWallFunction::ABLWallFunction(const CFDSim& sim)
     pp.query("mo_beta_h", m_mo.beta_h);
     pp.query("surface_roughness_z0", m_mo.z0);
     pp.query("normal_direction", m_direction);
-    pp.queryarr("gravity", m_gravity);
     AMREX_ASSERT((0 <= m_direction) && (m_direction < AMREX_SPACEDIM));
 
     if (pp.contains("log_law_height")) {
@@ -85,8 +89,8 @@ ABLWallFunction::ABLWallFunction(const CFDSim& sim)
         }
     }
 
-    m_mo.alg_type =
-        m_tempflux ? MOData::HEAT_FLUX : MOData::SURFACE_TEMPERATURE;
+    m_mo.alg_type = m_tempflux ? MOData::ThetaCalcType::HEAT_FLUX
+                               : MOData::ThetaCalcType::SURFACE_TEMPERATURE;
     m_mo.gravity = utils::vec_mag(m_gravity.data());
 }
 
@@ -94,8 +98,7 @@ void ABLWallFunction::init_log_law_height()
 {
     if (m_use_fch) {
         const auto& geom = m_mesh.Geom(0);
-        m_mo.zref =
-            (geom.ProbLo(m_direction) + 0.5 * geom.CellSize(m_direction));
+        m_mo.zref = 0.5 * geom.CellSize(m_direction);
     }
 }
 
@@ -124,12 +127,17 @@ void ABLWallFunction::update_umean(
         m_mo.vel_mean[0] = vpa.line_average_interpolated(m_mo.zref, 0);
         m_mo.vel_mean[1] = vpa.line_average_interpolated(m_mo.zref, 1);
         m_mo.vmag_mean = vpa.line_hvelmag_average_interpolated(m_mo.zref);
-        m_mo.Su_mean = vpa.line_Su_average_interpolated(m_mo.zref);
-        m_mo.Sv_mean = vpa.line_Sv_average_interpolated(m_mo.zref);
+        m_mo.Su_mean = vpa.line_su_average_interpolated(m_mo.zref);
+        m_mo.Sv_mean = vpa.line_sv_average_interpolated(m_mo.zref);
         m_mo.theta_mean = tpa.line_average_interpolated(m_mo.zref, 0);
     }
 
     m_mo.update_fluxes();
+}
+
+void ABLWallFunction::update_tflux(const amrex::Real tflux)
+{
+    m_mo.surf_temp_flux = tflux;
 }
 
 ABLVelWallFunc::ABLVelWallFunc(
@@ -166,8 +174,10 @@ void ABLVelWallFunc::wall_model(
 
     amrex::Orientation zlo(amrex::Direction::z, amrex::Orientation::low);
     amrex::Orientation zhi(amrex::Direction::z, amrex::Orientation::high);
-    if ((velocity.bc_type()[zlo] != BC::wall_model) &&
-        (velocity.bc_type()[zhi] != BC::wall_model)) {
+    if (velocity.bc_type()[zhi] == BC::wall_model) {
+        amrex::Abort("ABL wall models are not applicable to a zhi BC");
+    }
+    if (velocity.bc_type()[zlo] != BC::wall_model) {
         return;
     }
 
@@ -177,7 +187,7 @@ void ABLVelWallFunc::wall_model(
         amrex::MFItInfo mfi_info{};
 
         const auto& rho_lev = density(lev);
-        auto& vold_lev = velocity.state(FieldState::Old)(lev);
+        const auto& vold_lev = velocity.state(FieldState::Old)(lev);
         auto& vel_lev = velocity(lev);
         const auto& eta_lev = viscosity(lev);
 
@@ -189,10 +199,10 @@ void ABLVelWallFunc::wall_model(
 #endif
         for (amrex::MFIter mfi(vel_lev, mfi_info); mfi.isValid(); ++mfi) {
             const auto& bx = mfi.validbox();
-            auto varr = vel_lev.array(mfi);
-            auto vold_arr = vold_lev.array(mfi);
-            auto den = rho_lev.array(mfi);
-            auto eta = eta_lev.array(mfi);
+            const auto& varr = vel_lev.array(mfi);
+            const auto& vold_arr = vold_lev.const_array(mfi);
+            const auto& den = rho_lev.const_array(mfi);
+            const auto& eta = eta_lev.const_array(mfi);
 
             if (bx.smallEnd(idim) == domain.smallEnd(idim) &&
                 velocity.bc_type()[zlo] == BC::wall_model) {
@@ -212,27 +222,6 @@ void ABLVelWallFunc::wall_model(
                             tau.calc_vel_x(uu, wspd) * den(i, j, k) / mu;
                         varr(i, j, k - 1, 1) =
                             tau.calc_vel_y(vv, wspd) * den(i, j, k) / mu;
-                    });
-            }
-
-            if (bx.bigEnd(idim) == domain.bigEnd(idim) &&
-                velocity.bc_type()[zhi] == BC::wall_model) {
-                amrex::ParallelFor(
-                    amrex::bdryHi(bx, idim),
-                    [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                        const amrex::Real mu = eta(i, j, k - 1);
-                        const amrex::Real uu = vold_arr(i, j, k - 1, 0);
-                        const amrex::Real vv = vold_arr(i, j, k - 1, 1);
-                        const amrex::Real wspd = std::sqrt(uu * uu + vv * vv);
-
-                        // Dirichlet BC
-                        varr(i, j, k, 2) = 0.0;
-
-                        // Shear stress BC
-                        varr(i, j, k, 0) =
-                            -tau.calc_vel_x(uu, wspd) * den(i, j, k - 1) / mu;
-                        varr(i, j, k, 1) =
-                            -tau.calc_vel_y(vv, wspd) * den(i, j, k - 1) / mu;
                     });
             }
         }
@@ -291,9 +280,10 @@ void ABLTempWallFunc::wall_model(
     // Return early if the user hasn't requested a wall model BC for temperature
     amrex::Orientation zlo(amrex::Direction::z, amrex::Orientation::low);
     amrex::Orientation zhi(amrex::Direction::z, amrex::Orientation::high);
-
-    if ((temperature.bc_type()[zlo] != BC::wall_model) &&
-        (temperature.bc_type()[zhi] != BC::wall_model)) {
+    if (temperature.bc_type()[zhi] == BC::wall_model) {
+        amrex::Abort("ABL wall models are not applicable to a zhi BC");
+    }
+    if (temperature.bc_type()[zlo] != BC::wall_model) {
         return;
     }
 
@@ -309,8 +299,8 @@ void ABLTempWallFunc::wall_model(
         amrex::MFItInfo mfi_info{};
 
         const auto& rho_lev = density(lev);
-        auto& vold_lev = velocity.state(FieldState::Old)(lev);
-        auto& told_lev = temperature.state(FieldState::Old)(lev);
+        const auto& vold_lev = velocity.state(FieldState::Old)(lev);
+        const auto& told_lev = temperature.state(FieldState::Old)(lev);
         auto& theta = temperature(lev);
         const auto& eta_lev = alpha(lev);
 
@@ -322,11 +312,11 @@ void ABLTempWallFunc::wall_model(
 #endif
         for (amrex::MFIter mfi(theta, mfi_info); mfi.isValid(); ++mfi) {
             const auto& bx = mfi.validbox();
-            auto vold_arr = vold_lev.array(mfi);
-            auto told_arr = told_lev.array(mfi);
-            auto tarr = theta.array(mfi);
-            auto den = rho_lev.array(mfi);
-            auto eta = eta_lev.array(mfi);
+            const auto& vold_arr = vold_lev.const_array(mfi);
+            const auto& told_arr = told_lev.const_array(mfi);
+            const auto& tarr = theta.array(mfi);
+            const auto& den = rho_lev.const_array(mfi);
+            const auto& eta = eta_lev.const_array(mfi);
 
             if (bx.smallEnd(idim) == domain.smallEnd(idim) &&
                 temperature.bc_type()[zlo] == BC::wall_model) {
@@ -341,22 +331,6 @@ void ABLTempWallFunc::wall_model(
                         tarr(i, j, k - 1) = den(i, j, k) *
                                             tau.calc_theta(wspd, theta2) /
                                             alphaT;
-                    });
-            }
-
-            if (bx.bigEnd(idim) == domain.bigEnd(idim) &&
-                temperature.bc_type()[zhi] == BC::wall_model) {
-
-                amrex::ParallelFor(
-                    amrex::bdryHi(bx, idim),
-                    [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                        const amrex::Real alphaT = eta(i, j, k - 1);
-                        const amrex::Real uu = vold_arr(i, j, k - 1, 0);
-                        const amrex::Real vv = vold_arr(i, j, k - 1, 1);
-                        const amrex::Real wspd = std::sqrt(uu * uu + vv * vv);
-                        const amrex::Real theta2 = told_arr(i, j, k - 1);
-                        tarr(i, j, k) = -den(i, j, k - 1) *
-                                        tau.calc_theta(wspd, theta2) / alphaT;
                     });
             }
         }

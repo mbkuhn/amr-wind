@@ -37,6 +37,8 @@ public:
     void update_umean(
         const VelPlaneAveragingFine& vpa, const FieldPlaneAveragingFine& tpa);
 
+    void update_tflux(const amrex::Real tflux);
+
 private:
     const CFDSim& m_sim;
 
@@ -48,7 +50,7 @@ private:
     int m_direction{2};   ///< Direction normal to wall
     bool m_use_fch{true}; ///< Use first cell height?
 
-    amrex::Vector<amrex::Real> m_gravity{{0.0, 0.0, -9.81}};
+    amrex::Vector<amrex::Real> m_gravity{0.0, 0.0, -9.81};
 
     bool m_tempflux{true};
     amrex::Real m_surf_temp_rate{0.0};
@@ -57,7 +59,7 @@ private:
 
     bool m_inflow_outflow{false};
     amrex::Real m_wf_vmag{0.0};
-    amrex::Array<amrex::Real, 2> m_wf_vel{{0.0, 0.0}};
+    amrex::Array<amrex::Real, 2> m_wf_vel{0.0, 0.0};
     amrex::Real m_wf_theta{300.0};
 };
 

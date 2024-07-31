@@ -40,7 +40,7 @@ public:
     FPlaneAveragingFine(
         const FType& field_in, const amr_wind::SimTime& time, int axis_in);
 
-    ~FPlaneAveragingFine() = default;
+    virtual ~FPlaneAveragingFine() = default;
 
     virtual void operator()();
 
@@ -116,7 +116,7 @@ class VelPlaneAveragingFine : public FieldPlaneAveragingFine
 public:
     VelPlaneAveragingFine(CFDSim& sim, int axis_in);
 
-    ~VelPlaneAveragingFine() = default;
+    ~VelPlaneAveragingFine() override = default;
 
     void operator()() override;
 
@@ -142,10 +142,10 @@ public: // public for GPU
     amrex::Real line_hvelmag_average_interpolated(amrex::Real x) const;
     /** evaluate line haverage at specific location for horizontal velocity
      * magnitude times x-velocity */
-    amrex::Real line_Su_average_interpolated(amrex::Real x) const;
+    amrex::Real line_su_average_interpolated(amrex::Real x) const;
     /** evaluate line haverage at specific location for horizontal velocity
      * magnitude times y-velocity */
-    amrex::Real line_Sv_average_interpolated(amrex::Real x) const;
+    amrex::Real line_sv_average_interpolated(amrex::Real x) const;
 };
 
 } // namespace amr_wind

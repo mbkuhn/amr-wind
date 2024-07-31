@@ -2,7 +2,7 @@ time.stop_time               =   10     # Max (simulated) time to evolve
 time.max_step                =   10    # Max number of time steps
 
 time.initial_dt       =   0.05        # Use this constant dt if > 0
-time.cfl              =   0.5         # CFL factor
+time.cfl              =   0.95         # CFL factor
 time.plot_interval            =  10       # Steps between plot files
 
 io.output_default_variables = 0
@@ -11,7 +11,6 @@ io.derived_outputs = "components(velocity,0,2)" "components(gp,0,2)"
 
 incflo.use_godunov = 1
 incflo.godunov_type="weno"
-incflo.diffusion_type = 2
 transport.model = TwoPhaseTransport
 transport.laminar_prandtl = 0.7
 transport.turbulent_prandtl = 0.3333

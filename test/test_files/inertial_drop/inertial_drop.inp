@@ -8,7 +8,7 @@ time.max_step                =   10
 #         TIME STEP COMPUTATION         #
 #.......................................#
 time.initial_dt       =   0.05        # Use this constant dt if > 0
-time.cfl              =   0.45         # CFL factor
+time.cfl              =   0.95         # CFL factor
 
 #¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨#
 #            INPUT AND OUTPUT           #
@@ -23,7 +23,6 @@ io.outputs = density velocity vof
 #               PHYSICS                 #
 #.......................................#
 incflo.use_godunov = 1
-incflo.diffusion_type = 2
 incflo.godunov_type = "weno"
 transport.model = TwoPhaseTransport
 transport.viscosity_fluid1=0.0
