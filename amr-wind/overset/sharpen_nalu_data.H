@@ -123,7 +123,7 @@ void populate_normal_vector(
                 }*/
                 // Calculate normal
                 amrex::Real mx, my, mz, mmag;
-                multiphase::youngs_fd_normal_neumann(
+                multiphase::youngs_finite_difference_normal_neumann(
                     i, j, k, ibdy, jbdy, kbdy, vof, mx, my, mz);
                 // Normalize normal
                 mmag = std::sqrt(mx * mx + my * my + mz * mz + 1e-20);

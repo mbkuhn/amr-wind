@@ -517,7 +517,8 @@ void MultiPhase::levelset2vof()
             amrex::ParallelFor(
                 vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                     amrex::Real mx, my, mz;
-                    multiphase::youngs_fd_normal(i, j, k, phi, mx, my, mz);
+                    multiphase::youngs_finite_difference_normal(
+                        i, j, k, phi, mx, my, mz);
                     mx = std::abs(mx / 32.);
                     my = std::abs(my / 32.);
                     mz = std::abs(mz / 32.);
@@ -604,7 +605,7 @@ void MultiPhase::levelset2vof(IntField& iblank_cell, ScratchField& vof_scr)
                         }
                     }
                     amrex::Real mx, my, mz;
-                    multiphase::youngs_fd_normal_neumann(
+                    multiphase::youngs_finite_difference_normal_neumann(
                         i, j, k, ibdy, jbdy, kbdy, phi, mx, my, mz);
                     /*multiphase::youngs_fd_normal_extrap(
                         i, j, k, phi, iblank, mx, my, mz);*/
