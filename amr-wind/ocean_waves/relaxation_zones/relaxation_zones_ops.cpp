@@ -32,8 +32,8 @@ void read_inputs(
         pp.query("relax_zone_out_length", wdata.beach_length);
     } else {
         pp.query("numerical_beach_length", wdata.beach_length);
-        pp.query("numerical_beach_lfactor", wdata.beach_length_factor);
         wdata.has_beach = true;
+        pp.query("numerical_beach_length_factor", wdata.beach_length_factor);
         pp.query("initialize_wave_field", wdata.init_wave_field);
     }
 
@@ -118,57 +118,46 @@ void apply_relaxation_zones(CFDSim& sim, const RelaxZonesBaseData& wdata)
                     // Generation region
                     if (x <= problo[0] + gen_length) {
                         const amrex::Real Gamma =
-                            utils::Gamma_generate(x - problo[0], gen_length);
+                            utils::gamma_generate(x - problo[0], gen_length);
                         const amrex::Real vf =
                             (1. - Gamma) * target_volfrac(i, j, k) * rampf +
                             Gamma * volfrac(i, j, k);
                         volfrac(i, j, k) = (vf > 1. - 1.e-10) ? 1.0 : vf;
                         // Force liquid velocity, update according to mom.
-                        if (target_volfrac(i, j, k) > 1e-12) {
-                            amrex::Real rho_ = rho1 * volfrac(i, j, k) +
-                                               rho2 * (1.0 - volfrac(i, j, k));
-                            vel(i, j, k, 0) = (rho1 * volfrac(i, j, k) *
-                                                   (rampf * (1. - Gamma) *
-                                                        target_vel(i, j, k, 0) +
-                                                    Gamma * vel(i, j, k, 0)) +
-                                               rho2 * (1. - volfrac(i, j, k)) *
-                                                   vel(i, j, k, 0)) /
-                                              rho_;
-                            vel(i, j, k, 1) = (rho1 * volfrac(i, j, k) *
-                                                   (rampf * (1. - Gamma) *
-                                                        target_vel(i, j, k, 1) +
-                                                    Gamma * vel(i, j, k, 1)) +
-                                               rho2 * (1. - volfrac(i, j, k)) *
-                                                   vel(i, j, k, 1)) /
-                                              rho_;
-                            vel(i, j, k, 2) = (rho1 * volfrac(i, j, k) *
-                                                   (rampf * (1. - Gamma) *
-                                                        target_vel(i, j, k, 2) +
-                                                    Gamma * vel(i, j, k, 2)) +
-                                               rho2 * (1. - volfrac(i, j, k)) *
-                                                   vel(i, j, k, 2)) /
-                                              rho_;
-                        }
+                        amrex::Real rho_ = rho1 * volfrac(i, j, k) +
+                                           rho2 * (1.0 - volfrac(i, j, k));
+                        vel(i, j, k, 0) =
+                            (rho1 * volfrac(i, j, k) *
+                                 (rampf * (1. - Gamma) *
+                                      target_vel(i, j, k, 0) +
+                                  Gamma * vel(i, j, k, 0)) +
+                             rho2 * (1. - volfrac(i, j, k)) * vel(i, j, k, 0)) /
+                            rho_;
+                        vel(i, j, k, 1) =
+                            (rho1 * volfrac(i, j, k) *
+                                 (rampf * (1. - Gamma) *
+                                      target_vel(i, j, k, 1) +
+                                  Gamma * vel(i, j, k, 1)) +
+                             rho2 * (1. - volfrac(i, j, k)) * vel(i, j, k, 1)) /
+                            rho_;
+                        vel(i, j, k, 2) =
+                            (rho1 * volfrac(i, j, k) *
+                                 (rampf * (1. - Gamma) *
+                                      target_vel(i, j, k, 2) +
+                                  Gamma * vel(i, j, k, 2)) +
+                             rho2 * (1. - volfrac(i, j, k)) * vel(i, j, k, 2)) /
+                            rho_;
                     }
                     // Numerical beach (sponge layer)
                     if (x + beach_length >= probhi[0]) {
-                        const amrex::Real Gamma = utils::Gamma_absorb(
+                        const amrex::Real Gamma = utils::gamma_absorb(
                             x - (probhi[0] - beach_length), beach_length,
                             beach_length_factor);
                         if (has_beach) {
-                            // Only modify volume fraction if both phases
-                            // present
-                            if (volfrac(i, j, k) > 1e-12 &&
-                                volfrac(i, j, k) < 1. - 1e-12) {
-                                volfrac(i, j, k) =
-                                    (1.0 - Gamma) * utils::free_surface_to_vof(
-                                                        zsl, z, dx[2]) +
-                                    Gamma * volfrac(i, j, k);
-                                volfrac(i, j, k) =
-                                    (volfrac(i, j, k) > 1. - 1.e-10)
-                                        ? 1.0
-                                        : volfrac(i, j, k);
-                            }
+                            volfrac(i, j, k) =
+                                (1.0 - Gamma) *
+                                    utils::free_surface_to_vof(zsl, z, dx[2]) +
+                                Gamma * volfrac(i, j, k);
                             // Conserve momentum when density changes
                             amrex::Real rho_ = rho1 * volfrac(i, j, k) +
                                                rho2 * (1.0 - volfrac(i, j, k));

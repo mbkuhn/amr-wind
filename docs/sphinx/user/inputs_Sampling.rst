@@ -17,6 +17,15 @@ actual keyword is determined by the labels provided to
    Specify the output frequency (in timesteps) when data sampling is performed
    and output to disk.
 
+.. input_param:: sampling.output_delay
+
+   **type:** Integer, optional, default = 0
+
+   Specify the output delay (in timesteps) when data sampling and output will begin
+   during a simulation. E.g., a delay of 100 will wait until the 100th timestep to 
+   check if, according to the output frequency, sampling should be performed and 
+   output to disk.
+
 .. input_param:: sampling.output_format
 
    **type:** String, optional, default = "native"
@@ -57,6 +66,12 @@ actual keyword is determined by the labels provided to
    **type:** List of one or more strings
 
    List of CFD simulation fields to sample and output
+
+.. input_param:: sampling.derived_fields
+
+   **type:** List of one or more strings
+
+   List of CFD simulation derived fields to sample and output (e.g. mag_vorticity)
 
 The individual sampling types are documented below
 
@@ -130,4 +145,16 @@ Example::
 The first line of the file contains the total number of probes for this set.
 This is followed by the coordinates (three real numbers), one line per probe.
 
+Sampling on a volume
+`````````````````````
 
+The ``VolumeSampler`` samples a 3D volume that starts at ``lo`` and
+extends to ``hi``. The resolution in all directions is specified by
+``num_points``.
+
+Example::
+
+  sampling.volume1.type        = VolumeSampler
+  sampling.volume1.hi        = 3.0 1.0 0.5
+  sampling.volume1.lo      = 0.0 0.0 -0.5
+  sampling.volume1.num_points  = 30 10 10
