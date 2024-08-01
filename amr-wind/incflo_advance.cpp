@@ -205,13 +205,6 @@ void incflo::ApplyPredictor(bool incremental_projection)
             UpdateGradP(
                 (density_old).vec_const_ptrs(), m_time.current_time(),
                 m_time.delta_t());
-            /*amr_wind::overset::CopyGradP(
-                *gp_copy, gp, sim().repo().num_active_levels());
-            UpdateGradP(
-                (density_old).vec_const_ptrs(), m_time.current_time(),
-                m_time.delta_t());
-            amr_wind::overset::ReplaceUnMaskedGradP(
-                gp, *gp_copy, iblank_cell, iblank_node);*/
         }
         // Sharpen nalu fields
         amr_wind::overset::SharpenNaluDataDiscrete(
@@ -234,17 +227,6 @@ void incflo::ApplyPredictor(bool incremental_projection)
             UpdateGradP(
                 (density_old).vec_const_ptrs(), m_time.current_time(),
                 m_time.delta_t());
-            /*amr_wind::overset::ReplaceUnMaskedGradP(
-                gp, *gp_copy, iblank_cell, iblank_node);*/
-        }
-        if (m_sharpen_hsp_guess) {
-            // Use sharpened density to replace gradp with hydrostatic gradp
-            amr_wind::overset::ReplaceMaskedGradP(sim());
-        }
-        if (m_sharpen_replace_gp) {
-            // Copy current pressure gradient for use later
-            amr_wind::overset::CopyGradP(
-                *gp_copy, gp, sim().repo().num_active_levels());
         }
     }
 
@@ -451,19 +433,6 @@ void incflo::ApplyPredictor(bool incremental_projection)
     ApplyProjection(
         (density_new).vec_const_ptrs(), new_time, m_time.delta_t(),
         incremental_projection);
-
-    if (sim().has_overset()) {
-        if (m_sharpen_hsp_replace) {
-            // Replace effect of solved gradp with effect of new hydrostatic
-            // gradp within overset regions
-            amr_wind::overset::ReapplyModifiedGradP(sim());
-        }
-        if (m_sharpen_replace_gp) {
-            // Replace effect of solved gradp with effect of initial (n)
-            // sharpened gradp within overset regions
-            amr_wind::overset::ReapplyOversetGradP(*gp_copy, sim());
-        }
-    }
 
     if (m_verbose > 2) {
         PrintMaxVelLocations("after nodal projection");
