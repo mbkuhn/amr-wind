@@ -244,8 +244,8 @@ void SharpenNaluDataDiscrete(
                 // Update error at specified interval of steps
                 const amrex::Real err_lev =
                     amr_wind::overset_ops::measure_convergence(
-                        (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev)) /
-                    pvscale;
+                        (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev)); /* /
+                    pvscale; */
                 err = amrex::max(err, err_lev);
             }
         }
@@ -264,9 +264,10 @@ void SharpenNaluDataDiscrete(
             // Compare vof fluxes to vof in source cells
             auto dx = (geom[lev]).CellSizeArray();
             // Convergence tolerance determines what size of fluxes matter
-            const amrex::Real ptfac_lev = calculate_pseudo_dt_flux(
-                (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), vof(lev),
-                iblank_cell(lev), dx, tol);
+            const amrex::Real ptfac_lev =
+                amr_wind::overset_ops::calculate_pseudo_dt_flux(
+                    (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), vof(lev),
+                    tol);
             ptfac = amrex::min(ptfac, ptfac_lev);
         }
         amrex::ParallelDescriptor::ReduceRealMin(ptfac);

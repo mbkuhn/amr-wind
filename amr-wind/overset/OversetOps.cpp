@@ -6,6 +6,7 @@
 #include "amr-wind/core/MLMGOptions.H"
 #include "amr-wind/projection/nodal_projection_ops.H"
 #include <hydro_NodalProjector.H>
+#include "amr-wind/overset/sharpen_nalu_data.H"
 
 namespace amr_wind {
 
@@ -66,10 +67,10 @@ void OversetOps::pre_advance_work()
 
     if (m_vof_exists) {
         // Reinitialize fields
-        sharpen_nalu_data();
-        /* amr_wind::overset::SharpenNaluDataDiscrete(
+        // sharpen_nalu_data();
+        amr_wind::overset::SharpenNaluDataDiscrete(
             *m_sim_ptr, m_n_iterations, m_convg_tol, m_calc_convg_interval,
-            m_relative_length_scale, m_upw_margin, m_target_cutoff, true);*/
+            m_relative_length_scale, m_upw_margin, m_target_cutoff, true);
         if (m_use_hydrostatic_gradp) {
             // Use hydrostatic pressure gradient
             set_hydrostatic_gradp();

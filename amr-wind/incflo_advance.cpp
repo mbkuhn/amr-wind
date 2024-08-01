@@ -8,7 +8,6 @@
 #include "amr-wind/utilities/console_io.H"
 #include "amr-wind/utilities/PostProcessing.H"
 #include "AMReX_MultiFabUtil.H"
-#include "amr-wind/overset/sharpen_nalu_data.H"
 
 using namespace amrex;
 
@@ -195,6 +194,7 @@ void incflo::ApplyPredictor(bool incremental_projection)
     auto& gp = density().repo().get_field("gp");
     auto& pressure = density().repo().get_field("p");
 
+    /*
     // Process data for overset multiphase
     if (sim().has_overset()) {
         // auto& iblank_cell = density().repo().get_int_field("iblank_cell");
@@ -225,6 +225,7 @@ void incflo::ApplyPredictor(bool incremental_projection)
             m_ovst_ops.update_gradp();
         }
     }
+    */
 
     // *************************************************************************************
     // Compute viscosity / diffusive coefficients
