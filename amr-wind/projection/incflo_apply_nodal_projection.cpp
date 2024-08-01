@@ -4,7 +4,6 @@
 #include "amr-wind/core/MLMGOptions.H"
 #include "amr-wind/utilities/console_io.H"
 #include "amr-wind/core/field_ops.H"
-#include "amr-wind/wind_energy/ABL.H"
 #include "amr-wind/projection/nodal_projection_ops.H"
 
 using namespace amrex;
@@ -169,6 +168,8 @@ void incflo::ApplyProjection(
         mesh_mapping
             ? &(m_repo.get_mesh_mapping_det_j(amr_wind::FieldLoc::CELL))
             : nullptr;
+    const auto* ref_density =
+        is_anelastic ? &(m_repo.get_field("reference_density")) : nullptr;
 
     // TODO: Mesh mapping doesn't work with immersed boundaries
     // Do the pre pressure correction work -- this applies to IB only
@@ -188,7 +189,7 @@ void incflo::ApplyProjection(
         for (int lev = 0; lev <= finest_level; lev++) {
 
 #ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
+#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
             for (MFIter mfi(velocity(lev), TilingIfNotGPU()); mfi.isValid();
                  ++mfi) {
@@ -223,7 +224,7 @@ void incflo::ApplyProjection(
         // Create the Surface tension forcing term (Cell-centered)
         for (int lev = 0; lev <= finest_level; ++lev) {
 #ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
+#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
             {
                 amrex::MultiFab surf_tens_force;
@@ -279,7 +280,7 @@ void incflo::ApplyProjection(
             sigma[lev].define(
                 grids[lev], dmap[lev], ncomp, 0, MFInfo(), Factory(lev));
 #ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
+#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
             for (MFIter mfi(sigma[lev], TilingIfNotGPU()); mfi.isValid();
                  ++mfi) {
@@ -292,6 +293,9 @@ void incflo::ApplyProjection(
                 amrex::Array4<amrex::Real const> detJ =
                     mesh_mapping ? ((*mesh_detJ)(lev).const_array(mfi))
                                  : amrex::Array4<amrex::Real const>();
+                const auto& ref_rho = is_anelastic
+                                          ? (*ref_density)(lev).const_array(mfi)
+                                          : amrex::Array4<amrex::Real>();
 
                 amrex::ParallelFor(
                     bx, ncomp,
@@ -302,6 +306,9 @@ void incflo::ApplyProjection(
                             mesh_mapping ? (detJ(i, j, k)) : 1.0;
                         sig(i, j, k, n) = std::pow(fac_cc, -2.) * det_j *
                                           scaling_factor / rho(i, j, k);
+                        if (is_anelastic) {
+                            sig(i, j, k, n) *= ref_rho(i, j, k);
+                        }
                     });
             }
         }
@@ -322,6 +329,14 @@ void incflo::ApplyProjection(
         if (!proj_for_small_dt and !incremental) {
             amr_wind::nodal_projection::set_inflow_velocity(
                 m_sim.physics_manager(), velocity, lev, time, *vel[lev], 1);
+        }
+    }
+
+    if (is_anelastic) {
+        for (int lev = 0; lev <= finest_level; ++lev) {
+            amrex::Multiply(
+                velocity(lev), (*ref_density)(lev), 0, 0, density[lev]->nComp(),
+                0);
         }
     }
 
@@ -360,12 +375,22 @@ void incflo::ApplyProjection(
         }
         nodal_projector->setCustomRHS(div_vel_rhs->vec_const_ptrs());
     }
-    if ((sim().has_overset() && m_disable_onodal)) {
+
+    // Determine if nodal projection should be coupled for overset
+    bool disable_ovst_nodal = false;
+    if (sim().has_overset()) {
+        amrex::ParmParse pp("Overset");
+        pp.query("disable_coupled_nodal_proj", disable_ovst_nodal);
+    }
+
+    if ((sim().has_overset() && disable_ovst_nodal)) {
+        // Similar approach to immersed boundary (ib) above
         auto& iblank = m_repo.get_int_field("iblank_cell");
         for (int lev = 0; lev <= finest_level; lev++) {
             amr_wind::nodal_projection::apply_dirichlet_vel(
                 velocity(lev), iblank(lev));
         }
+        amrex::Gpu::synchronize();
         auto div_vel_rhs =
             sim().repo().create_scratch_field(1, 0, amr_wind::FieldLoc::NODE);
         nodal_projector->computeRHS(div_vel_rhs->vec_ptrs(), vel, {}, {});
@@ -381,7 +406,7 @@ void incflo::ApplyProjection(
     }
 
     // Setup masking for overset simulations
-    if (sim().has_overset() && !m_disable_onodal) {
+    if (sim().has_overset() && !disable_ovst_nodal) {
         auto& linop = nodal_projector->getLinOp();
         const auto& imask_node = repo().get_int_field("mask_node");
         for (int lev = 0; lev <= finest_level; ++lev) {
@@ -389,7 +414,7 @@ void incflo::ApplyProjection(
         }
     }
 
-    if (m_sim.has_overset() && !m_disable_onodal) {
+    if (m_sim.has_overset() && !disable_ovst_nodal) {
         auto phif = m_repo.create_scratch_field(1, 1, amr_wind::FieldLoc::NODE);
         if (incremental) {
             for (int lev = 0; lev <= finestLevel(); ++lev) {
@@ -404,8 +429,17 @@ void incflo::ApplyProjection(
     } else {
         nodal_projector->project(options.rel_tol, options.abs_tol);
     }
+
     amr_wind::io::print_mlmg_info(
         "Nodal_projection", nodal_projector->getMLMG());
+
+    if (is_anelastic) {
+        for (int lev = 0; lev <= finest_level; ++lev) {
+            amrex::Divide(
+                velocity(lev), (*ref_density)(lev), 0, 0, density[lev]->nComp(),
+                0);
+        }
+    }
 
     // scale U^* back to -> U = fac/J * U^bar
     if (mesh_mapping) {
@@ -427,7 +461,7 @@ void incflo::ApplyProjection(
     for (int lev = 0; lev <= finest_level; lev++) {
 
 #ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
+#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
         for (MFIter mfi(grad_p(lev), TilingIfNotGPU()); mfi.isValid(); ++mfi) {
             Box const& tbx = mfi.tilebox();
@@ -461,11 +495,11 @@ void incflo::ApplyProjection(
     }
 
     // Determine if reference pressure should be added back
-    if (m_repo.field_exists("reference_pressure") && time != 0.0) {
+    if (m_reconstruct_true_pressure && time != 0.0) {
         const auto& p0 = m_repo.get_field("reference_pressure");
         for (int lev = 0; lev <= finest_level; lev++) {
             amrex::MultiFab::Add(
-                pressure(lev), p0(lev), 0, 0, 1, pressure.num_grow()[0]);
+                pressure(lev), p0(lev), 0, 0, 1, p0.num_grow()[0]);
         }
     }
 
@@ -474,7 +508,7 @@ void incflo::ApplyProjection(
             grad_p(lev + 1), grad_p(lev), 0, AMREX_SPACEDIM, refRatio(lev));
     }
 
-    if (sim().has_overset() && m_disable_onodal) {
+    if (sim().has_overset() && disable_ovst_nodal) {
         auto& iblank = m_repo.get_int_field("iblank_cell");
         for (int lev = 0; lev <= finest_level; lev++) {
             amr_wind::nodal_projection::apply_dirichlet_vel(

@@ -42,7 +42,7 @@ MultiPhase::MultiPhase(CFDSim& sim)
         m_levelset = &(levelset_eqn.fields().field);
     } else {
         amrex::Print() << "Please select an interface capturing model between "
-                          "VOF and Levelset: defaultin to VOF "
+                          "VOF and Levelset: defaulting to VOF "
                        << std::endl;
         m_interface_capturing_method = amr_wind::InterfaceCapturingMethod::VOF;
         auto& vof_eqn = sim.pde_manager().register_transport_pde("VOF");
@@ -56,22 +56,25 @@ MultiPhase::MultiPhase(CFDSim& sim)
 
     // Address pressure approach through input values
     amrex::ParmParse pp_icns("ICNS");
-    pp_icns.query("use_perturb_pressure", is_pptb);
-    pp_icns.query("reconstruct_true_pressure", is_ptrue);
+    pp_icns.query("use_perturb_pressure", m_use_perturb_pressure);
+    pp_icns.query("reconstruct_true_pressure", m_reconstruct_true_pressure);
     // Declare fields
-    if (is_pptb) {
+    if (m_use_perturb_pressure) {
         m_sim.repo().declare_field("reference_density", 1, 0, 1);
-        if (is_ptrue) {
+        if (m_reconstruct_true_pressure) {
             m_sim.repo().declare_nd_field(
                 "reference_pressure", 1, (*m_vof).num_grow()[0], 1);
         }
     }
 
-    pp_multiphase.query("initialize_pressure", m_init_p);
-
+    // Warn if density specified in single-phase sense
+    amrex::ParmParse pp_incflo("incflo");
+    if (pp_incflo.contains("density")) {
+        amrex::Print() << "WARNING: single-phase density has been specified "
+                          "but will not be used! (MultiPhase physics)\n";
+    }
     // Always populate gravity
-    amrex::ParmParse pp("incflo");
-    pp.queryarr("gravity", m_gravity);
+    pp_incflo.queryarr("gravity", m_gravity);
 }
 
 InterfaceCapturingMethod MultiPhase::interface_capturing_method()
@@ -84,97 +87,66 @@ void MultiPhase::post_init_actions()
 
     const auto& io_mgr = m_sim.io_manager();
     if (!io_mgr.is_restart()) {
-        // Different steps depending on how case is initialized, solved
-        switch (m_interface_init_method) {
-        case InterfaceCapturingMethod::LS:
-            switch (m_interface_capturing_method) {
-            case InterfaceCapturingMethod::VOF:
-                levelset2vof();
-                set_density_via_vof();
-                break;
-            case InterfaceCapturingMethod::LS:
-                set_density_via_levelset();
-                break;
-            };
-            break;
-
+        switch (m_interface_capturing_method) {
         case InterfaceCapturingMethod::VOF:
-            switch (m_interface_capturing_method) {
-            case InterfaceCapturingMethod::VOF:
-                // VOF has been specified directly, just update density
-                set_density_via_vof();
-                break;
-            case InterfaceCapturingMethod::LS:
-                amrex::Abort(
-                    "Initialization failed. Case cannot be initialized with "
-                    "VOF and then simulated with Levelset");
-                break;
-            };
+            levelset2vof();
+            set_density_via_vof();
+            break;
+        case InterfaceCapturingMethod::LS:
+            set_density_via_levelset();
             break;
         };
     }
 
-    q0 = momentum_sum(0);
-    q1 = momentum_sum(1);
-    q2 = momentum_sum(2);
-    sumvof0 = volume_fraction_sum();
+    m_q0 = momentum_sum(0);
+    m_q1 = momentum_sum(1);
+    m_q2 = momentum_sum(2);
+    m_sumvof0 = volume_fraction_sum();
 
     // Check if water level is specified (from case definition)
     amrex::ParmParse pp_multiphase("MultiPhase");
     bool is_wlev = pp_multiphase.contains("water_level");
     // Abort if no water level specified
-    if (is_pptb && !is_wlev) {
+    if (m_use_perturb_pressure && !is_wlev) {
         amrex::Abort(
             "Perturbational pressure requested, but physics case does not "
             "specify water level.");
     }
+    if (is_wlev) {
+        pp_multiphase.get("water_level", m_water_level0);
+    }
     // Make rho0 field if both are specified
-    if (is_pptb && is_wlev) {
-        pp_multiphase.get("water_level", water_level0);
+    if (m_use_perturb_pressure && is_wlev) {
         // Initialize rho0 field for perturbational density, pressure
         auto& rho0 = m_sim.repo().get_field("reference_density");
         hydrostatic::define_rho0(
-            rho0, m_rho1, m_rho2, water_level0, m_sim.mesh().Geom());
+            rho0, m_rho1, m_rho2, m_water_level0, m_sim.mesh().Geom());
 
         // Make p0 field if requested
-        if (is_ptrue) {
+        if (m_reconstruct_true_pressure) {
             // Initialize p0 field for reconstructing p
             auto& p0 = m_sim.repo().get_field("reference_pressure");
             hydrostatic::define_p0(
-                p0, m_rho1, m_rho2, water_level0, m_gravity[2],
+                p0, m_rho1, m_rho2, m_water_level0, m_gravity[2],
                 m_sim.mesh().Geom());
         }
-    }
-
-    if (m_init_p && !is_wlev) {
-        amrex::Abort(
-            "Initialize pressure requested, but physics case does not "
-            "specify water level.");
-    }
-    // Make p field if both are specified
-    if (m_init_p && is_wlev) {
-        pp_multiphase.get("water_level", water_level0);
-        // Initialize rho0 field for perturbational density, pressure
-        auto& p = m_sim.repo().get_field("p");
-        hydrostatic::define_p0(
-            p, m_rho1, m_rho2, water_level0, m_gravity[2], m_sim.mesh().Geom());
     }
 }
 
 void MultiPhase::post_regrid_actions()
 {
     // Reinitialize rho0 if needed
-    if (is_pptb) {
+    if (m_use_perturb_pressure) {
         auto& rho0 = m_sim.repo().declare_field("reference_density", 1, 0, 1);
         hydrostatic::define_rho0(
-            rho0, m_rho1, m_rho2, water_level0, m_sim.mesh().Geom());
+            rho0, m_rho1, m_rho2, m_water_level0, m_sim.mesh().Geom());
         // Reinitialize p0 if needed
-        if (is_ptrue) {
+        if (m_reconstruct_true_pressure) {
             auto ng = (*m_vof).num_grow();
             auto& p0 = m_sim.repo().declare_nd_field(
                 "reference_pressure", 1, ng[0], 1);
             hydrostatic::define_p0(
-                p0, m_rho1, m_rho2, water_level0, m_gravity[2],
+                p0, m_rho1, m_rho2, m_water_level0, m_gravity[2],
                 m_sim.mesh().Geom());
         }
     }
@@ -200,19 +172,18 @@ void MultiPhase::post_advance_work()
 {
     switch (m_interface_capturing_method) {
     case InterfaceCapturingMethod::VOF:
-        // Compute and print the total volume fraction, momenta, and
-        // differences
+        // Compute and print the total volume fraction, momenta, and differences
         if (m_verbose > 0) {
             m_total_volfrac = volume_fraction_sum();
-            amrex::Real mom_x = momentum_sum(0) - q0;
-            amrex::Real mom_y = momentum_sum(1) - q1;
-            amrex::Real mom_z = momentum_sum(2) - q2;
+            amrex::Real mom_x = momentum_sum(0) - m_q0;
+            amrex::Real mom_y = momentum_sum(1) - m_q1;
+            amrex::Real mom_z = momentum_sum(2) - m_q2;
             const auto& geom = m_sim.mesh().Geom();
             const amrex::Real total_vol = geom[0].ProbDomain().volume();
             amrex::Print() << "Volume of Fluid diagnostics:" << std::endl;
             amrex::Print() << "   Water Volume Fractions Sum, Difference : "
                            << m_total_volfrac << " "
-                           << m_total_volfrac - sumvof0 << std::endl;
+                           << m_total_volfrac - m_sumvof0 << std::endl;
             amrex::Print() << "   Air Volume Fractions Sum : "
                            << total_vol - m_total_volfrac << std::endl;
             amrex::Print() << "   Total Momentum Difference (x, y, z) : "
@@ -243,7 +214,7 @@ amrex::Real MultiPhase::volume_fraction_sum()
         if (lev < nlevels - 1) {
             level_mask = makeFineMask(
                 mesh.boxArray(lev), mesh.DistributionMap(lev),
-                mesh.boxArray(lev + 1), amrex::IntVect(2), 1, 0);
+                mesh.boxArray(lev + 1), mesh.refRatio(lev), 1, 0);
         } else {
             level_mask.define(
                 mesh.boxArray(lev), mesh.DistributionMap(lev), 1, 0,
@@ -290,7 +261,7 @@ amrex::Real MultiPhase::momentum_sum(int n)
         if (lev < nlevels - 1) {
             level_mask = makeFineMask(
                 mesh.boxArray(lev), mesh.DistributionMap(lev),
-                mesh.boxArray(lev + 1), amrex::IntVect(2), 1, 0);
+                mesh.boxArray(lev + 1), mesh.refRatio(lev), 1, 0);
         } else {
             level_mask.define(
                 mesh.boxArray(lev), mesh.DistributionMap(lev), 1, 0,
@@ -528,13 +499,9 @@ void MultiPhase::levelset2vof()
                     mz = mz / normL1;
                     // Make sure that alpha is negative far away from the
                     // interface
-                    amrex::Real alpha;
-                    if (phi(i, j, k) < -eps) {
-                        alpha = -1.0;
-                    } else {
-                        alpha = phi(i, j, k) / normL1;
-                        alpha = alpha + 0.5;
-                    }
+                    const amrex::Real alpha = (phi(i, j, k) < -eps)
+                                                  ? -1.0
+                                                  : phi(i, j, k) / normL1 + 0.5;
                     if (alpha >= 1.0) {
                         volfrac(i, j, k) = 1.0;
                     } else if (alpha <= 0.0) {
@@ -550,7 +517,8 @@ void MultiPhase::levelset2vof()
     (*m_vof).fillpatch(0.0);
 }
 
-void MultiPhase::levelset2vof(IntField& iblank_cell, ScratchField& vof_scr)
+void MultiPhase::levelset2vof(
+    const IntField& iblank_cell, ScratchField& vof_scr)
 {
     const int nlevels = m_sim.repo().num_active_levels();
     (*m_levelset).fillpatch(m_sim.time().current_time());

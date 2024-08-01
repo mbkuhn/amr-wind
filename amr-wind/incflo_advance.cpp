@@ -325,10 +325,6 @@ void incflo::ApplyPredictor(bool incremental_projection)
         }
     }
 
-    if (m_verbose > 2) {
-        PrintMaxVelLocations("before pre advection");
-    }
-
     // Extrapolate and apply MAC projection for advection velocities
     icns().pre_advection_actions(amr_wind::FieldState::Old);
 

@@ -53,19 +53,9 @@ public:
 
     void levelset2vof();
 
-    void levelset2vof(IntField& iblank_cell, ScratchField& vof_scr);
+    void levelset2vof(const IntField& iblank_cell, ScratchField& vof_scr);
 
     void favre_filtering();
-
-    void set_intf_init_method_to_vof()
-    {
-        m_interface_init_method = InterfaceCapturingMethod::VOF;
-    }
-
-    void set_intf_init_method_to_ls()
-    {
-        m_interface_init_method = InterfaceCapturingMethod::LS;
-    };
 
     amrex::Real volume_fraction_sum();
 
@@ -77,11 +67,16 @@ public:
 
     amrex::Real rho2() const { return m_rho2; }
 
-    amrex::Real water_level() const { return water_level0; }
-
     amrex::Vector<amrex::Real> gravity() const { return m_gravity; }
 
-    bool perturb_p() const { return is_pptb; }
+    amrex::Real water_level() const { return m_water_level0; }
+
+    bool perturb_pressure() const { return m_use_perturb_pressure; }
+
+    bool reconstruct_true_pressure() const
+    {
+        return m_reconstruct_true_pressure;
+    }
 
 private:
     const CFDSim& m_sim;
@@ -103,16 +98,14 @@ private:
 
     // Bools according to ICNS settings
     // Turning on perturbational density and pressure
-    bool is_pptb{false};
+    bool m_use_perturb_pressure{false};
     // Reconstructing true pressure field at end of timestep
-    bool is_ptrue{false};
-
-    bool m_init_p{false};
+    bool m_reconstruct_true_pressure{false};
 
     // Info to create rho0
-    amrex::Real water_level0{0.0};
+    amrex::Real m_water_level0{0.0};
     // Info to reconstruct true pressure
-    amrex::Vector<amrex::Real> m_gravity{{0.0, 0.0, -9.81}};
+    amrex::Vector<amrex::Real> m_gravity{0.0, 0.0, -9.81};
 
     bool m_interface_smoothing{false};
 
@@ -123,19 +116,16 @@ private:
     InterfaceCapturingMethod m_interface_capturing_method =
         InterfaceCapturingMethod::VOF;
 
-    InterfaceCapturingMethod m_interface_init_method =
-        InterfaceCapturingMethod::LS;
-
     // Verbose flag for multiphase
     int m_verbose{0};
 
     // sum of volume fractions (for vof only)
     amrex::Real m_total_volfrac{0.0};
 
-    amrex::Real q0{0.0};
-    amrex::Real q1{0.0};
-    amrex::Real q2{0.0};
-    amrex::Real sumvof0{0.0};
+    amrex::Real m_q0{0.0};
+    amrex::Real m_q1{0.0};
+    amrex::Real m_q2{0.0};
+    amrex::Real m_sumvof0{0.0};
 };
 
 } // namespace amr_wind

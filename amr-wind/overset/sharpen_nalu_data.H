@@ -1045,7 +1045,7 @@ void ReplaceMaskedGradP(CFDSim& sim)
     // Get gravity
     auto& mphase = sim.physics_manager().get<MultiPhase>();
     const amrex::Real grav_z = mphase.gravity()[2];
-    const bool is_pptb = mphase.perturb_p();
+    const bool is_pptb = mphase.perturb_pressure();
 
     // Get blanking for cells
     auto& iblank_cell = repo.get_int_field("iblank_cell");
@@ -1077,7 +1077,7 @@ void ReapplyModifiedGradP(CFDSim& sim)
     // Get gravity
     auto& mphase = sim.physics_manager().get<MultiPhase>();
     const amrex::Real grav_z = mphase.gravity()[2];
-    const bool is_pptb = mphase.perturb_p();
+    const bool is_pptb = mphase.perturb_pressure();
 
     // Get timestep
     const amrex::Real dt = sim.time().delta_t();
