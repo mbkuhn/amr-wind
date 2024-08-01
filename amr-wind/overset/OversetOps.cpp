@@ -67,6 +67,9 @@ void OversetOps::pre_advance_work()
     if (m_vof_exists) {
         // Reinitialize fields
         sharpen_nalu_data();
+        /* amr_wind::overset::SharpenNaluDataDiscrete(
+            *m_sim_ptr, m_n_iterations, m_convg_tol, m_calc_convg_interval,
+            m_relative_length_scale, m_upw_margin, m_target_cutoff, true);*/
         if (m_use_hydrostatic_gradp) {
             // Use hydrostatic pressure gradient
             set_hydrostatic_gradp();

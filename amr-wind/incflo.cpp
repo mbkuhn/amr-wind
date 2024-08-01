@@ -107,11 +107,6 @@ void incflo::init_amr_wind_modules()
     for (auto& eqn : scalar_eqns()) {
         eqn->initialize();
     }
-    // Initialize pressure gradient
-    // (for cases with initial pressure field)
-    UpdateGradP(
-        sim().repo().get_field("density").vec_const_ptrs(),
-        m_time.current_time(), m_time.delta_t());
 
     m_sim.pde_manager().fillpatch_state_fields(m_time.current_time());
     m_sim.post_manager().post_init_actions();

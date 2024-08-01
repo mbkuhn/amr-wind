@@ -202,9 +202,7 @@ void incflo::ApplyPredictor(bool incremental_projection)
         if (m_sharpen_pressure) {
             // Start with an up-to-date pressure gradient field that will be
             // used in the sharpening process
-            UpdateGradP(
-                (density_old).vec_const_ptrs(), m_time.current_time(),
-                m_time.delta_t());
+            m_ovst_ops.update_gradp();
         }
         // Sharpen nalu fields
         amr_wind::overset::SharpenNaluDataDiscrete(
@@ -224,9 +222,7 @@ void incflo::ApplyPredictor(bool incremental_projection)
                 }
             }
             // Recalculate pressure gradient with incoming sharpened p field
-            UpdateGradP(
-                (density_old).vec_const_ptrs(), m_time.current_time(),
-                m_time.delta_t());
+            m_ovst_ops.update_gradp();
         }
     }
 
