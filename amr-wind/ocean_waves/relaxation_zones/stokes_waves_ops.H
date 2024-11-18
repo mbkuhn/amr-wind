@@ -82,6 +82,7 @@ struct InitDataOp<StokesWaves>
         // cppcheck-suppress constVariableReference
         auto& velocity = sim.repo().get_field("velocity");
         const auto& problo = geom.ProbLoArray();
+        const auto& probhi = geom.ProbHiArray();
         const auto& dx = geom.CellSizeArray();
         for (amrex::MFIter mfi(m_levelset(level)); mfi.isValid(); ++mfi) {
 
@@ -97,6 +98,8 @@ struct InitDataOp<StokesWaves>
             const auto& gbx3 = mfi.growntilebox(3);
 
             if (wdata.init_wave_field) {
+                const auto has_beach = wdata.has_beach;
+                const auto beach_length = wdata.beach_length;
                 amrex::ParallelFor(
                     gbx3, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                         const amrex::Real x = problo[0] + (i + 0.5) * dx[0];
@@ -108,13 +111,24 @@ struct InitDataOp<StokesWaves>
                             order, wave_length, water_depth, wave_height,
                             zero_sea_level, g, x, z, 0.0, eta, u_w, v_w, w_w);
 
-                        phi(i, j, k) = eta - z;
-                        const amrex::Real cell_length_2D =
-                            std::sqrt(dx[0] * dx[0] + dx[2] * dx[2]);
-                        if (phi(i, j, k) + cell_length_2D >= 0) {
-                            vel(i, j, k, 0) = u_w;
-                            vel(i, j, k, 1) = v_w;
-                            vel(i, j, k, 2) = w_w;
+                        if (!has_beach || x + beach_length >= probhi[0]) {
+                            phi(i, j, k) = eta - z;
+                            const amrex::Real cell_length_2D =
+                                std::sqrt(dx[0] * dx[0] + dx[2] * dx[2]);
+                            if (phi(i, j, k) + cell_length_2D >= 0) {
+                                vel(i, j, k, 0) = u_w;
+                                vel(i, j, k, 1) = v_w;
+                                vel(i, j, k, 2) = w_w;
+                            }
+                        } else {
+                            phi(i, j, k) = zero_sea_level - z;
+                            const amrex::Real cell_length_2D =
+                                std::sqrt(dx[0] * dx[0] + dx[2] * dx[2]);
+                            if (phi(i, j, k) + cell_length_2D >= 0) {
+                                vel(i, j, k, 0) = 0.0;
+                                vel(i, j, k, 1) = 0.0;
+                                vel(i, j, k, 2) = 0.0;
+                            }
                         }
                     });
 
