@@ -111,7 +111,7 @@ struct InitDataOp<StokesWaves>
                             order, wave_length, water_depth, wave_height,
                             zero_sea_level, g, x, z, 0.0, eta, u_w, v_w, w_w);
 
-                        if (!has_beach || x + beach_length >= probhi[0]) {
+                        if (!has_beach || x + beach_length < probhi[0]) {
                             phi(i, j, k) = eta - z;
                             const amrex::Real cell_length_2D =
                                 std::sqrt(dx[0] * dx[0] + dx[2] * dx[2]);
