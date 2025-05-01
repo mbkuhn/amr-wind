@@ -398,7 +398,7 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
             m_repo.num_active_levels());
         for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
             amrex::average_node_to_cellcenter(
-                (*phif)(lev), 0, pressure(lev), 0, 1);
+                (*phif)(lev), 0, pressure(lev), 0, 1, 1);
             gphi_vec[lev][0] = &(*gphix)(lev);
             gphi_vec[lev][1] = &(*gphiy)(lev);
             gphi_vec[lev][2] = &(*gphiz)(lev);
