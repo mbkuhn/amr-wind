@@ -388,8 +388,30 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
 
     if (m_has_overset) {
         auto phif = m_repo.create_scratch_field(1, 1, amr_wind::FieldLoc::CELL);
+        auto gphix =
+            m_repo.create_scratch_field(1, 1, amr_wind::FieldLoc::XFACE);
+        auto gphiy =
+            m_repo.create_scratch_field(1, 1, amr_wind::FieldLoc::YFACE);
+        auto gphiz =
+            m_repo.create_scratch_field(1, 1, amr_wind::FieldLoc::ZFACE);
+        amrex::Vector<amrex::Array<amrex::MultiFab*, ICNS::ndim>> gphi_vec(
+            m_repo.num_active_levels());
         for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
-            (*phif)(lev).setVal(0.);
+            amrex::average_node_to_cellcenter(
+                (*phif)(lev), 0, pressure(lev), 0, 1);
+            gphi_vec[lev][0] = &(*gphix)(lev);
+            gphi_vec[lev][1] = &(*gphiy)(lev);
+            gphi_vec[lev][2] = &(*gphiz)(lev);
+        }
+
+        // Get fluxes (pressure gradient)
+        m_mac_proj->getFluxes(
+            gphi_vec, phif->vec_ptrs(), amrex::MLMG::Location::FaceCenter);
+        // Remove pressure gradient
+        for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
+            amrex::MultiFab::Saxpy(u_mac(lev),-1.,(*gphix)(lev),0, 0, 1, 0);
+            amrex::MultiFab::Saxpy(v_mac(lev),-1.,(*gphiy)(lev),0, 0, 1, 0);
+            amrex::MultiFab::Saxpy(w_mac(lev),-1.,(*gphiz)(lev),0, 0, 1, 0);
         }
 
         if (m_verbose_output_fields) {
