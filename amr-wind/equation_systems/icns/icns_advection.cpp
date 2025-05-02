@@ -78,6 +78,20 @@ void mask_face_velocity(
         });
 }
 
+void mask_divergence(
+    const amrex::iMultiFab& mask_cell, amrex::MultiFab& divu_cell)
+{
+    const auto& marrs = mask_cell.const_arrays();
+    const auto& divu = divu_cell.arrays();
+    amrex::ParallelFor(
+        mask_cell, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+            // If current cell is not masked, set divu to 0
+            if (marrs[nbx](i, j, k) != 0) {
+                divu[nbx](i, j, k) = 0.;
+            }
+        });
+}
+
 } // namespace
 
 MacProjOp::MacProjOp(
@@ -388,6 +402,7 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
 
     if (m_has_overset) {
         auto phif = m_repo.create_scratch_field(1, 1, amr_wind::FieldLoc::CELL);
+        auto divu = m_repo.create_scratch_field(1, 1, amr_wind::FieldLoc::CELL);
         auto gphix =
             m_repo.create_scratch_field(1, 1, amr_wind::FieldLoc::XFACE);
         auto gphiy =
@@ -402,6 +417,11 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
             gphi_vec[lev][0] = &(*gphix)(lev);
             gphi_vec[lev][1] = &(*gphiy)(lev);
             gphi_vec[lev][2] = &(*gphiz)(lev);
+            amrex::Array<amrex::MultiFab const*, AMREX_SPACEDIM> mac_vec_const;
+            for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+                mac_vec_const[idim] = mac_vec[lev][idim];
+            }
+            amrex::computeDivergence((*divu)(lev), mac_vec_const, geom[lev]);
         }
 
         // Get fluxes (pressure gradient)
@@ -409,10 +429,16 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
             gphi_vec, phif->vec_ptrs(), amrex::MLMG::Location::FaceCenter);
         // Remove pressure gradient
         for (int lev = 0; lev < m_repo.num_active_levels(); ++lev) {
-            amrex::MultiFab::Saxpy(u_mac(lev),-1.,(*gphix)(lev),0, 0, 1, 0);
-            amrex::MultiFab::Saxpy(v_mac(lev),-1.,(*gphiy)(lev),0, 0, 1, 0);
-            amrex::MultiFab::Saxpy(w_mac(lev),-1.,(*gphiz)(lev),0, 0, 1, 0);
+            amrex::MultiFab::Saxpy(u_mac(lev), -1., (*gphix)(lev), 0, 0, 1, 0);
+            amrex::MultiFab::Saxpy(v_mac(lev), -1., (*gphiy)(lev), 0, 0, 1, 0);
+            amrex::MultiFab::Saxpy(w_mac(lev), -1., (*gphiz)(lev), 0, 0, 1, 0);
+
+            mask_divergence(
+                m_repo.get_int_field("mask_cell")(lev), (*divu)(lev));
         }
+
+        // RHS = custom divu - calculated divu; set RHS to 0 where masked
+        m_mac_proj->setDivU(divu->vec_const_ptrs());
 
         if (m_verbose_output_fields) {
             field_ops::copy(
