@@ -10,7 +10,7 @@
 namespace amr_wind::sampling {
 
 FreeSurfaceSampler::FreeSurfaceSampler(CFDSim& sim)
-    : m_sim(sim), m_vof(sim.repo().get_field("vof"))
+    : m_sim(sim), m_vof(sim.repo().get_field("ow_vof"))
 {}
 
 FreeSurfaceSampler::~FreeSurfaceSampler() = default;
