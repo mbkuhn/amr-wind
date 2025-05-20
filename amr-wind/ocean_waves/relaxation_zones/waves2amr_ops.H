@@ -757,7 +757,7 @@ struct UpdateTargetFieldsOp<W2AWaves>
                     flag_xhi = true;
                 }
 
-                if (flag_z && (flag_xlo || flag_xhi)) {
+                if (true) { // (flag_z && (flag_xlo || flag_xhi)) {
                     // Interpolation is needed
                     wdata.do_interp = true;
                     // Do resizing
