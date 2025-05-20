@@ -817,12 +817,12 @@ struct UpdateTargetFieldsOp<W2AWaves>
 
                 // Wave generation zones are irrelevant for single-phase mode,
                 // indicated by nonexistence of vof
-                if (!vof_exists) {
+                if (!vof_exists || true) {
                     flag_xlo = true;
                     flag_xhi = true;
                 }
 
-                if (true) { // (flag_z && (flag_xlo || flag_xhi)) {
+                if (flag_z && (flag_xlo || flag_xhi)) {
                     // Interpolation is needed
                     wdata.do_interp = true;
                     // Do resizing
