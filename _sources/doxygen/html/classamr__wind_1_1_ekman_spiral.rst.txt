@@ -1,0 +1,14 @@
+.. meta::b56625fcb95f9b8ee65550e84fed6cb264e5beb212a0a50ccc79a6047929a079e9ba87965a4e583a2607b1d34c286dc7af29d1c6c1511b0350fd8f66df77c254
+
+:orphan:
+
+.. title:: AMR-Wind API: amr_wind::EkmanSpiral Class Reference
+
+EkmanSpiral Class Reference
+===========================
+
+.. container:: doxygen-content
+
+   
+   .. raw:: html
+     :file: classamr__wind_1_1_ekman_spiral.html

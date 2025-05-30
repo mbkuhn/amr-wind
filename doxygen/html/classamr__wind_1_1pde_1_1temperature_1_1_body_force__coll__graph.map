@@ -1,0 +1,11 @@
+<map id="amr_wind::pde::temperature::BodyForce" name="amr_wind::pde::temperature::BodyForce">
+<area shape="rect" id="Node000001" title=" " alt="" coords="547,77,753,117"/>
+<area shape="rect" id="Node000002" title=" " alt="" coords="193,5,401,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="416,47,523,66,562,74,561,79,522,71,415,53"/>
+<area shape="rect" id="Node000003" href="$classamr__wind_1_1_sim_time.html" title=" " alt="" coords="221,84,373,109"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="387,94,546,94,546,99,387,99"/>
+<area shape="rect" id="Node000004" title=" " alt="" coords="254,157,341,183"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="354,165,434,158,522,142,603,114,605,119,523,147,435,163,355,170"/>
+<area shape="rect" id="Node000005" title=" " alt="" coords="5,150,144,190"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="158,167,254,167,254,173,158,173"/>
+</map>

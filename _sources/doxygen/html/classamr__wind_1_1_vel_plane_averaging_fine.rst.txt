@@ -1,0 +1,14 @@
+.. meta::99866faa79e24cdb7e558b1063120916e76ffb079a2953e13d3504d0c1fbf5869dc5ab3852965cc6ed7e6a5a8d57283f2208220bb3cfb9c8f70c9aebb58362d1
+
+:orphan:
+
+.. title:: AMR-Wind API: amr_wind::VelPlaneAveragingFine Class Reference
+
+VelPlaneAveragingFine Class Reference
+=====================================
+
+.. container:: doxygen-content
+
+   
+   .. raw:: html
+     :file: classamr__wind_1_1_vel_plane_averaging_fine.html

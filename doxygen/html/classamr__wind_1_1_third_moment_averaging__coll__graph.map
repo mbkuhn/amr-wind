@@ -1,0 +1,9 @@
+<map id="amr_wind::ThirdMomentAveraging" name="amr_wind::ThirdMomentAveraging">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,363,252,388"/>
+<area shape="rect" id="Node000002" href="$classamr__wind_1_1_f_plane_averaging.html" title=" " alt="" coords="27,212,230,252"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="131,266,131,363,126,363,126,266"/>
+<area shape="rect" id="Node000003" href="$classamr__wind_1_1_f_plane_averaging.html" title=" " alt="" coords="27,101,230,141"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="131,155,131,212,126,212,126,155"/>
+<area shape="rect" id="Node000004" href="$classamr__wind_1_1_sim_time.html" title=" " alt="" coords="53,5,205,31"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="131,45,131,101,126,101,126,45"/>
+</map>
