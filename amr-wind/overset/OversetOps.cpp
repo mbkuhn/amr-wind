@@ -372,10 +372,10 @@ void OversetOps::sharpen_nalu_data()
 
         if (m_verbose > 0) {
             amrex::Print() << "OversetOps: sharpen step " << std::setw(2) << n
-                           << "  conv. err " << std::scientific
+                           << "  max vof flux " << std::scientific
                            << std::setprecision(4) << err << " targ_err "
-                           << target_err << " " << target_err / target_err0
-                           << std::endl;
+                           << target_err << " /init "
+                           << target_err / target_err0 << std::endl;
         }
         if (target_err > target_err_last * (1.0 + constants::LOOSE_TOL)) {
             amrex::Print() << "OversetOps: WARNING, target error increased "
