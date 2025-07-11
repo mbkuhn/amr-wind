@@ -278,6 +278,7 @@ void OversetOps::sharpen_nalu_data()
     }
     amrex::Gpu::streamSynchronize();
     amrex::ParallelDescriptor::ReduceRealSum(target_err0);
+    amrex::Real target_err_last = target_err0;
 
     // Put fluxes in vector for averaging down during iterations
     amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>> fluxes(
@@ -335,11 +336,10 @@ void OversetOps::sharpen_nalu_data()
                 repo.mesh().refRatio(lev - 1), geom[lev - 1]);
         }
 
-        // Apply fluxes
-        const amrex::Real target_err_last = target_err;
         if (calc_convg) {
             target_err = 0.;
         }
+        // Apply fluxes
         for (int lev = 0; lev < nlevels; ++lev) {
             const auto dx = (geom[lev]).CellSizeArray();
 
@@ -377,11 +377,12 @@ void OversetOps::sharpen_nalu_data()
                            << target_err << " " << target_err / target_err0
                            << std::endl;
         }
-        if (target_err > target_err_last * (1.0 - constants::LOOSE_TOL)) {
+        if (target_err > target_err_last * (1.0 + constants::LOOSE_TOL)) {
             amrex::Print() << "OversetOps: WARNING, target error increased "
                            << target_err_last << " -> " << target_err
                            << std::endl;
         }
+        target_err_last = target_err;
     }
 
     // Fillpatch for pressure to make sure pressure stencil has all points
