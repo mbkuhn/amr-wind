@@ -227,10 +227,39 @@ vs::Tensor AMREX_GPU_DEVICE AMREX_FORCE_INLINE gp_flux_tensor(
     return f_otimes_gradp;
 }
 
+amrex::Real AMREX_GPU_DEVICE AMREX_FORCE_INLINE vof_diff_overset_extrap(
+    const int i,
+    const int j,
+    const int k,
+    const int dir,
+    amrex::Array4<int const> const& iblank,
+    amrex::Array4<amrex::Real const> const& vof)
+{
+    amrex::IntVect iv{i, j, k};
+    auto ivm = iv;
+    ivm[dir] -= 1;
+    amrex::Real vof_diff = vof(iv) - vof(ivm);
+    amrex::Real gibl = iblank(iv) - iblank(ivm);
+    if (std::abs(gibl) == 2) {
+        // Shift away from overset interface, toward iblank = -1, and
+        // recalculate
+        iv[dir] -= gibl / 2;
+        ivm[dir] -= gibl / 2;
+        vof_diff = vof(iv) - vof(ivm);
+        gibl = iblank(iv) - iblank(ivm);
+        if (std::abs(gibl) == 2) {
+            // If still crossing overset interface, set to 0
+            vof_diff = 0.;
+        }
+    }
+    return vof_diff;
+}
+
 vs::Tensor AMREX_GPU_DEVICE AMREX_FORCE_INLINE normal_reinit_tensor(
     const int i,
     const int j,
     const int k,
+    amrex::Array4<int const> const& iblank,
     amrex::Array4<amrex::Real const> const& fx,
     amrex::Array4<amrex::Real const> const& fy,
     amrex::Array4<amrex::Real const> const& fz,
@@ -249,26 +278,35 @@ vs::Tensor AMREX_GPU_DEVICE AMREX_FORCE_INLINE normal_reinit_tensor(
                                tiny;
 
     auto n_zeta = vs::Vector::one();
+
     // Get components of normal in each position
+    // If current difference straddles overset boundary, offset by one in
+    // direction of -1. If that also straddles overset boundary, set diff to 0
     n_zeta.x() =
-        ((vof(i, j, k) - vof(i - 1, j, k)) * fx(i, j, k, 8) +
-         (vof(i, j - 1, k) - vof(i - 1, j - 1, k)) * fx(i, j - 1, k, 8) +
-         (vof(i, j, k - 1) - vof(i - 1, j, k - 1)) * fx(i, j, k - 1, 8) +
-         (vof(i, j - 1, k - 1) - vof(i - 1, j - 1, k - 1)) *
+        (vof_diff_overset_extrap(i, j, k, 0, iblank, vof) * fx(i, j, k, 8) +
+         vof_diff_overset_extrap(i, j - 1, k, 0, iblank, vof) *
+             fx(i, j - 1, k, 8) +
+         vof_diff_overset_extrap(i, j, k - 1, 0, iblank, vof) *
+             fx(i, j, k - 1, 8) +
+         vof_diff_overset_extrap(i, j - 1, k - 1, 0, iblank, vof) *
              fx(i, j - 1, k - 1, 8)) /
         avg_fx;
     n_zeta.y() =
-        ((vof(i, j, k) - vof(i, j - 1, k)) * fy(i, j, k, 8) +
-         (vof(i - 1, j, k) - vof(i - 1, j - 1, k)) * fy(i - 1, j, k, 8) +
-         (vof(i, j, k - 1) - vof(i, j - 1, k - 1)) * fy(i, j, k - 1, 8) +
-         (vof(i - 1, j, k - 1) - vof(i - 1, j - 1, k - 1)) *
+        (vof_diff_overset_extrap(i, j, k, 1, iblank, vof) * fy(i, j, k, 8) +
+         vof_diff_overset_extrap(i - 1, j, k, 1, iblank, vof) *
+             fy(i - 1, j, k, 8) +
+         vof_diff_overset_extrap(i, j, k - 1, 1, iblank, vof) *
+             fy(i, j, k - 1, 8) +
+         vof_diff_overset_extrap(i - 1, j, k - 1, 1, iblank, vof) *
              fy(i - 1, j, k - 1, 8)) /
         avg_fy;
     n_zeta.z() =
-        ((vof(i, j, k) - vof(i, j, k - 1)) * fz(i, j, k, 8) +
-         (vof(i - 1, j, k) - vof(i - 1, j, k - 1)) * fz(i - 1, j, k, 8) +
-         (vof(i, j - 1, k) - vof(i, j - 1, k - 1)) * fz(i, j - 1, k, 8) +
-         (vof(i - 1, j - 1, k) - vof(i - 1, j - 1, k - 1)) *
+        (vof_diff_overset_extrap(i, j, k, 2, iblank, vof) * fz(i, j, k, 8) +
+         vof_diff_overset_extrap(i - 1, j, k, 2, iblank, vof) *
+             fz(i - 1, j, k, 8) +
+         vof_diff_overset_extrap(i, j - 1, k, 2, iblank, vof) *
+             fz(i, j - 1, k, 8) +
+         vof_diff_overset_extrap(i - 1, j - 1, k, 2, iblank, vof) *
              fz(i - 1, j - 1, k, 8)) /
         avg_fz;
 

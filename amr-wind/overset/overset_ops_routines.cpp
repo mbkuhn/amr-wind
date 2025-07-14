@@ -397,7 +397,8 @@ void process_fluxes_calc_src(
             sp[nbx](i, j, k) =
                 gp_flux_tensor(i, j, k, fx[nbx], fy[nbx], fz[nbx], tiny) &&
                 normal_reinit_tensor(
-                    i, j, k, fx[nbx], fy[nbx], fz[nbx], vof[nbx], tiny);
+                    i, j, k, iblank[nbx], fx[nbx], fy[nbx], fz[nbx], vof[nbx],
+                    tiny);
         });
 }
 
