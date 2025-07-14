@@ -235,6 +235,8 @@ void populate_normal_vector(
         [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
             // Calculate normal
             amrex::Real mx, my, mz, mmag;
+            /*multiphase::youngs_finite_difference_normal_neumann(
+                i, j, k, ibdy, jbdy, kbdy, vof[nbx], mx, my, mz);*/
             multiphase::youngs_finite_difference_normal_neumann(
                 i, j, k, iblank[nbx], vof[nbx], mx, my, mz);
             // Normalize normal

@@ -90,29 +90,34 @@ youngs_finite_difference_normal_neumann(
     // Cells that are not iblank == -1 get calculated with extrapolation using
     // the average of all valid (relying only on iblank == -1 cells) gradients
     const int ibl_c = iblank(i, j, k);
-    amrex::Vector<amrex::Real> dvf{0., 0., 0.};
-    amrex::Vector<int> ct{0, 0, 0};
+    amrex::Vector<amrex::Real> dvf{0., 0., 0., 0., 0., 0.};
     const amrex::IntVect iv{i, j, k};
     for (int ddir = 0; ddir < 3; ++ddir) {
+        int ct_0 = 0;
+        int ct_1 = 0;
         const int odir0 = (ddir + 1) % 3;
         const int odir1 = (ddir + 2) % 3;
         for (int n0 = -1; n0 <= 1; ++n0) {
             for (int n1 = -1; n1 <= 1; ++n1) {
-                for (int n2 = -1; n2 <= 0; ++n2) {
-                    amrex::IntVect iv_p = iv;
-                    iv_p[odir0] += n0;
-                    iv_p[odir1] += n1;
-                    amrex::IntVect iv_m = iv_p;
-                    iv_p[ddir] += n2 + 1;
-                    iv_m[ddir] += n2;
-                    if (iblank(iv_p) == iblank(iv_m) && iblank(iv_p) == ibl_c) {
-                        dvf[ddir] += volfrac(iv_p) - volfrac(iv_m);
-                        ct[ddir]++;
-                    }
+                amrex::IntVect iv_c = iv;
+                iv_c[odir0] += n0;
+                iv_c[odir1] += n1;
+                amrex::IntVect iv_p = iv_c;
+                amrex::IntVect iv_m = iv_c;
+                iv_p[ddir] += 1;
+                iv_m[ddir] += -1;
+                if (iblank(iv_m) == iblank(iv_c) && iblank(iv_m) == ibl_c) {
+                    dvf[ddir] += volfrac(iv_c) - volfrac(iv_m);
+                    ct_0++;
+                }
+                if (iblank(iv_p) == iblank(iv_c) && iblank(iv_p) == ibl_c) {
+                    dvf[ddir + 3] += volfrac(iv_p) - volfrac(iv_c);
+                    ct_1++;
                 }
             }
         }
-        dvf[ddir] /= (amrex::Real)ct[ddir];
+        dvf[ddir] /= (amrex::Real)ct_0 + constants::EPS;
+        dvf[ddir + 3] /= (amrex::Real)ct_1 + constants::EPS;
     }
 
     amrex::Vector<amrex::Real> vf(27, 0.);
@@ -123,12 +128,19 @@ youngs_finite_difference_normal_neumann(
                 iv_l[0] += n0;
                 iv_l[1] += n1;
                 iv_l[2] += n2;
-                vf[idx(n0, n1, n2)] = iblank(iv_l) == ibl_c
-                                          ? volfrac(iv_l)
-                                          : volfrac(iv) +
-                                                (amrex::Real)n0 * dvf[0] +
-                                                (amrex::Real)n1 * dvf[1] +
-                                                (amrex::Real)n2 * dvf[2];
+                vf[idx(n0, n1, n2)] =
+                    iblank(iv_l) == ibl_c
+                        ? volfrac(iv_l)
+                        : std::max(
+                              0.,
+                              std::min(
+                                  1., volfrac(iv) +
+                                          (amrex::Real)n0 *
+                                              dvf[0 + 3 * std::max(0, n0)] +
+                                          (amrex::Real)n1 *
+                                              dvf[1 + 3 * std::max(0, n1)] +
+                                          (amrex::Real)n2 *
+                                              dvf[2 + 3 * std::max(0, n2)]));
             }
         }
     }
