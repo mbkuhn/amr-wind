@@ -221,6 +221,7 @@ void OversetOps::sharpen_nalu_data()
     auto p_src = repo.create_scratch_field(1, 0, amr_wind::FieldLoc::NODE);
     auto normal_vec = repo.create_scratch_field(3, vof.num_grow()[0] - 1);
     auto target_vof = repo.create_scratch_field(1, vof.num_grow()[0]);
+    auto delta_vof = repo.create_scratch_field(1, vof.num_grow()[0]);
 
     // Sharpening fluxes (at faces) have 1 ghost, requiring fields to have >= 2
     auto gp_scr = repo.create_scratch_field(3, 2);
@@ -339,6 +340,23 @@ void OversetOps::sharpen_nalu_data()
         if (calc_convg) {
             target_err = 0.;
         }
+
+        // Get pseudo dt (dtau)
+        amrex::Real ptfac = 1.0;
+        for (int lev = 0; lev < nlevels; ++lev) {
+            const auto dx = (geom[lev]).CellSizeArray();
+            (*delta_vof)(lev).setVal(0.);
+            // Compare vof fluxes to vof in source cells
+            // Convergence tolerance determines what size of fluxes matter
+            const amrex::Real ptfac_lev = overset_ops::calculate_pseudo_dt_flux(
+                (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), vof(lev),
+                (*delta_vof)(lev), iblank_cell(lev), dx, m_convg_tol);
+            ptfac = amrex::min(ptfac, ptfac_lev);
+        }
+        amrex::Gpu::streamSynchronize();
+        amrex::ParallelDescriptor::ReduceRealMin(ptfac);
+        ptfac *= m_pCFL;
+
         // Apply fluxes
         for (int lev = 0; lev < nlevels; ++lev) {
             const auto dx = (geom[lev]).CellSizeArray();
@@ -346,7 +364,7 @@ void OversetOps::sharpen_nalu_data()
             overset_ops::apply_fluxes(
                 (*flux_x)(lev), (*flux_y)(lev), (*flux_z)(lev), (*p_src)(lev),
                 iblank_cell(lev), iblank_node(lev), vof(lev), rho(lev),
-                velocity(lev), gp(lev), p(lev), dx, m_pCFL, m_vof_tol);
+                velocity(lev), gp(lev), p(lev), dx, ptfac, m_vof_tol);
 
             vof(lev).FillBoundary(geom[lev].periodicity());
             velocity(lev).FillBoundary(geom[lev].periodicity());
@@ -375,7 +393,8 @@ void OversetOps::sharpen_nalu_data()
                            << "  max vof flux " << std::scientific
                            << std::setprecision(4) << err << " targ_err "
                            << target_err << " /init "
-                           << target_err / target_err0 << std::endl;
+                           << target_err / target_err0 << " p-dt " << ptfac
+                           << std::endl;
         }
         if (target_err > target_err_last * (1.0 + constants::LOOSE_TOL)) {
             amrex::Print() << "OversetOps: WARNING, target error increased "
