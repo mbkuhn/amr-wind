@@ -65,6 +65,8 @@ amrex::Real AMREX_GPU_DEVICE AMREX_FORCE_INLINE alpha_flux(
                                                                     : dphi_eval;
         }
     }
+
+    
     if (std::abs(gibl) == 2) {
         if (gibl > 0) {
             dphi_eval = dphi_nb;
