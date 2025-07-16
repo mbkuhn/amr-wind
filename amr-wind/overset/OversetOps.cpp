@@ -231,7 +231,7 @@ void OversetOps::sharpen_nalu_data()
     auto p_src = repo.create_scratch_field(1, 0, amr_wind::FieldLoc::NODE);
     auto normal_vec = repo.create_scratch_field(3, vof.num_grow()[0] - 1);
     auto target_vof = repo.create_scratch_field(1, vof.num_grow()[0]);
-    auto delta_vof = repo.create_scratch_field(1, vof.num_grow()[0]);
+    auto delta_vof = repo.create_scratch_field(1);
 
     // Sharpening fluxes (at faces) have 1 ghost, requiring fields to have >= 2
     auto gp_scr = repo.create_scratch_field(3, 2);
@@ -419,7 +419,7 @@ void OversetOps::sharpen_nalu_data()
 
     // Purely for debugging via visualization, should be removed later
     // Currently set up to overwrite the levelset field (not used as time
-    // evolves) with the post-sharpening vof distribution
+    // evolves) with the difference b/w post-sharpening vof and target
     field_ops::lincomb(*target_vof, 1., *target_vof, 0, -1., vof, 0, 0, 1, 0);
     for (int lev = 0; lev < nlevels; ++lev) {
         overset_ops::equate_field(levelset(lev), (*target_vof)(lev), 0);
