@@ -37,7 +37,7 @@ amrex::Real AMREX_GPU_DEVICE AMREX_FORCE_INLINE alpha_flux(
     const amrex::Real norm_nb = normal(ivm, dir);
 
     // Gradient of iblank
-    const amrex::Real gibl = (ibl(iv) - ibl(ivm));
+    const int gibl = (ibl(iv) - ibl(ivm));
 
     // Determine which delta_phi (and multiply by normal)
     // The sign depends on side of flux face
@@ -100,7 +100,7 @@ void AMREX_GPU_DEVICE AMREX_FORCE_INLINE velocity_face(
     const amrex::Real gphi = (vof(iv) - vof(ivm));
 
     // Gradient of iblank
-    const amrex::Real gibl = (ibl(iv) - ibl(ivm));
+    const int gibl = (ibl(iv) - ibl(ivm));
 
     // Get velocities on both sides
     const amrex::Real u_ = velocity(iv, 0);
@@ -148,7 +148,7 @@ void AMREX_GPU_DEVICE AMREX_FORCE_INLINE gp_rho_face(
     const amrex::Real gphi = (vof(iv) - vof(ivm));
 
     // Gradient of iblank
-    const amrex::Real gibl = (ibl(iv) - ibl(ivm));
+    const int gibl = (ibl(iv) - ibl(ivm));
 
     // Get velocities on both sides
     const amrex::Real u_ = gp(iv, 0) / rho(iv);
