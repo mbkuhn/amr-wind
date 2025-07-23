@@ -1,0 +1,14 @@
+.. meta::9c6fe7a97963553ff14fea883331974173a4c4e56f026d7ebdcae6f4cbca4543066dd3c6c72c3c376f4dd79dc150c3f15d548ad7843161a297504b8ddb797ee1
+
+:orphan:
+
+.. title:: AMR-Wind API: amr_wind::field_norms::FieldNorms Class Reference
+
+FieldNorms Class Reference
+==========================
+
+.. container:: doxygen-content
+
+   
+   .. raw:: html
+     :file: classamr__wind_1_1field__norms_1_1_field_norms.html
