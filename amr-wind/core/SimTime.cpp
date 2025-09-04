@@ -22,6 +22,7 @@ void SimTime::parse_parameters()
     pp.query("min_dt", m_min_dt);
     pp.query("init_shrink", m_init_shrink);
     pp.query("max_dt_growth", m_dt_growth);
+    pp.query("max_dt_shrink", m_dt_shrink);
     pp.query("cfl", m_max_cfl);
     pp.query("verbose", m_verbose);
     pp.query("regrid_interval", m_regrid_interval);
@@ -191,6 +192,7 @@ void SimTime::set_current_cfl(
     // Limit timestep growth to % per timestep
     if (m_dt[0] > 0.0) {
         dt_new = amrex::min<amrex::Real>(dt_new, (1.0 + m_dt_growth) * m_dt[0]);
+        dt_new = amrex::max<amrex::Real>(dt_new, (1.0 - m_dt_shrink) * m_dt[0]);
     }
 
     if (m_adaptive) {
