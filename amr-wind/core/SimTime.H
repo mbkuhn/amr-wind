@@ -231,6 +231,9 @@ private:
     //! Maximum growth of dt between timesteps
     amrex::Real m_dt_growth{0.1};
 
+    //! Maximum shrink of dt between timesteps (default off)
+    amrex::Real m_dt_shrink{1.};
+
     //! Time interval for writing checkpoint/restart files
     amrex::Real m_chkpt_t_interval{-1.0};
 
