@@ -214,6 +214,9 @@ private:
     //! Minimum delta_t indicated by user
     amrex::Real m_min_dt{-1.0};
 
+    //! Subsolver delta_t to constrain solver delta_t
+    amrex::Real m_subsolver_dt{-1.0};
+
     //! Current CFL
     amrex::Real m_current_cfl{0.0};
 

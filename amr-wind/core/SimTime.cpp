@@ -248,6 +248,12 @@ void SimTime::set_current_cfl(
             dt_new = amrex::min(dt_new, m_initial_dt);
         }
 
+        // Constrain dt to be a factor of subsolver dt
+        if (m_subsolver_dt > 0.) {
+            dt_new = m_subsolver_dt *
+                     std::max(1.0, std::floor(dt_new / m_subsolver_dt + 1e-8));
+        }
+
         m_dt[0] = dt_new;
 
     } else {
