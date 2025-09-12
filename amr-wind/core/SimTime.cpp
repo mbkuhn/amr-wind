@@ -20,6 +20,7 @@ void SimTime::parse_parameters()
     pp.query("initial_dt", m_initial_dt);
     pp.query("max_dt", m_max_dt);
     pp.query("min_dt", m_min_dt);
+    pp.query("subsolver_dt", m_subsolver_dt);
     pp.query("init_shrink", m_init_shrink);
     pp.query("max_dt_growth", m_dt_growth);
     pp.query("cfl", m_max_cfl);
