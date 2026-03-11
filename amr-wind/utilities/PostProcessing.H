@@ -168,6 +168,9 @@ public:
                    m_out_time_interval) <
               dt));
 
+        amrex::Print() << "output_now " << time - time0 + tol << " " << std::floor((time - time0 + tol) / m_out_time_interval) *
+                   m_out_time_interval << " " << dt << " " << time_based << std::endl;
+
         return (step_based || time_based);
     }
 
