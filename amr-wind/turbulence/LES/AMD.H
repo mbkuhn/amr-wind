@@ -62,7 +62,6 @@ private:
 
     FieldPlaneAveraging m_pa_temp;
     amrex::Vector<amrex::Real> m_gravity{0.0_rt, 0.0_rt, -9.81_rt};
-
 };
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real amd_muvel(
