@@ -42,8 +42,8 @@ public:
     ABLStats(
         CFDSim& /*sim*/,
         const ABLWallFunction& /*abl_wall_func*/,
-        const int dir,
-        const int max_level);
+        int dir,
+        int max_level);
 
     ~ABLStats() override;
 
