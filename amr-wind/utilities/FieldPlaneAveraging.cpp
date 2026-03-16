@@ -3,6 +3,9 @@
 #include "AMReX_iMultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include <algorithm>
+#include "AMReX_REAL.H"
+
+using namespace amrex::literals;
 
 namespace amr_wind {
 
@@ -57,14 +60,15 @@ FPlaneAveraging<FType>::FPlaneAveraging(
         }
     }
 
-    m_line_average.resize(static_cast<size_t>(m_ncell_line) * m_ncomp, 0.0);
+    m_line_average.resize(static_cast<size_t>(m_ncell_line) * m_ncomp, 0.0_rt);
     if (m_comp_deriv) {
-        m_line_deriv.resize(static_cast<size_t>(m_ncell_line) * m_ncomp, 0.0);
+        m_line_deriv.resize(
+            static_cast<size_t>(m_ncell_line) * m_ncomp, 0.0_rt);
     }
     m_line_xcentroid.resize(m_ncell_line);
 
     for (int i = 0; i < m_ncell_line; ++i) {
-        m_line_xcentroid[i] = m_xlo + (i + 0.5) * m_dx;
+        m_line_xcentroid[i] = m_xlo + ((i + 0.5_rt) * m_dx);
     }
 }
 
@@ -109,13 +113,13 @@ void FPlaneAveraging<FType>::output_line_average_ascii(
     if (step == 1) {
         // make new file
         outfile.open(filename.c_str(), std::ios_base::out);
-        outfile << "#ncell,ncomp" << std::endl;
-        outfile << m_ncell_line << ", " << m_ncomp + 3 << std::endl;
+        outfile << "#ncell,ncomp" << '\n';
+        outfile << m_ncell_line << ", " << m_ncomp + 3 << '\n';
         outfile << "#step,time,z";
         for (int i = 0; i < m_ncomp; ++i) {
             outfile << ",<" + m_field.name() + std::to_string(i) + ">";
         }
-        outfile << std::endl;
+        outfile << '\n';
     } else {
         // append file
         outfile.open(filename.c_str(), std::ios_base::out | std::ios_base::app);
@@ -126,9 +130,9 @@ void FPlaneAveraging<FType>::output_line_average_ascii(
                 << m_line_xcentroid[i];
         for (int n = 0; n < m_ncomp; ++n) {
             outfile << ", " << std::scientific
-                    << m_line_average[m_ncomp * i + n];
+                    << m_line_average[(m_ncomp * i) + n];
         }
-        outfile << std::endl;
+        outfile << '\n';
     }
 }
 
@@ -153,8 +157,8 @@ FPlaneAveraging<FType>::line_average_interpolated(amrex::Real x, int comp) const
     amrex::Real c;
     convert_x_to_ind(x, ind, c);
 
-    return m_line_average[m_ncomp * ind + comp] * (1.0 - c) +
-           m_line_average[m_ncomp * (ind + 1) + comp] * c;
+    return (m_line_average[(m_ncomp * ind) + comp] * (1.0_rt - c)) +
+           (m_line_average[(m_ncomp * (ind + 1)) + comp] * c);
 }
 
 template <typename FType>
@@ -166,7 +170,7 @@ void FPlaneAveraging<FType>::line_average(
     AMREX_ALWAYS_ASSERT(comp >= 0 && comp < m_ncomp);
 
     for (int i = 0; i < m_ncell_line; i++) {
-        l_vec[i] = m_line_average[m_ncomp * i + comp];
+        l_vec[i] = m_line_average[(m_ncomp * i) + comp];
     }
 }
 
@@ -178,7 +182,7 @@ amrex::Real FPlaneAveraging<FType>::line_average_cell(int ind, int comp) const
     AMREX_ALWAYS_ASSERT(comp >= 0 && comp < m_ncomp);
     AMREX_ALWAYS_ASSERT(ind >= 0 && ind < m_ncell_line);
 
-    return m_line_average[m_ncomp * ind + comp];
+    return m_line_average[(m_ncomp * ind) + comp];
 }
 
 template <typename FType>
@@ -403,7 +407,7 @@ void FPlaneAveraging<FType>::compute_line_derivatives()
     BL_PROFILE("amr-wind::FPlaneAveraging::compute_line_derivatives");
     for (int i = 0; i < m_ncell_line; ++i) {
         for (int n = 0; n < m_ncomp; ++n) {
-            m_line_deriv[m_ncomp * i + n] =
+            m_line_deriv[(m_ncomp * i) + n] =
                 line_derivative_of_average_cell(i, n);
         }
     }
@@ -421,17 +425,17 @@ FPlaneAveraging<FType>::line_derivative_of_average_cell(int ind, int comp) const
     amrex::Real dudx;
 
     if (ind == 0) {
-        dudx = (m_line_average[m_ncomp * (ind + 1) + comp] -
-                m_line_average[m_ncomp * ind + comp]) /
+        dudx = (m_line_average[(m_ncomp * (ind + 1)) + comp] -
+                m_line_average[(m_ncomp * ind) + comp]) /
                m_dx;
     } else if (ind == m_ncell_line - 1) {
-        dudx = (m_line_average[m_ncomp * (ind) + comp] -
-                m_line_average[m_ncomp * (ind - 1) + comp]) /
+        dudx = (m_line_average[(m_ncomp * (ind)) + comp] -
+                m_line_average[(m_ncomp * (ind - 1)) + comp]) /
                m_dx;
     } else {
-        dudx = 0.5 *
-               (m_line_average[m_ncomp * (ind + 1) + comp] -
-                m_line_average[m_ncomp * (ind - 1) + comp]) /
+        dudx = 0.5_rt *
+               (m_line_average[(m_ncomp * (ind + 1)) + comp] -
+                m_line_average[(m_ncomp * (ind - 1)) + comp]) /
                m_dx;
     }
 
@@ -450,8 +454,8 @@ amrex::Real FPlaneAveraging<FType>::line_derivative_interpolated(
     amrex::Real c;
     convert_x_to_ind(x, ind, c);
 
-    return m_line_deriv[m_ncomp * ind + comp] * (1.0 - c) +
-           m_line_deriv[m_ncomp * (ind + 1) + comp] * c;
+    return (m_line_deriv[(m_ncomp * ind) + comp] * (1.0_rt - c)) +
+           (m_line_deriv[(m_ncomp * (ind + 1)) + comp] * c);
 }
 
 template class FPlaneAveraging<Field>;
@@ -465,6 +469,7 @@ VelPlaneAveraging::VelPlaneAveraging(CFDSim& sim, int axis_in, int max_level)
     m_line_Su_average.resize(m_ncell_line, 0.0);
     m_line_Sv_average.resize(m_ncell_line, 0.0);
 }
+// NOLINTEND(clang-analyzer-security.ArrayBound)
 
 void VelPlaneAveraging::operator()()
 {
@@ -670,8 +675,8 @@ VelPlaneAveraging::line_hvelmag_average_interpolated(amrex::Real x) const
     amrex::Real c;
     convert_x_to_ind(x, ind, c);
 
-    return m_line_hvelmag_average[ind] * (1.0 - c) +
-           m_line_hvelmag_average[ind + 1] * c;
+    return (m_line_hvelmag_average[ind] * (1.0_rt - c)) +
+           (m_line_hvelmag_average[ind + 1] * c);
 }
 
 amrex::Real VelPlaneAveraging::line_su_average_interpolated(amrex::Real x) const
