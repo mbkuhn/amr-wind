@@ -251,6 +251,7 @@ void FPlaneAveraging<FType>::compute_averages(const IndexSelector& idxOp)
         const amrex::Real probhi_x = geom.ProbHi(m_axis);
 
         const auto dir = m_axis;
+        const bool no_ghost = (m_field.num_grow()[dir] == 0);
 
         amrex::iMultiFab level_mask;
         if (lev < finestLevel) {
@@ -364,15 +365,24 @@ void FPlaneAveraging<FType>::compute_averages(const IndexSelector& idxOp)
                                         x_down = amrex::max(problo_x, x_down);
                                     }
                                     // Pick indices of closest neighbor
+                                    // Bound indices in case of no ghost cells
                                     auto iv_nb = iv;
                                     auto x_nb = x_cell;
                                     if (std::abs(x_up - x_targ) <
                                         std::abs(x_down - x_targ)) {
                                         x_nb = x_up;
                                         iv_nb[dir] += 1;
+                                        if (no_ghost) {
+                                            iv_nb[dir] = amrex::min<int>(
+                                                iv_nb[dir], bx.bigEnd(dir));
+                                        }
                                     } else {
                                         x_nb = x_down;
                                         iv_nb[dir] -= 1;
+                                        if (no_ghost) {
+                                            iv_nb[dir] = amrex::max<int>(
+                                                iv_nb[dir], bx.smallEnd(dir));
+                                        }
                                     }
                                     // Interpolate to target location using
                                     // closest neighbor
