@@ -104,8 +104,6 @@ void SecondMomentAveraging::operator()()
 
     std::ranges::fill(m_second_moments_line, 0.0_rt);
 
-    const int level = m_plane_average1.level();
-
     switch (m_plane_average1.axis()) {
     case 0:
         compute_average(XDir());
