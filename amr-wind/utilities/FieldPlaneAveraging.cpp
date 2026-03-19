@@ -239,19 +239,18 @@ void FPlaneAveraging<FType>::compute_averages(const IndexSelector& idxOp)
 
     const auto& mesh = m_field.repo().mesh();
     const int finestLevel = m_max_level < 0 ? mesh.finestLevel() : m_max_level;
+    const auto dir = m_axis;
+    const bool no_ghost = (m_field.num_grow()[dir] == 0);
 
     for (int lev = 0; lev <= finestLevel; ++lev) {
 
         const auto& geom = m_field.repo().mesh().Geom(lev);
-        const amrex::Real dx = geom.CellSize()[m_axis];
+        const amrex::Real dx = geom.CellSize()[dir];
         const amrex::Real dy = geom.CellSize()[idxOp.odir1];
         const amrex::Real dz = geom.CellSize()[idxOp.odir2];
 
-        const amrex::Real problo_x = geom.ProbLo(m_axis);
-        const amrex::Real probhi_x = geom.ProbHi(m_axis);
-
-        const auto dir = m_axis;
-        const bool no_ghost = (m_field.num_grow()[dir] == 0);
+        const amrex::Real problo_x = geom.ProbLo(dir);
+        const amrex::Real probhi_x = geom.ProbHi(dir);
 
         amrex::iMultiFab level_mask;
         if (lev < finestLevel) {
