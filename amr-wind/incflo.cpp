@@ -117,7 +117,6 @@ void incflo::init_amr_wind_modules()
         fb->post_init_actions();
     }
 
-
     icns().initialize();
     for (auto& eqn : scalar_eqns()) {
         eqn->initialize();

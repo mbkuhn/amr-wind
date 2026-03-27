@@ -84,7 +84,8 @@ void OversetOps::pre_advance_work()
 
     // Pre advance work for plane was skipped for overset solver, do it here
     if (m_sim_ptr->field_boundary_manager().contains("BoundaryPlane")) {
-        auto& bndry_plane = m_sim_ptr->field_boundary_manager().get<BoundaryPlane>();
+        auto& bndry_plane =
+            m_sim_ptr->field_boundary_manager().get<BoundaryPlane>();
         bndry_plane.pre_advance_inner_calls();
     }
 }

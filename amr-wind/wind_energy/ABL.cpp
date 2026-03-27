@@ -245,7 +245,6 @@ void ABL::pre_advance_work()
         m_hurricane_temp_forcing->mean_velocity_update(
             m_stats->vel_profile_coarse());
     }
-
 }
 
 /** Perform tasks at the end of a new timestep
@@ -253,9 +252,6 @@ void ABL::pre_advance_work()
  *  For ABL simulations, this method writes all plane-averaged profiles and
  *  integrated statistics to output
  */
-void ABL::post_advance_work()
-{
-    m_stats->post_advance_work();
-}
+void ABL::post_advance_work() { m_stats->post_advance_work(); }
 
 } // namespace amr_wind
