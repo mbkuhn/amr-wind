@@ -147,6 +147,9 @@ public:
     //! Instantiate all physics instances based on user inputs
     void init_physics();
 
+    //! Instantiate all field boundaries based on user inputs
+    void init_field_boundaries();
+
     //! Activate overset connectivity
     void activate_overset();
 

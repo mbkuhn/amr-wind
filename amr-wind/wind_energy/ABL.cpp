@@ -74,11 +74,17 @@ ABL::ABL(CFDSim& sim)
     // Instantiate the ABL field initializer
     m_field_init = std::make_unique<ABLFieldInit>();
 
-    // Instantiate the ABL boundary plane IO
-    m_bndry_plane = std::make_unique<BoundaryPlane>(sim);
+    // Instantiate the BoundaryPlane field boundary if not already present
+    if (!sim.field_boundary_manager().contains("BoundaryPlane")) {
+        sim.field_boundary_manager().create("BoundaryPlane", sim);
+    }
+    m_bndry_plane = &(sim.field_boundary_manager().get<BoundaryPlane>());
 
-    // Instantiate the ABL Modulated Power Law
-    m_abl_mpl = std::make_unique<ModulatedPowerLaw>(sim);
+    // Instantiate the BoundaryPlane field boundary if not already present
+    if (!sim.field_boundary_manager().contains("ModulatedPowerLaw")) {
+        sim.field_boundary_manager().create("ModulatedPowerLaw", sim);
+    }
+    m_abl_mpl = &(sim.field_boundary_manager().get<ModulatedPowerLaw>());
 
     // Instantiate the ABL anelastic module
     m_abl_anelastic = std::make_unique<ABLAnelastic>(sim);

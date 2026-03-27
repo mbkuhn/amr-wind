@@ -64,7 +64,7 @@ private:
     std::unique_ptr<OceanWavesModel> m_owm;
 
     //! Ocean waves boundary instance
-    std::unique_ptr<OceanWavesBoundary> m_ow_bndry;
+    OceanWavesBoundary* m_ow_bndry{nullptr};
 
     //! Ocean waves target free surface levelset function
     Field& m_ow_levelset;

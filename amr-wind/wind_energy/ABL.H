@@ -7,11 +7,12 @@
 #include "amr-wind/wind_energy/ABLFieldInit.H"
 #include "amr-wind/wind_energy/ABLFieldInitFile.H"
 #include "amr-wind/wind_energy/ABLWallFunction.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/FieldBoundary.H"
 #include "amr-wind/boundary_conditions/field_boundary_fill/BoundaryPlane.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ModulatedPowerLaw.H"
 #include "amr-wind/core/SimTime.H"
 #include "amr-wind/utilities/FieldPlaneAveraging.H"
 #include "amr-wind/wind_energy/ABLStatsBase.H"
-#include "amr-wind/boundary_conditions/field_boundary_fill/ModulatedPowerLaw.H"
 #include "amr-wind/wind_energy/ABLAnelastic.H"
 #include "AMReX_REAL.H"
 
@@ -144,10 +145,10 @@ private:
     std::unique_ptr<ABLFieldInit> m_field_init;
 
     //! ABL boundary plane instance
-    std::unique_ptr<BoundaryPlane> m_bndry_plane;
+    BoundaryPlane* m_bndry_plane{nullptr};
 
     //! ABL modulated power law instance
-    std::unique_ptr<ModulatedPowerLaw> m_abl_mpl;
+    ModulatedPowerLaw* m_abl_mpl{nullptr};
 
     //! Reference to ABL forcing term if present
     mutable pde::icns::ABLForcing* m_abl_forcing{nullptr};

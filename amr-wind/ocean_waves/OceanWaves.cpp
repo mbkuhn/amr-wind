@@ -27,7 +27,11 @@ OceanWaves::OceanWaves(CFDSim& sim)
     m_ow_vof.set_default_fillpatch_bc(sim.time());
     m_ow_velocity.set_default_fillpatch_bc(sim.time());
 
-    m_ow_bndry = std::make_unique<OceanWavesBoundary>(sim);
+    // Instantiate the OceanWavesBoundary field boundary if not already present
+    if (!sim.field_boundary_manager().contains("OceanWavesBoundary")) {
+        sim.field_boundary_manager().create("OceanWavesBoundary", sim);
+    }
+    m_ow_bndry = &(sim.field_boundary_manager().get<OceanWavesBoundary>());
 }
 
 OceanWaves::~OceanWaves() = default;

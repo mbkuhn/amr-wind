@@ -64,6 +64,17 @@ void CFDSim::init_physics()
     }
 }
 
+void CFDSim::init_field_boundaries()
+{
+    amrex::ParmParse pp("incflo");
+    amrex::Vector<std::string> fb_names;
+    pp.queryarr("field_boundaries", fb_names);
+
+    for (const auto& fb : fb_names) {
+        m_field_boundary_mgr.create(fb, *this);
+    }
+}
+
 void CFDSim::activate_overset()
 {
     amrex::ParmParse pp("overset");
