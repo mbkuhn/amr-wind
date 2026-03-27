@@ -1,5 +1,5 @@
-#ifndef ABLBOUNDARYPLANE_H
-#define ABLBOUNDARYPLANE_H
+#ifndef BOUNDARYPLANE_H
+#define BOUNDARYPLANE_H
 
 #include <cstdint>
 #include "amr-wind/core/Field.H"
@@ -111,14 +111,14 @@ private:
  *  This class performs the necessary file operations to read and
  *  write boundary planes.
  *
- *  \sa ABLFillInflow
+ *  \sa PlaneFillInflow
  */
-class ABLBoundaryPlane
+class BoundaryPlane
 {
     static_assert(AMREX_SPACEDIM == 3, "ABL requires 3 dimensional mesh");
 
 public:
-    explicit ABLBoundaryPlane(CFDSim& /*sim*/);
+    explicit BoundaryPlane(CFDSim& /*sim*/);
 
     //! Execute initialization actions after mesh has been fully generated
     void post_init_actions();
@@ -266,4 +266,4 @@ private:
 
 } // namespace amr_wind
 
-#endif /* ABLBOUNDARYPLANE_H */
+#endif /* BOUNDARYPLANE_H */

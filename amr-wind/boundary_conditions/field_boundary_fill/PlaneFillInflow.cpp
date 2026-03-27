@@ -1,22 +1,22 @@
 #include <utility>
 
-#include "amr-wind/boundary_conditions/field_boundary_fill/ABLFillInflow.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/PlaneFillInflow.H"
 
 namespace amr_wind {
 
-ABLFillInflow::ABLFillInflow(
+PlaneFillInflow::PlaneFillInflow(
     Field& field,
     const amrex::AmrCore& mesh,
     const SimTime& time,
-    const ABLBoundaryPlane& bndry_plane)
+    const BoundaryPlane& bndry_plane)
     : FieldFillPatchOps<FieldBCDirichlet>(
           field, mesh, time, FieldInterpolator::CellConsLinear)
     , m_bndry_plane(bndry_plane)
 {}
 
-ABLFillInflow::~ABLFillInflow() = default;
+PlaneFillInflow::~PlaneFillInflow() = default;
 
-void ABLFillInflow::fillpatch(
+void PlaneFillInflow::fillpatch(
     int lev,
     amrex::Real time,
     amrex::MultiFab& mfab,
@@ -29,7 +29,7 @@ void ABLFillInflow::fillpatch(
     m_bndry_plane.populate_data(lev, time, m_field, mfab);
 }
 
-void ABLFillInflow::fillpatch_from_coarse(
+void PlaneFillInflow::fillpatch_from_coarse(
     int lev,
     amrex::Real time,
     amrex::MultiFab& mfab,
@@ -42,7 +42,7 @@ void ABLFillInflow::fillpatch_from_coarse(
     m_bndry_plane.populate_data(lev, time, m_field, mfab);
 }
 
-void ABLFillInflow::fillphysbc(
+void PlaneFillInflow::fillphysbc(
     int lev,
     amrex::Real time,
     amrex::MultiFab& mfab,
@@ -55,7 +55,7 @@ void ABLFillInflow::fillphysbc(
     m_bndry_plane.populate_data(lev, time, m_field, mfab);
 }
 
-void ABLFillInflow::fillpatch_sibling_fields(
+void PlaneFillInflow::fillpatch_sibling_fields(
     int lev,
     amrex::Real time,
     amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& mfabs,

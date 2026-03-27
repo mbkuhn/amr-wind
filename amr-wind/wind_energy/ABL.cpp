@@ -2,7 +2,7 @@
 
 #include "amr-wind/wind_energy/ABL.H"
 #include "amr-wind/wind_energy/ABLFieldInit.H"
-#include "amr-wind/boundary_conditions/field_boundary_fill/ABLBoundaryPlane.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/BoundaryPlane.H"
 #include "amr-wind/equation_systems/icns/source_terms/ABLForcing.H"
 #include "amr-wind/equation_systems/icns/source_terms/ABLMeanBoussinesq.H"
 #include "amr-wind/equation_systems/icns/source_terms/ABLMesoForcingMom.H"
@@ -75,7 +75,7 @@ ABL::ABL(CFDSim& sim)
     m_field_init = std::make_unique<ABLFieldInit>();
 
     // Instantiate the ABL boundary plane IO
-    m_bndry_plane = std::make_unique<ABLBoundaryPlane>(sim);
+    m_bndry_plane = std::make_unique<BoundaryPlane>(sim);
 
     // Instantiate the ABL Modulated Power Law
     m_abl_mpl = std::make_unique<ABLModulatedPowerLaw>(sim);

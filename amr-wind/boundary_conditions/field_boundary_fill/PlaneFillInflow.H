@@ -1,9 +1,9 @@
-#ifndef ABLFILLINFLOW_H
-#define ABLFILLINFLOW_H
+#ifndef PLANEFILLINFLOW_H
+#define PLANEFILLINFLOW_H
 
 #include "amr-wind/core/FieldFillPatchOps.H"
 #include "amr-wind/core/FieldBCOps.H"
-#include "amr-wind/boundary_conditions/field_boundary_fill/ABLBoundaryPlane.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/BoundaryPlane.H"
 
 namespace amr_wind {
 
@@ -11,20 +11,20 @@ namespace amr_wind {
  *  \ingroup we_abl
  *
  *  This class contains the operations necessary to interface with
- *  ABLBoundaryPlane class and populate data at the boundaries
+ *  BoundaryPlane class and populate data at the boundaries
  *
- *  \sa ABLBoundaryPlane
+ *  \sa BoundaryPlane
  */
-class ABLFillInflow : public FieldFillPatchOps<FieldBCDirichlet>
+class PlaneFillInflow : public FieldFillPatchOps<FieldBCDirichlet>
 {
 public:
-    ABLFillInflow(
+    PlaneFillInflow(
         Field& field,
         const amrex::AmrCore& mesh,
         const SimTime& time,
-        const ABLBoundaryPlane& bndry_plane);
+        const BoundaryPlane& bndry_plane);
 
-    ~ABLFillInflow() override;
+    ~PlaneFillInflow() override;
 
     void fillpatch(
         int lev,
@@ -61,9 +61,9 @@ public:
         FieldState fstate = FieldState::New) override;
 
 protected:
-    const ABLBoundaryPlane& m_bndry_plane;
+    const BoundaryPlane& m_bndry_plane;
 };
 
 } // namespace amr_wind
 
-#endif /* ABLFILLINFLOW_H */
+#endif /* PLANEFILLINFLOW_H */
