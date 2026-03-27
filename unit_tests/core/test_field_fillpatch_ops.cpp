@@ -241,7 +241,7 @@ TEST_F(FieldFillPatchTest, dirichlet_inflow)
 
     // Test set_inflow and check boundary cells
     amr_wind::nodal_projection::set_inflow_velocity(
-        sim().physics_manager(), (*m_vel), 0, time().current_time(),
+        sim().field_boundaries(), (*m_vel), 0, time().current_time(),
         (*m_vel)(0), 1);
     const auto err = get_field_err(*m_vel, false);
     EXPECT_DOUBLE_EQ(err, 0.);

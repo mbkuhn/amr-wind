@@ -78,13 +78,11 @@ ABL::ABL(CFDSim& sim)
     if (!sim.field_boundary_manager().contains("BoundaryPlane")) {
         sim.field_boundary_manager().create("BoundaryPlane", sim);
     }
-    m_bndry_plane = &(sim.field_boundary_manager().get<BoundaryPlane>());
 
     // Instantiate the BoundaryPlane field boundary if not already present
     if (!sim.field_boundary_manager().contains("ModulatedPowerLaw")) {
         sim.field_boundary_manager().create("ModulatedPowerLaw", sim);
     }
-    m_abl_mpl = &(sim.field_boundary_manager().get<ModulatedPowerLaw>());
 
     // Instantiate the ABL anelastic module
     m_abl_anelastic = std::make_unique<ABLAnelastic>(sim);
@@ -163,8 +161,6 @@ void ABL::post_init_actions()
     m_velocity.register_custom_bc<ABLVelWallFunc>(m_abl_wall_func);
     (*m_temperature).register_custom_bc<ABLTempWallFunc>(m_abl_wall_func);
 
-    m_bndry_plane->post_init_actions();
-    m_abl_mpl->post_init_actions();
     m_abl_anelastic->post_init_actions();
 }
 
@@ -250,17 +246,7 @@ void ABL::pre_advance_work()
             m_stats->vel_profile_coarse());
     }
 
-    if (!m_sim.has_overset()) {
-        m_bndry_plane->pre_advance_work();
-    }
-    m_abl_mpl->pre_advance_work();
 }
-
-/** Perform tasks at the beginning of a timestep, but after pre_advance
- *
- *  For ABL simulations, this method updates plane data to new_time (n+1)
- */
-void ABL::pre_predictor_work() { m_bndry_plane->pre_predictor_work(); }
 
 /** Perform tasks at the end of a new timestep
  *
@@ -270,8 +256,6 @@ void ABL::pre_predictor_work() { m_bndry_plane->pre_predictor_work(); }
 void ABL::post_advance_work()
 {
     m_stats->post_advance_work();
-    m_bndry_plane->post_advance_work();
-    m_abl_mpl->post_advance_work();
 }
 
 } // namespace amr_wind

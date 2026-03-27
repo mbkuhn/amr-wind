@@ -23,17 +23,8 @@ public:
 
     ~FieldBoundary() override = default;
 
-    //! Initialize any boundary-related fields for a given level
-    virtual void initialize_fields(int level, const amrex::Geometry& geom) = 0;
-
-    //! Actions to perform after PDE/turbulence creation, before mesh creation
-    virtual void pre_init_actions() {}
-
     //! Actions to perform post initialization
     virtual void post_init_actions() = 0;
-
-    //! Actions to perform post regrid
-    virtual void post_regrid_actions() = 0;
 
     //! Perform tasks necessary before advancing timestep
     virtual void pre_advance_work() = 0;
@@ -43,6 +34,15 @@ public:
 
     //! Perform tasks necessary after advancing timestep
     virtual void post_advance_work() = 0;
+
+    //! Velocity fill function to be used by nodal projection
+    virtual void set_velocity(
+        int /*lev*/,
+        amrex::Real /*time*/,
+        const Field& /*vel_fld*/,
+        amrex::MultiFab& /*vel_mfab*/,
+        int /*dcomp*/ = 0,
+        int /*orig_comp*/ = 0) const = 0;
 };
 
 /** A collection of FieldBoundary instances active during a simulation */

@@ -84,8 +84,6 @@ public:
 
     void pre_advance_work() override;
 
-    void pre_predictor_work() override;
-
     void post_advance_work() override;
 
     void register_forcing_term(pde::icns::ABLForcing* forcing) const
@@ -118,10 +116,6 @@ public:
         m_hurricane_temp_forcing = forcing;
     }
 
-    const BoundaryPlane& bndry_plane() const { return *m_bndry_plane; }
-    BoundaryPlane& bndry_plane() { return *m_bndry_plane; }
-    const ModulatedPowerLaw& abl_mpl() const { return *m_abl_mpl; }
-
     //! Return the ABL statistics calculator
     const ABLStatsBase& abl_statistics() const { return *m_stats; }
 
@@ -143,12 +137,6 @@ private:
 
     //! ABL field initializer instance
     std::unique_ptr<ABLFieldInit> m_field_init;
-
-    //! ABL boundary plane instance
-    BoundaryPlane* m_bndry_plane{nullptr};
-
-    //! ABL modulated power law instance
-    ModulatedPowerLaw* m_abl_mpl{nullptr};
 
     //! Reference to ABL forcing term if present
     mutable pde::icns::ABLForcing* m_abl_forcing{nullptr};

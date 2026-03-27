@@ -26,11 +26,7 @@ public:
 
     explicit OceanWavesBoundary(CFDSim& /*sim*/);
 
-    void initialize_fields(int, const amrex::Geometry&) override {}
-
     void post_init_actions() override;
-
-    void post_regrid_actions() override {}
 
     void pre_advance_work() override {}
 
@@ -42,7 +38,7 @@ public:
         const Field& fld,
         amrex::MultiFab& mfab,
         int dcomp = 0,
-        int orig_comp = 0) const;
+        int orig_comp = 0) const override;
 
     void
     set_vof(int lev, amrex::Real time, const Field& fld, amrex::MultiFab& mfab)

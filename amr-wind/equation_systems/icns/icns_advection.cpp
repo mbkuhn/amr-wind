@@ -3,8 +3,9 @@
 #include "amr-wind/equation_systems/icns/icns_advection.H"
 #include "amr-wind/core/MLMGOptions.H"
 #include "amr-wind/utilities/console_io.H"
-#include "amr-wind/wind_energy/ABL.H"
-#include "amr-wind/ocean_waves/OceanWaves.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/BoundaryPlane.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ModulatedPowerLaw.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/OceanWavesBoundary.H"
 #include "amr-wind/overset/overset_ops_routines.H"
 #include "AMReX_MultiFabUtil.H"
 #include "hydro_MacProjector.H"
@@ -43,13 +44,13 @@ amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> get_projection_bc(
 
 MacProjOp::MacProjOp(
     FieldRepo& repo,
-    PhysicsMgr& phy_mgr,
+    FieldBoundaryMgr& fb_mgr,
     bool has_overset,
     bool variable_density,
     bool mesh_mapping,
     bool is_anelastic)
     : m_repo(repo)
-    , m_phy_mgr(phy_mgr)
+    , m_fb_mgr(fb_mgr)
     , m_options("mac_proj")
     , m_has_overset(has_overset)
     , m_variable_density(variable_density)
@@ -157,14 +158,13 @@ void MacProjOp::set_inflow_velocity(amrex::Real time)
 {
     // Currently, input boundary planes account for inflow differently
     // Also, MPL needs to be refactored to do this properly, defer for now
-    if (m_phy_mgr.contains("ABL")) {
-        if (m_phy_mgr.get<amr_wind::ABL>().bndry_plane().mode() ==
-            io_mode::input) {
-            return;
-        }
-        if (m_phy_mgr.get<amr_wind::ABL>().abl_mpl().is_active()) {
-            return;
-        }
+    if (m_fb_mgr.contains("BoundaryPlane") &&
+        m_fb_mgr.get<BoundaryPlane>().mode() == io_mode::input) {
+        return;
+    }
+    if (m_fb_mgr.contains("ModulatedPowerLaw") &&
+        m_fb_mgr.get<ModulatedPowerLaw>().is_active()) {
+        return;
     }
 
     auto& velocity = m_repo.get_field("velocity");
@@ -176,10 +176,9 @@ void MacProjOp::set_inflow_velocity(amrex::Real time)
         amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM> mac_vec = {
             AMREX_D_DECL(&u_mac(lev), &v_mac(lev), &w_mac(lev))};
         velocity.set_inflow_sibling_fields(lev, time, mac_vec);
-        if (m_phy_mgr.contains("OceanWaves")) {
-            auto& ow = m_phy_mgr.get<amr_wind::ocean_waves::OceanWaves>();
-            ow.ow_bndry().set_inflow_sibling_velocity(
-                lev, time, velocity, mac_vec);
+        if (m_fb_mgr.contains("OceanWavesBoundary")) {
+            auto& owb = m_fb_mgr.get<OceanWavesBoundary>();
+            owb.set_inflow_sibling_velocity(lev, time, velocity, mac_vec);
         }
     }
 }

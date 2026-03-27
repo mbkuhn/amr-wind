@@ -11,7 +11,7 @@
 using namespace amrex::literals;
 
 void amr_wind::nodal_projection::set_inflow_velocity(
-    amr_wind::PhysicsMgr& phy_mgr,
+    amr_wind::FieldBoundaryMgr::TypeVector& fbs,
     amr_wind::Field& vel_fld,
     int lev,
     amrex::Real time,
@@ -20,16 +20,8 @@ void amr_wind::nodal_projection::set_inflow_velocity(
 {
     vel_fld.set_inflow(lev, time, vel_mfab, nghost);
 
-    // TODO fix hack for ABL
-    if (phy_mgr.contains("ABL")) {
-        auto& abl = phy_mgr.get<amr_wind::ABL>();
-        const auto& bndry_plane = abl.bndry_plane();
-        bndry_plane.populate_data(lev, time, vel_fld, vel_mfab);
-        abl.abl_mpl().set_velocity(lev, time, vel_fld, vel_mfab);
-    }
-    if (phy_mgr.contains("OceanWaves")) {
-        auto& ow = phy_mgr.get<amr_wind::ocean_waves::OceanWaves>();
-        ow.ow_bndry().set_velocity(lev, time, vel_fld, vel_mfab);
+    for (auto& fb : fbs) {
+        fb->set_velocity(lev, time, vel_fld, vel_mfab);
     }
 }
 
@@ -316,7 +308,7 @@ void incflo::ApplyProjection(
         vel[lev]->setBndry(0.0_rt);
         if (!proj_for_small_dt and !incremental) {
             amr_wind::nodal_projection::set_inflow_velocity(
-                m_sim.physics_manager(), velocity, lev, time, *vel[lev], 1);
+                m_sim.field_boundaries(), velocity, lev, time, *vel[lev], 1);
 
             // fill periodic boundaries to avoid corner cell issues
             vel[lev]->FillBoundary(geom[lev].periodicity());

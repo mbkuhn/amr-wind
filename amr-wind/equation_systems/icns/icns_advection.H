@@ -4,7 +4,7 @@
 #include "amr-wind/equation_systems/AdvOp_Godunov.H"
 #include "amr-wind/equation_systems/AdvOp_MOL.H"
 #include "amr-wind/equation_systems/icns/icns.H"
-#include "amr-wind/core/Physics.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/FieldBoundary.H"
 
 #include "AMReX_MultiFabUtil.H"
 #include "hydro_MacProjector.H"
@@ -26,7 +26,7 @@ public:
 
     MacProjOp(
         FieldRepo& /*repo*/,
-        PhysicsMgr& /*phy_mgr*/,
+        FieldBoundaryMgr& /*fb_mgr*/,
         bool /*has_overset*/,
         bool /*variable_density*/,
         bool /*mesh_mapping*/,
@@ -56,7 +56,7 @@ private:
             a_umac);
 
     FieldRepo& m_repo;
-    PhysicsMgr& m_phy_mgr;
+    FieldBoundaryMgr& m_fb_mgr;
     std::unique_ptr<Hydro::MacProjector> m_mac_proj;
 #ifdef AMR_WIND_USE_FFT
     std::unique_ptr<Hydro::FFTMacProjector> m_fft_mac_proj;
@@ -90,7 +90,7 @@ struct AdvectionOp<ICNS, fvm::Godunov>
         , w_mac(fields_in.repo.get_field("w_mac"))
         , m_macproj_op(
               fields.repo,
-              sim.physics_manager(),
+              sim.field_boundary_manager(),
               has_overset,
               variable_density,
               mesh_mapping,
@@ -475,7 +475,7 @@ struct AdvectionOp<ICNS, fvm::MOL>
         , m_mesh_mapping(mesh_mapping)
         , m_macproj_op(
               fields.repo,
-              sim.physics_manager(),
+              sim.field_boundary_manager(),
               has_overset,
               variable_density,
               m_mesh_mapping,

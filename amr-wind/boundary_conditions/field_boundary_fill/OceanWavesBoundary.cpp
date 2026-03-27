@@ -1,10 +1,11 @@
 #include "amr-wind/CFDSim.H"
 #include "amr-wind/boundary_conditions/field_boundary_fill/OceanWavesBoundary.H"
 #include "amr-wind/boundary_conditions/field_boundary_fill/OceanWavesFillInflow.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/FieldBoundary.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/BoundaryPlane.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ModulatedPowerLaw.H"
 #include "amr-wind/utilities/index_operations.H"
 #include "amr-wind/utilities/constants.H"
-#include "amr-wind/core/Physics.H"
-#include "amr-wind/wind_energy/ABL.H"
 #include "amr-wind/physics/multiphase/MultiPhase.H"
 #include "AMReX_REAL.H"
 
@@ -20,17 +21,18 @@ OceanWavesBoundary::OceanWavesBoundary(CFDSim& sim)
     , m_ow_vof(sim.repo().get_field("ow_vof"))
 {
     // Check for if boundary planes are being used; disable if so
-    if (sim.physics_manager().contains("ABL")) {
-        if (sim.physics_manager().get<amr_wind::ABL>().bndry_plane().mode() ==
+    if (sim.field_boundary_manager().contains("BoundaryPlane") &&
+        sim.field_boundary_manager().get<BoundaryPlane>().mode() ==
             io_mode::input) {
-            // Turn off ow_bndry; will rely on bndry_plane for fills
-            m_activate_ow_bndry = false;
-        }
-        if (sim.physics_manager().get<amr_wind::ABL>().abl_mpl().is_active()) {
-            amrex::Abort(
-                "OceanWavesBoundary: not currently compatible with ABL MPL "
-                "implementation.");
-        }
+        // Turn off ow_bndry; will rely on bndry_plane for fills
+        m_activate_ow_bndry = false;
+    }
+    if (sim.field_boundary_manager().contains("ModulatedPowerLaw") &&
+        sim.field_boundary_manager().get<ModulatedPowerLaw>().is_active()) {
+        amrex::Abort(
+            "OceanWavesBoundary: not currently compatible with Modulated Power "
+            "Law "
+            "implementation.");
     }
     // Get liquid density, will only be used if vof is present
     if (sim.physics_manager().contains("MultiPhase")) {

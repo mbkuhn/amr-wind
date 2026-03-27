@@ -3,14 +3,14 @@
 
 #include "AMReX_BC_TYPES.H"
 #include "amr-wind/core/field_ops.H"
-#include "amr-wind/core/Physics.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/FieldBoundary.H"
 #include "amr-wind/wind_energy/ABL.H"
 #include "amr-wind/ocean_waves/OceanWaves.H"
 
 namespace amr_wind::nodal_projection {
 
 void set_inflow_velocity(
-    amr_wind::PhysicsMgr& phy_mgr,
+    amr_wind::FieldBoundaryMgr::TypeVector& fbs,
     amr_wind::Field& vel_fld,
     int lev,
     amrex::Real time,

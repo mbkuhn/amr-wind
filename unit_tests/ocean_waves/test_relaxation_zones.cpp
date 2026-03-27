@@ -515,7 +515,8 @@ TEST_F(OceanWavesOpTest, set_inflow_sibling)
     u_mac.setVal(0.0_rt);
     // Initialize MAC projection operator
     auto mco = amr_wind::pde::MacProjOp(
-        sim().repo(), sim().physics_manager(), false, false, false, false);
+        sim().repo(), sim().field_boundary_manager(), false, false, false,
+        false);
     // Populate boundary using set inflow
     mco.set_inflow_velocity(0.0_rt);
 

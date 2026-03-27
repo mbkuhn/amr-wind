@@ -308,6 +308,7 @@ BoundaryPlane::BoundaryPlane(CFDSim& sim)
         m_is_initialized = false;
         return;
     }
+    m_has_overset = sim.has_overset();
 
     pp.query("bndry_write_frequency", m_write_frequency);
     pp.queryarr("bndry_planes", m_planes);
@@ -350,7 +351,18 @@ void BoundaryPlane::post_init_actions()
     read_file(false);
 }
 
+// At the beginning of a timestep, this method updates plane data for the sake
+// of the boundaries during advection to nph time (n+1/2)
 void BoundaryPlane::pre_advance_work()
+{
+    if (!m_has_overset) {
+        pre_advance_inner_calls();
+    }
+}
+
+// Isolated calls from within pre_advance_work so it can be called independently
+// for overset simulations where timing is more complicated
+void BoundaryPlane::pre_advance_inner_calls()
 {
     if (!m_is_initialized) {
         return;
@@ -358,6 +370,8 @@ void BoundaryPlane::pre_advance_work()
     read_file(true);
 }
 
+// At the beginning of a timestep but after pre_advance_work, this method
+// updates plane data to new time (n+1) for rest of the algorithm
 void BoundaryPlane::pre_predictor_work()
 {
     if (!m_is_initialized) {
@@ -1302,7 +1316,7 @@ void BoundaryPlane::read_file(const bool nph_target_time)
 void BoundaryPlane::populate_data(
     const int lev,
     const amrex::Real time,
-    Field& fld,
+    const Field& fld,
     amrex::MultiFab& mfab,
     const int dcomp,
     const int orig_comp) const
@@ -1396,6 +1410,28 @@ void BoundaryPlane::populate_data(
     const auto& geom = fld.repo().mesh().Geom();
     mfab.EnforcePeriodicity(
         0, mfab.nComp(), amrex::IntVect(1), geom[lev].periodicity());
+}
+
+void BoundaryPlane::set_velocity(
+    const int lev,
+    const amrex::Real time,
+    const Field& fld,
+    amrex::MultiFab& mfab,
+    const int dcomp,
+    const int orig_comp) const
+{
+    BL_PROFILE("amr-wind::BoundaryPlane::set_velocity");
+    if (m_io_mode != io_mode::input) {
+        return;
+    }
+
+    if (fld.num_comp() != 3) {
+        amrex::Abort(
+            "BoundaryPlane.cpp BoundaryPlane::set_velocity() check failed\n"
+            "Field must have 3 components to set velocity.");
+    }
+
+    populate_data(lev, time, fld, mfab, dcomp, orig_comp);
 }
 
 #ifdef AMR_WIND_USE_NETCDF

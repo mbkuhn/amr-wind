@@ -122,19 +122,25 @@ public:
 
     explicit BoundaryPlane(CFDSim& /*sim*/);
 
-    void initialize_fields(int, const amrex::Geometry&) override {}
-
     void post_init_actions() override;
-
-    void post_regrid_actions() override {}
 
     void pre_advance_work() override;
 
     void post_advance_work() override;
+    
+    void pre_predictor_work() override;
+
+    void set_velocity(
+        int lev,
+        amrex::Real time,
+        const Field& fld,
+        amrex::MultiFab& mfab,
+        int dcomp = 0,
+        int orig_comp = 0) const override;
 
     // Non-inherited public methods
 
-    void pre_predictor_work();
+    void pre_advance_inner_calls();
 
     void initialize_data();
 
@@ -154,7 +160,7 @@ public:
     void populate_data(
         int /*lev*/,
         amrex::Real /*time*/,
-        Field& /*fld*/,
+        const Field& /*fld*/,
         amrex::MultiFab& /*mfab*/,
         int dcomp = 0,
         int orig_comp = 0) const;
@@ -261,6 +267,10 @@ private:
 
     //! Flag indicating if this capability is available
     bool m_is_initialized{false};
+
+    //! Flag indicating if the simulation is overset -- needed for complicated
+    //! timing of pre_advance_work
+    bool m_has_overset{false};
 
     //! controls extents on native bndry output
     const int m_in_rad = 1;

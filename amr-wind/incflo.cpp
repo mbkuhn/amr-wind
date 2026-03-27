@@ -113,6 +113,10 @@ void incflo::init_amr_wind_modules()
     for (auto& pp : m_sim.physics()) {
         pp->post_init_actions();
     }
+    for (auto& fb : m_sim.field_boundaries()) {
+        fb->post_init_actions();
+    }
+
 
     icns().initialize();
     for (auto& eqn : scalar_eqns()) {
@@ -256,6 +260,10 @@ void incflo::post_advance_work()
 
     for (auto& pp : m_sim.physics()) {
         pp->post_advance_work();
+    }
+
+    for (auto& fb : m_sim.field_boundaries()) {
+        fb->post_advance_work();
     }
 
     m_sim.post_manager().post_advance_work();
@@ -442,6 +450,7 @@ void incflo::init_physics_and_pde()
 
     m_sim.create_transport_model();
     m_sim.init_physics();
+    m_sim.init_field_boundaries();
     {
         // Check for if velocity is prescribed
         amrex::ParmParse pp("incflo");
