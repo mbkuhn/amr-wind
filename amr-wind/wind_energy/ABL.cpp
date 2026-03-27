@@ -78,7 +78,7 @@ ABL::ABL(CFDSim& sim)
     m_bndry_plane = std::make_unique<BoundaryPlane>(sim);
 
     // Instantiate the ABL Modulated Power Law
-    m_abl_mpl = std::make_unique<ABLModulatedPowerLaw>(sim);
+    m_abl_mpl = std::make_unique<ModulatedPowerLaw>(sim);
 
     // Instantiate the ABL anelastic module
     m_abl_anelastic = std::make_unique<ABLAnelastic>(sim);

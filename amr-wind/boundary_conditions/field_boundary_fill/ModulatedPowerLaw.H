@@ -1,5 +1,5 @@
-#ifndef ABLMODULATEDPOWERLAW_H
-#define ABLMODULATEDPOWERLAW_H
+#ifndef MODULATEDPOWERLAW_H
+#define MODULATEDPOWERLAW_H
 
 #include "amr-wind/core/Field.H"
 #include "amr-wind/CFDSim.H"
@@ -18,11 +18,11 @@ namespace amr_wind {
  *  This class sets velocity and temperature at mass inflow bc's
  *
  */
-class ABLModulatedPowerLaw
+class ModulatedPowerLaw
 {
 
 public:
-    explicit ABLModulatedPowerLaw(CFDSim& /*sim*/);
+    explicit ModulatedPowerLaw(CFDSim& /*sim*/);
 
     //! Execute initialization actions after mesh has been fully generated
     void post_init_actions();
@@ -91,4 +91,4 @@ private:
 
 } // namespace amr_wind
 
-#endif /* ABLMODULATEDPOWERLAW_H */
+#endif /* MODULATEDPOWERLAW_H */

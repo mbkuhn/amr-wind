@@ -1,22 +1,22 @@
 #include <utility>
 
-#include "amr-wind/boundary_conditions/field_boundary_fill/ABLFillMPL.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/FillMPL.H"
 
 namespace amr_wind {
 
-ABLFillMPL::ABLFillMPL(
+FillMPL::FillMPL(
     Field& field,
     const amrex::AmrCore& mesh,
     const SimTime& time,
-    const ABLModulatedPowerLaw& abl_mpl)
+    const ModulatedPowerLaw& abl_mpl)
     : FieldFillPatchOps<FieldBCDirichlet>(
           field, mesh, time, FieldInterpolator::CellConsLinear)
     , m_abl_mpl(abl_mpl)
 {}
 
-ABLFillMPL::~ABLFillMPL() = default;
+FillMPL::~FillMPL() = default;
 
-void ABLFillMPL::fillpatch(
+void FillMPL::fillpatch(
     const int lev,
     const amrex::Real time,
     amrex::MultiFab& mfab,
@@ -33,7 +33,7 @@ void ABLFillMPL::fillpatch(
     }
 }
 
-void ABLFillMPL::fillpatch_from_coarse(
+void FillMPL::fillpatch_from_coarse(
     const int lev,
     const amrex::Real time,
     amrex::MultiFab& mfab,
@@ -50,7 +50,7 @@ void ABLFillMPL::fillpatch_from_coarse(
     }
 }
 
-void ABLFillMPL::fillphysbc(
+void FillMPL::fillphysbc(
     const int lev,
     const amrex::Real time,
     amrex::MultiFab& mfab,
@@ -67,7 +67,7 @@ void ABLFillMPL::fillphysbc(
     }
 }
 
-void ABLFillMPL::fillpatch_sibling_fields(
+void FillMPL::fillpatch_sibling_fields(
     const int lev,
     const amrex::Real time,
     amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& mfabs,

@@ -11,7 +11,7 @@
 #include "amr-wind/core/SimTime.H"
 #include "amr-wind/utilities/FieldPlaneAveraging.H"
 #include "amr-wind/wind_energy/ABLStatsBase.H"
-#include "amr-wind/boundary_conditions/field_boundary_fill/ABLModulatedPowerLaw.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ModulatedPowerLaw.H"
 #include "amr-wind/wind_energy/ABLAnelastic.H"
 #include "AMReX_REAL.H"
 
@@ -119,7 +119,7 @@ public:
 
     const BoundaryPlane& bndry_plane() const { return *m_bndry_plane; }
     BoundaryPlane& bndry_plane() { return *m_bndry_plane; }
-    const ABLModulatedPowerLaw& abl_mpl() const { return *m_abl_mpl; }
+    const ModulatedPowerLaw& abl_mpl() const { return *m_abl_mpl; }
 
     //! Return the ABL statistics calculator
     const ABLStatsBase& abl_statistics() const { return *m_stats; }
@@ -147,7 +147,7 @@ private:
     std::unique_ptr<BoundaryPlane> m_bndry_plane;
 
     //! ABL modulated power law instance
-    std::unique_ptr<ABLModulatedPowerLaw> m_abl_mpl;
+    std::unique_ptr<ModulatedPowerLaw> m_abl_mpl;
 
     //! Reference to ABL forcing term if present
     mutable pde::icns::ABLForcing* m_abl_forcing{nullptr};

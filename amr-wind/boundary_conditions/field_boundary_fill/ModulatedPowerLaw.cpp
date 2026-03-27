@@ -1,6 +1,6 @@
 #include "amr-wind/CFDSim.H"
-#include "amr-wind/boundary_conditions/field_boundary_fill/ABLModulatedPowerLaw.H"
-#include "amr-wind/boundary_conditions/field_boundary_fill/ABLFillMPL.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ModulatedPowerLaw.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/FillMPL.H"
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"
 #include "amr-wind/utilities/ncutils/nc_interface.H"
@@ -15,7 +15,7 @@ using namespace amrex::literals;
 
 namespace amr_wind {
 
-ABLModulatedPowerLaw::ABLModulatedPowerLaw(CFDSim& sim)
+ModulatedPowerLaw::ModulatedPowerLaw(CFDSim& sim)
     : m_sim(sim)
     , m_time(m_sim.time())
     , m_repo(m_sim.repo())
@@ -70,15 +70,15 @@ ABLModulatedPowerLaw::ABLModulatedPowerLaw(CFDSim& sim)
         m_thvv_d.begin());
 }
 
-void ABLModulatedPowerLaw::post_init_actions()
+void ModulatedPowerLaw::post_init_actions()
 {
     if (m_activate_mpl) {
-        m_velocity.register_fill_patch_op<ABLFillMPL>(m_mesh, m_time, *this);
-        m_temperature.register_fill_patch_op<ABLFillMPL>(m_mesh, m_time, *this);
+        m_velocity.register_fill_patch_op<FillMPL>(m_mesh, m_time, *this);
+        m_temperature.register_fill_patch_op<FillMPL>(m_mesh, m_time, *this);
     }
 }
 
-void ABLModulatedPowerLaw::pre_advance_work()
+void ModulatedPowerLaw::pre_advance_work()
 {
 
 #ifdef AMR_WIND_USE_HELICS
@@ -108,9 +108,9 @@ void ABLModulatedPowerLaw::pre_advance_work()
     m_uvec[2] = 0.0_rt;
 }
 
-void ABLModulatedPowerLaw::post_advance_work() {}
+void ModulatedPowerLaw::post_advance_work() {}
 
-void ABLModulatedPowerLaw::set_velocity(
+void ModulatedPowerLaw::set_velocity(
     const int lev,
     const amrex::Real /*time*/,
     const Field& fld,
@@ -123,7 +123,7 @@ void ABLModulatedPowerLaw::set_velocity(
         return;
     }
 
-    BL_PROFILE("amr-wind::ABLModulatedPowerLaw::set_velocity");
+    BL_PROFILE("amr-wind::ModulatedPowerLaw::set_velocity");
 
     const amrex::Real tvx = m_uvec[0];
     const amrex::Real tvy = m_uvec[1];
@@ -216,7 +216,7 @@ void ABLModulatedPowerLaw::set_velocity(
     }
 }
 
-void ABLModulatedPowerLaw::set_temperature(
+void ModulatedPowerLaw::set_temperature(
     const int lev,
     const amrex::Real /*time*/,
     const Field& fld,
@@ -227,7 +227,7 @@ void ABLModulatedPowerLaw::set_temperature(
         return;
     }
 
-    BL_PROFILE("amr-wind::ABLModulatedPowerLaw::set_temperature");
+    BL_PROFILE("amr-wind::ModulatedPowerLaw::set_temperature");
 
     const amrex::Real delta_t = m_delta_t;
     const amrex::Real theta_cutoff_height = m_theta_cutoff_height;

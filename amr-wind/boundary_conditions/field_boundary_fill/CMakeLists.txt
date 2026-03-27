@@ -4,6 +4,6 @@ target_sources(${amr_wind_lib_name}
   OceanWavesBoundary.cpp
   PlaneFillInflow.cpp
   BoundaryPlane.cpp
-  ABLFillMPL.cpp
-  ABLModulatedPowerLaw.cpp
+  FillMPL.cpp
+  ModulatedPowerLaw.cpp
   )
