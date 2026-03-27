@@ -386,13 +386,11 @@ void BoundaryPlane::initialize_data()
             }
             m_fields.emplace_back(&fld);
         } else {
-            amrex::Abort(
-                "BoundaryPlane: invalid variable requested: " + fname);
+            amrex::Abort("BoundaryPlane: invalid variable requested: " + fname);
         }
     }
     if ((m_io_mode == io_mode::output) && (m_out_fmt == "erf-multiblock")) {
-        amrex::Abort(
-            "BoundaryPlane: can't output data in erf-multiblock mode");
+        amrex::Abort("BoundaryPlane: can't output data in erf-multiblock mode");
     }
 }
 
