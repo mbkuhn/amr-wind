@@ -6,6 +6,7 @@
 #include "amr-wind/core/FieldRepo.H"
 #include "amr-wind/equation_systems/PDEBase.H"
 #include "amr-wind/core/Physics.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/FieldBoundary.H"
 #include "amr-wind/core/MeshMap.H"
 #include "amr-wind/helics.H"
 
@@ -87,6 +88,21 @@ public:
         return m_physics_mgr.objects();
     }
 
+    FieldBoundaryMgr& field_boundary_manager() { return m_field_boundary_mgr; }
+    const FieldBoundaryMgr& field_boundary_manager() const
+    {
+        return m_field_boundary_mgr;
+    }
+
+    FieldBoundaryMgr::TypeVector& field_boundaries()
+    {
+        return m_field_boundary_mgr.objects();
+    }
+    const FieldBoundaryMgr::TypeVector& field_boundaries() const
+    {
+        return m_field_boundary_mgr.objects();
+    }
+
     transport::TransportModel& transport_model() { return *m_transport; }
     const transport::TransportModel& transport_model() const
     {
@@ -158,6 +174,8 @@ private:
     pde::PDEMgr m_pde_mgr;
 
     PhysicsMgr m_physics_mgr;
+
+    FieldBoundaryMgr m_field_boundary_mgr;
 
     std::unique_ptr<transport::TransportModel> m_transport;
 
