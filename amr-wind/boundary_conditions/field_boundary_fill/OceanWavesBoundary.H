@@ -4,6 +4,7 @@
 #include "amr-wind/core/Field.H"
 #include "amr-wind/core/IntField.H"
 #include "amr-wind/CFDSim.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/FieldBoundary.H"
 #include "AMReX_Gpu.H"
 #include <AMReX_BndryRegister.H>
 #include "AMReX_REAL.H"
@@ -18,13 +19,22 @@ namespace amr_wind {
  *  available wave data at the boundaries
  *
  */
-class OceanWavesBoundary
+class OceanWavesBoundary : public FieldBoundary::Register<OceanWavesBoundary>
 {
-
 public:
+    static std::string identifier() { return "OceanWavesBoundary"; }
+
     explicit OceanWavesBoundary(CFDSim& /*sim*/);
 
-    void post_init_actions();
+    void initialize_fields(int, const amrex::Geometry&) override {}
+
+    void post_init_actions() override;
+
+    void post_regrid_actions() override {}
+
+    void pre_advance_work() override {}
+
+    void post_advance_work() override {}
 
     void set_velocity(
         int lev,
