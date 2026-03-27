@@ -3,6 +3,7 @@
 
 #include "amr-wind/core/Field.H"
 #include "amr-wind/CFDSim.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/FieldBoundary.H"
 #include "AMReX_Gpu.H"
 #include "amr-wind/utilities/trig_ops.H"
 #include "amr-wind/core/vs/vector_space.H"
@@ -18,18 +19,23 @@ namespace amr_wind {
  *  This class sets velocity and temperature at mass inflow bc's
  *
  */
-class ModulatedPowerLaw
+class ModulatedPowerLaw : public FieldBoundary::Register<ModulatedPowerLaw>
 {
 
 public:
+    static std::string identifier() { return "ModulatedPowerLaw"; }
+
     explicit ModulatedPowerLaw(CFDSim& /*sim*/);
 
-    //! Execute initialization actions after mesh has been fully generated
-    void post_init_actions();
+    void initialize_fields(int, const amrex::Geometry&) override {}
 
-    void pre_advance_work();
+    void post_init_actions() override;
 
-    void post_advance_work();
+    void post_regrid_actions() override {}
+
+    void pre_advance_work() override;
+
+    void post_advance_work() override;
 
     void set_velocity(
         int lev,
