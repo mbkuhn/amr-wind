@@ -1,9 +1,9 @@
-#ifndef ABLFILLMPL_H
-#define ABLFILLMPL_H
+#ifndef ABLFILLINFLOW_H
+#define ABLFILLINFLOW_H
 
 #include "amr-wind/core/FieldFillPatchOps.H"
 #include "amr-wind/core/FieldBCOps.H"
-#include "amr-wind/wind_energy/ABLModulatedPowerLaw.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ABLBoundaryPlane.H"
 
 namespace amr_wind {
 
@@ -15,16 +15,16 @@ namespace amr_wind {
  *
  *  \sa ABLBoundaryPlane
  */
-class ABLFillMPL : public FieldFillPatchOps<FieldBCDirichlet>
+class ABLFillInflow : public FieldFillPatchOps<FieldBCDirichlet>
 {
 public:
-    ABLFillMPL(
+    ABLFillInflow(
         Field& field,
         const amrex::AmrCore& mesh,
         const SimTime& time,
-        const ABLModulatedPowerLaw& abl_mpl);
+        const ABLBoundaryPlane& bndry_plane);
 
-    ~ABLFillMPL() override;
+    ~ABLFillInflow() override;
 
     void fillpatch(
         int lev,
@@ -61,9 +61,9 @@ public:
         FieldState fstate = FieldState::New) override;
 
 protected:
-    const ABLModulatedPowerLaw& m_abl_mpl;
+    const ABLBoundaryPlane& m_bndry_plane;
 };
 
 } // namespace amr_wind
 
-#endif /* ABLFILLMPL_H */
+#endif /* ABLFILLINFLOW_H */

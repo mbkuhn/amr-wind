@@ -3,7 +3,7 @@
 
 #include "amr-wind/core/Physics.H"
 #include "amr-wind/core/FieldRepo.H"
-#include "amr-wind/ocean_waves/boundary_ops/OceanWavesBoundary.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/OceanWavesBoundary.H"
 
 /** \defgroup ocean_waves Ocean Waves module
  *  Ocean Waves class

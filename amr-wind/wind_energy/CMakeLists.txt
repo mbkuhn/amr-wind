@@ -6,13 +6,9 @@ target_sources(${amr_wind_lib_name}
   ABLFieldInit.cpp
   ABLFieldInitFile.cpp
   ABLWallFunction.cpp
-  ABLFillInflow.cpp
-  ABLBoundaryPlane.cpp
   MOData.cpp
   ABLMesoscaleForcing.cpp
   ABLMesoscaleInput.cpp
-  ABLFillMPL.cpp
-  ABLModulatedPowerLaw.cpp
   ABLAnelastic.cpp
   )
 

@@ -8,3 +8,4 @@ target_sources(${amr_wind_lib_name}
    )
 
 add_subdirectory(wall_models)
+add_subdirectory(field_boundary_fill)

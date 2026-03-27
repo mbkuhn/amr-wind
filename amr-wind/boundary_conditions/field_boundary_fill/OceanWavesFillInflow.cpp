@@ -1,6 +1,6 @@
 #include <utility>
 
-#include "amr-wind/ocean_waves/boundary_ops/OceanWavesFillInflow.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/OceanWavesFillInflow.H"
 #include "amr-wind/utilities/constants.H"
 
 namespace amr_wind {

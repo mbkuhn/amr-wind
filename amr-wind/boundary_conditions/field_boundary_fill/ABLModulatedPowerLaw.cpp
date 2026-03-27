@@ -1,6 +1,6 @@
 #include "amr-wind/CFDSim.H"
-#include "amr-wind/wind_energy/ABLModulatedPowerLaw.H"
-#include "amr-wind/wind_energy/ABLFillMPL.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ABLModulatedPowerLaw.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ABLFillMPL.H"
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"
 #include "amr-wind/utilities/ncutils/nc_interface.H"

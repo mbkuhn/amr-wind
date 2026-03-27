@@ -1,6 +1,6 @@
 #include <utility>
 
-#include "amr-wind/wind_energy/ABLFillInflow.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ABLFillInflow.H"
 
 namespace amr_wind {
 

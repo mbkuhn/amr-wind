@@ -2,7 +2,7 @@
 
 #include "amr-wind/wind_energy/ABL.H"
 #include "amr-wind/wind_energy/ABLFieldInit.H"
-#include "amr-wind/wind_energy/ABLBoundaryPlane.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ABLBoundaryPlane.H"
 #include "amr-wind/equation_systems/icns/source_terms/ABLForcing.H"
 #include "amr-wind/equation_systems/icns/source_terms/ABLMeanBoussinesq.H"
 #include "amr-wind/equation_systems/icns/source_terms/ABLMesoForcingMom.H"

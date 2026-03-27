@@ -3,7 +3,7 @@
 
 #include "amr-wind/core/FieldFillPatchOps.H"
 #include "amr-wind/core/FieldBCOps.H"
-#include "amr-wind/ocean_waves/boundary_ops/OceanWavesBoundary.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/OceanWavesBoundary.H"
 
 namespace amr_wind {
 

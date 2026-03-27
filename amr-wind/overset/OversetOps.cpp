@@ -7,7 +7,7 @@
 #include "amr-wind/projection/nodal_projection_ops.H"
 #include <hydro_NodalProjector.H>
 #include "amr-wind/wind_energy/ABL.H"
-#include "amr-wind/wind_energy/ABLBoundaryPlane.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ABLBoundaryPlane.H"
 #include "AMReX_REAL.H"
 
 using namespace amrex::literals;

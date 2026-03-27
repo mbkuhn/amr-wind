@@ -7,11 +7,11 @@
 #include "amr-wind/wind_energy/ABLFieldInit.H"
 #include "amr-wind/wind_energy/ABLFieldInitFile.H"
 #include "amr-wind/wind_energy/ABLWallFunction.H"
-#include "amr-wind/wind_energy/ABLBoundaryPlane.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ABLBoundaryPlane.H"
 #include "amr-wind/core/SimTime.H"
 #include "amr-wind/utilities/FieldPlaneAveraging.H"
 #include "amr-wind/wind_energy/ABLStatsBase.H"
-#include "amr-wind/wind_energy/ABLModulatedPowerLaw.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ABLModulatedPowerLaw.H"
 #include "amr-wind/wind_energy/ABLAnelastic.H"
 #include "AMReX_REAL.H"
 

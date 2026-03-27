@@ -1,6 +1,6 @@
 #include "amr-wind/CFDSim.H"
-#include "amr-wind/ocean_waves/boundary_ops/OceanWavesBoundary.H"
-#include "amr-wind/ocean_waves/boundary_ops/OceanWavesFillInflow.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/OceanWavesBoundary.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/OceanWavesFillInflow.H"
 #include "amr-wind/utilities/index_operations.H"
 #include "amr-wind/utilities/constants.H"
 #include "amr-wind/core/Physics.H"
