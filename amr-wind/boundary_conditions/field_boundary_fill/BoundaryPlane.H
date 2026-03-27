@@ -113,21 +113,28 @@ private:
  *
  *  \sa PlaneFillInflow
  */
-class BoundaryPlane
+class BoundaryPlane : public amr_wind::FieldBoundary::Register<BoundaryPlane>
 {
     static_assert(AMREX_SPACEDIM == 3, "ABL requires 3 dimensional mesh");
 
 public:
+    static std::string identifier() { return "BoundaryPlane"; }
+
     explicit BoundaryPlane(CFDSim& /*sim*/);
 
-    //! Execute initialization actions after mesh has been fully generated
-    void post_init_actions();
+    void initialize_fields(int, const amrex::Geometry&) override {}
 
-    void pre_advance_work();
+    void post_init_actions() override;
+
+    void post_regrid_actions() override {}
+
+    void pre_advance_work() override;
+
+    void post_advance_work() override;
+
+    // Non-inherited public methods
 
     void pre_predictor_work();
-
-    void post_advance_work();
 
     void initialize_data();
 
