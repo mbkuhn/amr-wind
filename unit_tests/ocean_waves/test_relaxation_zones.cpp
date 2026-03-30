@@ -3,6 +3,7 @@
 #include "aw_test_utils/test_utils.H"
 #include "amr-wind/ocean_waves/utils/wave_utils_K.H"
 #include "amr-wind/ocean_waves/OceanWaves.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/OceanWavesBoundary.H"
 #include "amr-wind/utilities/constants.H"
 #include "amr-wind/physics/multiphase/MultiPhase.H"
 #include "amr-wind/equation_systems/icns/icns_advection.H"
@@ -354,10 +355,12 @@ TEST_F(OceanWavesOpTest, gas_phase)
     // OceanWaves
     auto& pde_mgr = sim().pde_manager();
     pde_mgr.register_icns();
-    // Initialize physics
+    // Initialize physics and boundary fill
     sim().init_physics();
     auto& oceanwaves =
         sim().physics_manager().get<amr_wind::ocean_waves::OceanWaves>();
+    auto& oceanwaves_bndry =
+        sim().field_boundary_manager().get<amr_wind::OceanWavesBoundary>();
     // Initialize fields
     oceanwaves.pre_init_actions();
     auto& repo = sim().repo();
@@ -372,6 +375,7 @@ TEST_F(OceanWavesOpTest, gas_phase)
 
     // Do post-init step, which modifies velocity and vof fields
     oceanwaves.post_init_actions();
+    oceanwaves_bndry.post_init_actions();
 
     // Get vof field
     auto& vof = repo.get_field("vof");
@@ -419,10 +423,12 @@ TEST_F(OceanWavesOpTest, boundary_fill)
     // OceanWaves
     auto& pde_mgr = sim().pde_manager();
     pde_mgr.register_icns();
-    // Initialize physics
+    // Initialize physics and boundary fill
     sim().init_physics();
     auto& oceanwaves =
         sim().physics_manager().get<amr_wind::ocean_waves::OceanWaves>();
+    auto& oceanwaves_bndry =
+        sim().field_boundary_manager().get<amr_wind::OceanWavesBoundary>();
     // Initialize fields
     auto& repo = sim().repo();
     auto& velocity = repo.get_field("velocity");
@@ -433,6 +439,7 @@ TEST_F(OceanWavesOpTest, boundary_fill)
     }
     // Do post-init step, which includes fillpatch calls
     oceanwaves.post_init_actions();
+    oceanwaves_bndry.post_init_actions();
 
     auto& multiphase = sim().physics_manager().get<amr_wind::MultiPhase>();
     const amrex::Real rho1 = multiphase.rho1();
@@ -494,10 +501,12 @@ TEST_F(OceanWavesOpTest, set_inflow_sibling)
     // OceanWaves
     auto& pde_mgr = sim().pde_manager();
     pde_mgr.register_icns();
-    // Initialize physics
+    // Initialize physics and boundary fill
     sim().init_physics();
     auto& oceanwaves =
         sim().physics_manager().get<amr_wind::ocean_waves::OceanWaves>();
+    auto& oceanwaves_bndry =
+        sim().field_boundary_manager().get<amr_wind::OceanWavesBoundary>();
     // Initialize fields
     auto& repo = sim().repo();
     auto& velocity = repo.get_field("velocity");
@@ -508,6 +517,7 @@ TEST_F(OceanWavesOpTest, set_inflow_sibling)
     }
     // Do post-init step, which includes fillpatch calls
     oceanwaves.post_init_actions();
+    oceanwaves_bndry.post_init_actions();
 
     // Get MAC velocity in x
     auto& u_mac = repo.get_field("u_mac");
