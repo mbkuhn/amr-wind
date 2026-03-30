@@ -10,7 +10,7 @@
 #include "amr-wind/core/MeshMap.H"
 #include "amr-wind/helics.H"
 
-#include "amr-wind/wind_energy/ABLReadERFFunction.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ReadERFFunction.H"
 class MultiBlockContainer;
 
 /** AMR-Wind

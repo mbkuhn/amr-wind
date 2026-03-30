@@ -6,7 +6,7 @@
 #include "amr-wind/CFDSim.H"
 #include "amr-wind/utilities/ncutils/nc_interface.H"
 #include "amr-wind/utilities/io_utils.H"
-#include "amr-wind/wind_energy/ABLReadERFFunction.H"
+#include "amr-wind/boundary_conditions/field_boundary_fill/ReadERFFunction.H"
 #include "AMReX_Gpu.H"
 #include "AMReX_BndryRegister.H"
 #include "AMReX_REAL.H"
