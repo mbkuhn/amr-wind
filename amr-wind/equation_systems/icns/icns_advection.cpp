@@ -162,8 +162,7 @@ void MacProjOp::set_inflow_velocity(amrex::Real time)
         m_fb_mgr.get<BoundaryPlane>().mode() == io_mode::input) {
         return;
     }
-    if (m_fb_mgr.contains("ModulatedPowerLaw") &&
-        m_fb_mgr.get<ModulatedPowerLaw>().is_active()) {
+    if (m_fb_mgr.contains("ModulatedPowerLaw")) {
         return;
     }
 

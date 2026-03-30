@@ -47,8 +47,6 @@ public:
         const Field& fld,
         amrex::MultiFab& mfab) const;
 
-    [[nodiscard]] bool is_active() const { return m_activate_mpl; }
-
 private:
     const CFDSim& m_sim;
     const amr_wind::SimTime& m_time;
@@ -87,8 +85,6 @@ private:
     amrex::Real m_theta_cutoff_height{250.0_rt};
     amrex::Real m_theta_gauss_mean{0.0_rt};
     amrex::Real m_theta_gauss_var{1.0_rt};
-
-    bool m_activate_mpl{false};
 };
 
 } // namespace amr_wind

@@ -27,8 +27,7 @@ OceanWavesBoundary::OceanWavesBoundary(CFDSim& sim)
         // Turn off ow_bndry; will rely on bndry_plane for fills
         m_activate_ow_bndry = false;
     }
-    if (sim.field_boundary_manager().contains("ModulatedPowerLaw") &&
-        sim.field_boundary_manager().get<ModulatedPowerLaw>().is_active()) {
+    if (sim.field_boundary_manager().contains("ModulatedPowerLaw")) {
         amrex::Abort(
             "OceanWavesBoundary: not currently compatible with Modulated Power "
             "Law implementation.");

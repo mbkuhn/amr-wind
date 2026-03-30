@@ -79,9 +79,15 @@ ABL::ABL(CFDSim& sim)
         sim.field_boundary_manager().create("BoundaryPlane", sim);
     }
 
-    // Instantiate the BoundaryPlane field boundary if not already present
+    // Instantiate the ModulatedPowerLaw field boundary if requested through
+    // original input argument
     if (!sim.field_boundary_manager().contains("ModulatedPowerLaw")) {
-        sim.field_boundary_manager().create("ModulatedPowerLaw", sim);
+        amrex::ParmParse pp_mpl("MPL");
+        bool activate_mpl = false;
+        pp_mpl.query("activate", activate_mpl);
+        if (activate_mpl) {
+            sim.field_boundary_manager().create("ModulatedPowerLaw", sim);
+        }
     }
 
     // Instantiate the ABL anelastic module

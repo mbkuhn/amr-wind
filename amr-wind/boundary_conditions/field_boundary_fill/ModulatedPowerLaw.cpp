@@ -25,7 +25,6 @@ ModulatedPowerLaw::ModulatedPowerLaw(CFDSim& sim)
 {
     amrex::ParmParse pp("MPL");
 
-    pp.query("activate", m_activate_mpl);
     pp.query("zref", m_zref);
     pp.query("shear_exp", m_shear_exp);
     pp.query("umax_factor", m_umax_factor);
@@ -72,10 +71,8 @@ ModulatedPowerLaw::ModulatedPowerLaw(CFDSim& sim)
 
 void ModulatedPowerLaw::post_init_actions()
 {
-    if (m_activate_mpl) {
-        m_velocity.register_fill_patch_op<FillMPL>(m_mesh, m_time, *this);
-        m_temperature.register_fill_patch_op<FillMPL>(m_mesh, m_time, *this);
-    }
+    m_velocity.register_fill_patch_op<FillMPL>(m_mesh, m_time, *this);
+    m_temperature.register_fill_patch_op<FillMPL>(m_mesh, m_time, *this);
 }
 
 void ModulatedPowerLaw::pre_advance_work()
@@ -118,10 +115,6 @@ void ModulatedPowerLaw::set_velocity(
     const int dcomp,
     const int orig_comp) const
 {
-
-    if (!m_activate_mpl) {
-        return;
-    }
 
     BL_PROFILE("amr-wind::ModulatedPowerLaw::set_velocity");
 
@@ -222,10 +215,6 @@ void ModulatedPowerLaw::set_temperature(
     const Field& fld,
     amrex::MultiFab& mfab) const
 {
-
-    if (!m_activate_mpl) {
-        return;
-    }
 
     BL_PROFILE("amr-wind::ModulatedPowerLaw::set_temperature");
 
