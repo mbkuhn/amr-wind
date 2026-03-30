@@ -31,8 +31,7 @@ OceanWavesBoundary::OceanWavesBoundary(CFDSim& sim)
         sim.field_boundary_manager().get<ModulatedPowerLaw>().is_active()) {
         amrex::Abort(
             "OceanWavesBoundary: not currently compatible with Modulated Power "
-            "Law "
-            "implementation.");
+            "Law implementation.");
     }
     // Get liquid density, will only be used if vof is present
     if (sim.physics_manager().contains("MultiPhase")) {
