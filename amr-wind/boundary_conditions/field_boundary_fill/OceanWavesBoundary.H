@@ -28,7 +28,9 @@ public:
 
     void post_init_actions() override;
 
-    void pre_advance_work() override {}
+    void pre_advance_work() override;
+
+    void pre_predictor_work() override;
 
     void post_advance_work() override {}
 

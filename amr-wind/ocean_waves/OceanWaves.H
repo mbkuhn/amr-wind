@@ -49,11 +49,6 @@ public:
 
     void post_advance_work() override;
 
-    [[nodiscard]] const OceanWavesBoundary& ow_bndry() const
-    {
-        return *m_ow_bndry;
-    }
-
 protected:
     virtual void prepare_outputs();
 
@@ -62,9 +57,6 @@ private:
 
     //! Unique pointer to the ocean waves model
     std::unique_ptr<OceanWavesModel> m_owm;
-
-    //! Ocean waves boundary instance
-    OceanWavesBoundary* m_ow_bndry{nullptr};
 
     //! Ocean waves target free surface levelset function
     Field& m_ow_levelset;

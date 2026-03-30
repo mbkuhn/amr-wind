@@ -31,7 +31,6 @@ OceanWaves::OceanWaves(CFDSim& sim)
     if (!sim.field_boundary_manager().contains("OceanWavesBoundary")) {
         sim.field_boundary_manager().create("OceanWavesBoundary", sim);
     }
-    m_ow_bndry = &(sim.field_boundary_manager().get<OceanWavesBoundary>());
 }
 
 OceanWaves::~OceanWaves() = default;
@@ -76,9 +75,7 @@ void OceanWaves::initialize_fields(int level, const amrex::Geometry& geom)
 void OceanWaves::post_init_actions()
 {
     BL_PROFILE("amr-wind::ocean_waves::OceanWaves::post_init_actions");
-    m_ow_bndry->post_init_actions();
     m_owm->update_target_fields(m_sim.time().current_time());
-    m_ow_bndry->record_boundary_data_time(m_sim.time().current_time());
     if (m_multiphase_mode) {
         m_owm->apply_relax_zones();
     }
@@ -98,7 +95,6 @@ void OceanWaves::pre_advance_work()
     const amrex::Real adv_bdy_time =
         0.5_rt * (m_sim.time().current_time() + m_sim.time().new_time());
     m_owm->update_target_fields(adv_bdy_time);
-    m_ow_bndry->record_boundary_data_time(adv_bdy_time);
 }
 
 void OceanWaves::pre_predictor_work()
@@ -107,12 +103,11 @@ void OceanWaves::pre_predictor_work()
     // Update ow values for boundary fills at new time
     const amrex::Real bdy_fill_time = m_sim.time().new_time();
     m_owm->update_target_fields(bdy_fill_time);
-    m_ow_bndry->record_boundary_data_time(bdy_fill_time);
 }
 
 void OceanWaves::post_advance_work()
 {
-    BL_PROFILE("amr-wind::ocean_waves::OceanWaves::post_init_actions");
+    BL_PROFILE("amr-wind::ocean_waves::OceanWaves::post_advance_work");
     if (m_multiphase_mode) {
         m_owm->apply_relax_zones();
     }

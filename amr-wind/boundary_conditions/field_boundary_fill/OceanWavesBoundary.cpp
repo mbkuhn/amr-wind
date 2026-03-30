@@ -61,7 +61,35 @@ void OceanWavesBoundary::post_init_actions()
         if (m_terrain_exists) {
             m_terrain_blank_ptr = &m_repo.get_int_field("terrain_blank");
         }
+
+        const amrex::Real init_fill_bdy_time = m_time.current_time();
+        record_boundary_data_time(init_fill_bdy_time);
+
+        // Do fills now that intended fill patch ops have been registered
+        // These fills are the ones from relaxation zones ops
+        if (m_vof_exists) {
+            m_repo.get_field("vof").fillpatch(init_fill_bdy_time);
+            m_repo.get_field("velocity").fillpatch(init_fill_bdy_time);
+            m_repo.get_field("density").fillpatch(init_fill_bdy_time);
+        }
     }
+}
+
+void OceanWavesBoundary::pre_advance_work()
+{
+    BL_PROFILE("amr-wind::OceanWavesBoundary::pre_advance_work");
+    // ow values at nph time for advection boundaries
+    const amrex::Real adv_bdy_time =
+        0.5_rt * (m_time.current_time() + m_time.new_time());
+    record_boundary_data_time(adv_bdy_time);
+}
+
+void OceanWavesBoundary::pre_predictor_work()
+{
+    BL_PROFILE("amr-wind::OceanWavesBoundary::pre_predictor_work");
+    // ow values at new time for boundary fills
+    const amrex::Real bdy_fill_time = m_time.new_time();
+    record_boundary_data_time(bdy_fill_time);
 }
 
 void OceanWavesBoundary::set_velocity(
