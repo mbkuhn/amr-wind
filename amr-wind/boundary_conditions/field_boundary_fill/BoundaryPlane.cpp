@@ -291,31 +291,43 @@ BoundaryPlane::BoundaryPlane(CFDSim& sim)
     , m_mbc(sim.mbc())
     , m_read_erf(sim.get_read_erf())
 {
-    amrex::ParmParse pp("ABL");
     int pp_io_mode = -1;
-    pp.query("bndry_io_mode", pp_io_mode);
+    amrex::ParmParse pp_abl("ABL");
+    pp_abl.query("bndry_io_mode", pp_io_mode);
+    amrex::ParmParse pp("BoundaryPlane");
+    const bool original_input = pp.contains("io_mode");
+    if (!original_input) {
+        pp.get("io_mode", pp_io_mode);
+    }
     switch (pp_io_mode) {
     case 0:
         m_io_mode = io_mode::output;
-        m_is_initialized = true;
         break;
     case 1:
         m_io_mode = io_mode::input;
-        m_is_initialized = true;
         break;
     default:
-        m_io_mode = io_mode::undefined;
-        m_is_initialized = false;
-        return;
+        amrex::Abort(
+            "BoundaryPlane: io_mode must be specified as 0 for output or 1 for "
+            "input. Code should not be able to reach this conditional.\n");
     }
     m_has_overset = sim.has_overset();
 
-    pp.query("bndry_write_frequency", m_write_frequency);
-    pp.queryarr("bndry_planes", m_planes);
-    pp.query("bndry_output_start_time", m_out_start_time);
-    pp.queryarr("bndry_var_names", m_var_names);
-    pp.get("bndry_file", m_filename);
-    pp.query("bndry_output_format", m_out_fmt);
+    if (!original_input) {
+        pp.query("bndry_write_frequency", m_write_frequency);
+        pp.queryarr("bndry_planes", m_planes);
+        pp.query("bndry_output_start_time", m_out_start_time);
+        pp.queryarr("bndry_var_names", m_var_names);
+        pp.get("bndry_file", m_filename);
+        pp.query("bndry_output_format", m_out_fmt);
+    } else {
+        pp_abl.query("bndry_write_frequency", m_write_frequency);
+        pp_abl.queryarr("bndry_planes", m_planes);
+        pp_abl.query("bndry_output_start_time", m_out_start_time);
+        pp_abl.queryarr("bndry_var_names", m_var_names);
+        pp_abl.get("bndry_file", m_filename);
+        pp_abl.query("bndry_output_format", m_out_fmt);
+    }
 
 #ifndef AMR_WIND_USE_NETCDF
     if (m_out_fmt == "netcdf") {
@@ -341,9 +353,6 @@ BoundaryPlane::BoundaryPlane(CFDSim& sim)
 
 void BoundaryPlane::post_init_actions()
 {
-    if (!m_is_initialized) {
-        return;
-    }
     initialize_data();
     write_header();
     write_file();
@@ -362,31 +371,13 @@ void BoundaryPlane::pre_advance_work()
 
 // Isolated calls from within pre_advance_work so it can be called independently
 // for overset simulations where timing is more complicated
-void BoundaryPlane::pre_advance_inner_calls()
-{
-    if (!m_is_initialized) {
-        return;
-    }
-    read_file(true);
-}
+void BoundaryPlane::pre_advance_inner_calls() { read_file(true); }
 
 // At the beginning of a timestep but after pre_advance_work, this method
 // updates plane data to new time (n+1) for rest of the algorithm
-void BoundaryPlane::pre_predictor_work()
-{
-    if (!m_is_initialized) {
-        return;
-    }
-    read_file(false);
-}
+void BoundaryPlane::pre_predictor_work() { read_file(false); }
 
-void BoundaryPlane::post_advance_work()
-{
-    if (!m_is_initialized) {
-        return;
-    }
-    write_file();
-}
+void BoundaryPlane::post_advance_work() { write_file(); }
 
 void BoundaryPlane::initialize_data()
 {

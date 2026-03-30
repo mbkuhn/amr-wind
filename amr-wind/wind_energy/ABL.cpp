@@ -76,7 +76,11 @@ ABL::ABL(CFDSim& sim)
 
     // Instantiate the BoundaryPlane field boundary if not already present
     if (!sim.field_boundary_manager().contains("BoundaryPlane")) {
-        sim.field_boundary_manager().create("BoundaryPlane", sim);
+        int io_mode = -1;
+        pp.query("bndry_io_mode", io_mode);
+        if (io_mode == 0 || io_mode == 1) {
+            sim.field_boundary_manager().create("BoundaryPlane", sim);
+        }
     }
 
     // Instantiate the ModulatedPowerLaw field boundary if requested through

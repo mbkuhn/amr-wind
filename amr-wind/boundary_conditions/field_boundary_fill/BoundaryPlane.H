@@ -176,8 +176,6 @@ public:
         amrex::Gpu::ManagedVector<amrex::Real>& /*buffer*/);
 #endif
 
-    [[nodiscard]] bool is_initialized() const { return m_is_initialized; }
-
     [[nodiscard]] bool box_intersects_boundary(
         const amrex::Box& /*bx*/,
         int /*lev*/,
@@ -264,9 +262,6 @@ private:
 
     //! IO mode
     io_mode m_io_mode{io_mode::undefined};
-
-    //! Flag indicating if this capability is available
-    bool m_is_initialized{false};
 
     //! Flag indicating if the simulation is overset -- needed for complicated
     //! timing of pre_advance_work
