@@ -35,7 +35,6 @@ void incflo::prepare_time_step()
 {
     m_sim.pde_manager().advance_states();
     m_sim.pde_manager().prepare_boundaries();
-    // Should be able to remove this one
     for (auto& pp : m_sim.physics()) {
         pp->pre_predictor_work();
     }
