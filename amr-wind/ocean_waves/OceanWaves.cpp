@@ -41,7 +41,7 @@ OceanWaves::OceanWaves(CFDSim& sim)
         if (fb == "ModulatedPowerLaw") {
             mpl_fb_present = true;
         }
-        if (fb == "OceanWaves") {
+        if (fb == "OceanWavesBoundary") {
             ow_fb_present = true;
         }
     }
