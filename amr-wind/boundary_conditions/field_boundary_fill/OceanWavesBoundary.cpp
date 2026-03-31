@@ -20,18 +20,6 @@ OceanWavesBoundary::OceanWavesBoundary(CFDSim& sim)
     , m_ow_velocity(sim.repo().get_field("ow_velocity"))
     , m_ow_vof(sim.repo().get_field("ow_vof"))
 {
-    // Check for if boundary planes are being used; disable if so
-    if (sim.field_boundary_manager().contains("BoundaryPlane") &&
-        sim.field_boundary_manager().get<BoundaryPlane>().mode() ==
-            io_mode::input) {
-        // Turn off ow_bndry; will rely on bndry_plane for fills
-        m_activate_ow_bndry = false;
-    }
-    if (sim.field_boundary_manager().contains("ModulatedPowerLaw")) {
-        amrex::Abort(
-            "OceanWavesBoundary: not currently compatible with Modulated Power "
-            "Law implementation.");
-    }
     // Get liquid density, will only be used if vof is present
     if (sim.physics_manager().contains("MultiPhase")) {
         m_rho1 = sim.physics_manager().get<amr_wind::MultiPhase>().rho1();
@@ -41,35 +29,31 @@ OceanWavesBoundary::OceanWavesBoundary(CFDSim& sim)
 void OceanWavesBoundary::post_init_actions()
 {
     BL_PROFILE("amr-wind::OceanWavesBoundary::post_init_actions");
-    if (m_activate_ow_bndry) {
-        m_repo.get_field("velocity")
+    m_repo.get_field("velocity")
+        .register_fill_patch_op<OceanWavesFillInflow>(m_mesh, m_time, *this);
+    m_vof_exists = m_repo.field_exists("vof");
+    if (m_vof_exists) {
+        m_repo.get_field("vof").register_fill_patch_op<OceanWavesFillInflow>(
+            m_mesh, m_time, *this);
+        m_repo.get_field("density")
             .register_fill_patch_op<OceanWavesFillInflow>(
                 m_mesh, m_time, *this);
-        m_vof_exists = m_repo.field_exists("vof");
-        if (m_vof_exists) {
-            m_repo.get_field("vof")
-                .register_fill_patch_op<OceanWavesFillInflow>(
-                    m_mesh, m_time, *this);
-            m_repo.get_field("density")
-                .register_fill_patch_op<OceanWavesFillInflow>(
-                    m_mesh, m_time, *this);
-        }
+    }
 
-        m_terrain_exists = m_repo.int_field_exists("terrain_blank");
-        if (m_terrain_exists) {
-            m_terrain_blank_ptr = &m_repo.get_int_field("terrain_blank");
-        }
+    m_terrain_exists = m_repo.int_field_exists("terrain_blank");
+    if (m_terrain_exists) {
+        m_terrain_blank_ptr = &m_repo.get_int_field("terrain_blank");
+    }
 
-        const amrex::Real init_fill_bdy_time = m_time.current_time();
-        record_boundary_data_time(init_fill_bdy_time);
+    const amrex::Real init_fill_bdy_time = m_time.current_time();
+    record_boundary_data_time(init_fill_bdy_time);
 
-        // Do fills now that intended fill patch ops have been registered
-        // These fills are the ones from relaxation zones ops
-        if (m_vof_exists) {
-            m_repo.get_field("vof").fillpatch(init_fill_bdy_time);
-            m_repo.get_field("velocity").fillpatch(init_fill_bdy_time);
-            m_repo.get_field("density").fillpatch(init_fill_bdy_time);
-        }
+    // Do fills now that intended fill patch ops have been registered
+    // These fills are the ones from relaxation zones ops
+    if (m_vof_exists) {
+        m_repo.get_field("vof").fillpatch(init_fill_bdy_time);
+        m_repo.get_field("velocity").fillpatch(init_fill_bdy_time);
+        m_repo.get_field("density").fillpatch(init_fill_bdy_time);
     }
 }
 
@@ -98,11 +82,6 @@ void OceanWavesBoundary::set_velocity(
     const int dcomp,
     const int orig_comp) const
 {
-
-    if (!m_activate_ow_bndry) {
-        return;
-    }
-
     BL_PROFILE("amr-wind::OceanWavesBoundary::set_velocity");
 
     const auto& geom = m_mesh.Geom(lev);
@@ -171,11 +150,6 @@ void OceanWavesBoundary::set_vof(
     const Field& fld,
     amrex::MultiFab& mfab) const
 {
-
-    if (!m_activate_ow_bndry) {
-        return;
-    }
-
     BL_PROFILE("amr-wind::OceanWavesBoundary::set_vof");
 
     const auto& geom = m_mesh.Geom(lev);
@@ -220,7 +194,7 @@ void OceanWavesBoundary::set_density(
     amrex::MultiFab& mfab) const
 {
 
-    if (!m_activate_ow_bndry || m_rho1 < 0.0_rt) {
+    if (m_rho1 < 0.0_rt) {
         return;
     }
 
@@ -270,11 +244,6 @@ void OceanWavesBoundary::set_inflow_sibling_velocity(
     const Field& fld,
     const amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM> mfabs) const
 {
-
-    if (!m_activate_ow_bndry) {
-        return;
-    }
-
     BL_PROFILE("amr-wind::OceanWavesBoundary::set_inflow_sibling_velocity");
 
     const bool terrain_and_vof_exist = m_terrain_exists && m_vof_exists;

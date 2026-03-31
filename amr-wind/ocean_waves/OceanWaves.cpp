@@ -27,9 +27,65 @@ OceanWaves::OceanWaves(CFDSim& sim)
     m_ow_vof.set_default_fillpatch_bc(sim.time());
     m_ow_velocity.set_default_fillpatch_bc(sim.time());
 
-    // Instantiate the OceanWavesBoundary field boundary if not already present
-    if (!sim.field_boundary_manager().contains("OceanWavesBoundary")) {
-        sim.field_boundary_manager().create("OceanWavesBoundary", sim);
+    // Get the field boundaries named explicitly
+    amrex::ParmParse pp_incflo("incflo");
+    amrex::Vector<std::string> fb_names;
+    pp_incflo.queryarr("field_boundaries", fb_names);
+    bool abl_fb_present = false;
+    bool mpl_fb_present = false;
+    bool ow_fb_present = false;
+    for (const auto& fb : fb_names) {
+        if (fb == "BoundaryPlane") {
+            abl_fb_present = true;
+        }
+        if (fb == "ModulatedPowerLaw") {
+            mpl_fb_present = true;
+        }
+        if (fb == "OceanWaves") {
+            ow_fb_present = true;
+        }
+    }
+
+    // Add OceanWaves field boundary if not present unless conflicts are
+    // detected
+    int need_changes = static_cast<int>(!ow_fb_present);
+    if (abl_fb_present) {
+        // Check for input mode
+        int pp_io_mode = -1;
+        amrex::ParmParse pp_abl("ABL");
+        pp_abl.query("bndry_io_mode", pp_io_mode);
+        amrex::ParmParse pp_bdy("BoundaryPlane");
+        pp_bdy.query("io_mode", pp_io_mode);
+        if (pp_io_mode == 1) {
+            // Turn off ow_bndry; will rely on bndry_plane for fills
+            // Unless ow_bndry is not present, then no changes needed
+            need_changes -= 1;
+        }
+    }
+    if (mpl_fb_present) {
+        amrex::Abort(
+            "OceanWavesBoundary: not currently compatible with Modulated Power "
+            "Law implementation.");
+    }
+
+    if (need_changes == 1) {
+        // Add OceanWavesBoundary to field boundaries list
+        fb_names.push_back("OceanWavesBoundary");
+    }
+    if (need_changes == -1) {
+        // Remove OceanWavesBoundary from field boundaries list and allow
+        // BoundaryPlane to handle fills
+        amrex::Print() << "OceanWavesBoundary: detected conflict with "
+                       << "BoundaryPlane; removing OceanWavesBoundary from "
+                       << "field boundaries list\n";
+        fb_names.erase(
+            std::remove(fb_names.begin(), fb_names.end(), "OceanWavesBoundary"),
+            fb_names.end());
+    }
+
+    if (need_changes != 0) {
+        // Update the input database with the new field boundaries list
+        pp_incflo.addarr("field_boundaries", fb_names);
     }
 }
 
