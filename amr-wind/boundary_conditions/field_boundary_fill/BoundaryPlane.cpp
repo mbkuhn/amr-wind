@@ -294,8 +294,8 @@ BoundaryPlane::BoundaryPlane(CFDSim& sim)
     int pp_io_mode = -1;
     amrex::ParmParse pp_abl("ABL");
     pp_abl.query("bndry_io_mode", pp_io_mode);
+    const bool original_input = pp_abl.contains("bndry_io_mode");
     amrex::ParmParse pp("BoundaryPlane");
-    const bool original_input = pp.contains("io_mode");
     if (!original_input) {
         pp.get("io_mode", pp_io_mode);
     }
@@ -309,17 +309,17 @@ BoundaryPlane::BoundaryPlane(CFDSim& sim)
     default:
         amrex::Abort(
             "BoundaryPlane: io_mode must be specified as 0 for output or 1 for "
-            "input. Code should not be able to reach this conditional.\n");
+            "input. \n");
     }
     m_has_overset = sim.has_overset();
 
     if (!original_input) {
-        pp.query("bndry_write_frequency", m_write_frequency);
-        pp.queryarr("bndry_planes", m_planes);
-        pp.query("bndry_output_start_time", m_out_start_time);
-        pp.queryarr("bndry_var_names", m_var_names);
-        pp.get("bndry_file", m_filename);
-        pp.query("bndry_output_format", m_out_fmt);
+        pp.query("write_frequency", m_write_frequency);
+        pp.queryarr("planes", m_planes);
+        pp.query("output_start_time", m_out_start_time);
+        pp.queryarr("var_names", m_var_names);
+        pp.get("file", m_filename);
+        pp.query("output_format", m_out_fmt);
     } else {
         pp_abl.query("bndry_write_frequency", m_write_frequency);
         pp_abl.queryarr("bndry_planes", m_planes);
