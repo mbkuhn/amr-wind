@@ -31,25 +31,25 @@ OceanWaves::OceanWaves(CFDSim& sim)
     amrex::ParmParse pp_incflo("incflo");
     amrex::Vector<std::string> fb_names;
     pp_incflo.queryarr("field_boundaries", fb_names);
-    bool abl_fb_present = false;
-    bool mpl_fb_present = false;
-    bool ow_fb_present = false;
+    bool bp_present = false;
+    bool mpl_present = false;
+    bool owb_present = false;
     for (const auto& fb : fb_names) {
         if (fb == "BoundaryPlane") {
-            abl_fb_present = true;
+            bp_present = true;
         }
         if (fb == "ModulatedPowerLaw") {
-            mpl_fb_present = true;
+            mpl_present = true;
         }
         if (fb == "OceanWavesBoundary") {
-            ow_fb_present = true;
+            owb_present = true;
         }
     }
 
     // Add OceanWaves field boundary if not present unless conflicts are
     // detected
-    int need_changes = static_cast<int>(!ow_fb_present);
-    if (abl_fb_present) {
+    int need_changes = static_cast<int>(!owb_present);
+    if (bp_present) {
         // Check for input mode
         int pp_io_mode = -1;
         amrex::ParmParse pp_abl("ABL");
@@ -62,7 +62,7 @@ OceanWaves::OceanWaves(CFDSim& sim)
             need_changes -= 1;
         }
     }
-    if (mpl_fb_present) {
+    if (mpl_present) {
         amrex::Abort(
             "OceanWavesBoundary: not currently compatible with Modulated Power "
             "Law implementation.");
