@@ -24,6 +24,10 @@ OceanWavesBoundary::OceanWavesBoundary(CFDSim& sim)
     if (sim.physics_manager().contains("MultiPhase")) {
         m_rho1 = sim.physics_manager().get<amr_wind::MultiPhase>().rho1();
     }
+    if (!sim.physics_manager().contains("OceanWaves")) {
+        amrex::Abort(
+            "OceanWaves physics must be present to use OceanWavesBoundary\n");
+    }
 }
 
 void OceanWavesBoundary::post_init_actions()
