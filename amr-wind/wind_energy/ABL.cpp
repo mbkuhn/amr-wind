@@ -74,24 +74,45 @@ ABL::ABL(CFDSim& sim)
     // Instantiate the ABL field initializer
     m_field_init = std::make_unique<ABLFieldInit>();
 
-    // Instantiate the BoundaryPlane field boundary if not already present
-    if (!sim.field_boundary_manager().contains("BoundaryPlane")) {
-        int io_mode = -1;
-        pp.query("bndry_io_mode", io_mode);
-        if (io_mode == 0 || io_mode == 1) {
-            sim.field_boundary_manager().create("BoundaryPlane", sim);
+    // Get the field boundaries named explicitly
+    amrex::ParmParse pp_incflo("incflo");
+    amrex::Vector<std::string> fb_names;
+    pp_incflo.queryarr("field_boundaries", fb_names);
+    bool abl_fb_present = false;
+    bool mpl_fb_present = false;
+    for (const auto& fb : fb_names) {
+        if (fb == "BoundaryPlane") {
+            abl_fb_present = true;
+        }
+        if (fb == "ModulatedPowerLaw") {
+            mpl_fb_present = true;
         }
     }
 
-    // Instantiate the ModulatedPowerLaw field boundary if requested through
-    // original input argument
-    if (!sim.field_boundary_manager().contains("ModulatedPowerLaw")) {
+    // Check original input arguments and add if requested
+    bool need_changes = false;
+    // - BoundaryPlane
+    if (!abl_fb_present) {
+        int io_mode = -1;
+        pp.query("bndry_io_mode", io_mode);
+        if (io_mode == 0 || io_mode == 1) {
+            fb_names.push_back("BoundaryPlane");
+            need_changes = true;
+        }
+    }
+    // - ModulatedPowerLaw
+    if (!mpl_fb_present) {
         amrex::ParmParse pp_mpl("MPL");
         bool activate_mpl = false;
         pp_mpl.query("activate", activate_mpl);
         if (activate_mpl) {
-            sim.field_boundary_manager().create("ModulatedPowerLaw", sim);
+            fb_names.push_back("ModulatedPowerLaw");
+            need_changes = true;
         }
+    }
+    if (need_changes) {
+        // Update the input database with the new field boundaries list
+        pp_incflo.addarr("field_boundaries", fb_names);
     }
 
     // Instantiate the ABL anelastic module
