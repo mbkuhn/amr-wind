@@ -14,11 +14,7 @@ using namespace amrex::literals;
 namespace amr_wind {
 
 OceanWavesBoundary::OceanWavesBoundary(CFDSim& sim)
-    : m_time(sim.time())
-    , m_repo(sim.repo())
-    , m_mesh(sim.mesh())
-    , m_ow_velocity(sim.repo().get_field("ow_velocity"))
-    , m_ow_vof(sim.repo().get_field("ow_vof"))
+    : m_time(sim.time()), m_repo(sim.repo()), m_mesh(sim.mesh())
 {
     // Get liquid density, will only be used if vof is present
     if (sim.physics_manager().contains("MultiPhase")) {
@@ -28,6 +24,8 @@ OceanWavesBoundary::OceanWavesBoundary(CFDSim& sim)
         amrex::Abort(
             "OceanWaves physics must be present to use OceanWavesBoundary\n");
     }
+    m_ow_velocity = &sim.repo().get_field("ow_velocity");
+    m_ow_vof = &sim.repo().get_field("ow_vof");
 }
 
 void OceanWavesBoundary::post_init_actions()
@@ -119,8 +117,8 @@ void OceanWavesBoundary::set_velocity(
                 continue;
             }
 
-            const auto& targ_vof = m_ow_vof(lev).const_array(mfi);
-            const auto& targ_arr = m_ow_velocity(lev).const_array(mfi);
+            const auto& targ_vof = (*m_ow_vof)(lev).const_array(mfi);
+            const auto& targ_arr = (*m_ow_velocity)(lev).const_array(mfi);
             const auto& arr = mfab[mfi].array();
             const int numcomp = mfab.nComp();
 
@@ -181,7 +179,7 @@ void OceanWavesBoundary::set_vof(
                 continue;
             }
 
-            const auto& targ_arr = m_ow_vof(lev).const_array(mfi);
+            const auto& targ_arr = (*m_ow_vof)(lev).const_array(mfi);
             const auto& arr = mfab[mfi].array();
 
             amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -230,7 +228,7 @@ void OceanWavesBoundary::set_density(
                 continue;
             }
 
-            const auto& targ_vof = m_ow_vof(lev).const_array(mfi);
+            const auto& targ_vof = (*m_ow_vof)(lev).const_array(mfi);
             const auto& arr = mfab[mfi].array();
 
             amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -294,8 +292,8 @@ void OceanWavesBoundary::set_inflow_sibling_velocity(
                     continue;
                 }
 
-                const auto& targ_vof = m_ow_vof(lev).const_array(mfi);
-                const auto& targ_arr = m_ow_velocity(lev).const_array(mfi);
+                const auto& targ_vof = (*m_ow_vof)(lev).const_array(mfi);
+                const auto& targ_arr = (*m_ow_velocity)(lev).const_array(mfi);
                 const auto& marr = mfab[mfi].array();
 
                 const auto terrain_blank_flags =

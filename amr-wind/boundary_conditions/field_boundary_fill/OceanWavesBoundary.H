@@ -72,8 +72,8 @@ private:
     const amr_wind::SimTime& m_time;
     const FieldRepo& m_repo;
     const amrex::AmrCore& m_mesh;
-    Field& m_ow_velocity;
-    Field& m_ow_vof;
+    Field* m_ow_velocity{nullptr};
+    Field* m_ow_vof{nullptr};
     IntField* m_terrain_blank_ptr{nullptr};
 
     // Should be active unless boundary planes are used
