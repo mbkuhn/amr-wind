@@ -357,6 +357,7 @@ TEST_F(OceanWavesOpTest, gas_phase)
     pde_mgr.register_icns();
     // Initialize physics and boundary fill
     sim().init_physics();
+    sim().init_field_boundaries();
     auto& oceanwaves =
         sim().physics_manager().get<amr_wind::ocean_waves::OceanWaves>();
     auto& oceanwaves_bndry =
@@ -425,6 +426,7 @@ TEST_F(OceanWavesOpTest, boundary_fill)
     pde_mgr.register_icns();
     // Initialize physics and boundary fill
     sim().init_physics();
+    sim().init_field_boundaries();
     auto& oceanwaves =
         sim().physics_manager().get<amr_wind::ocean_waves::OceanWaves>();
     auto& oceanwaves_bndry =
@@ -503,6 +505,7 @@ TEST_F(OceanWavesOpTest, set_inflow_sibling)
     pde_mgr.register_icns();
     // Initialize physics and boundary fill
     sim().init_physics();
+    sim().init_field_boundaries();
     auto& oceanwaves =
         sim().physics_manager().get<amr_wind::ocean_waves::OceanWaves>();
     auto& oceanwaves_bndry =
