@@ -76,9 +76,6 @@ private:
     Field* m_ow_vof{nullptr};
     IntField* m_terrain_blank_ptr{nullptr};
 
-    // Should be active unless boundary planes are used
-    bool m_activate_ow_bndry{true};
-
     // Check for single-phase simulation
     bool m_vof_exists{true};
 
