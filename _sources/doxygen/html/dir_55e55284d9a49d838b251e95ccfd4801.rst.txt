@@ -1,0 +1,14 @@
+.. meta::d5abbbb3428696c8a401c130bf5c137ae57e7448233fd48867c3828df08f2452a1f7e4ad042eb197185d5d0c8fe97b250fdb4ff9a249eef5b81f785e500748bc
+
+:orphan:
+
+.. title:: AMR-Wind API: /home/runner/work/amr-wind/amr-wind/amr-wind/diffusion Directory Reference
+
+/home/runner/work/amr-wind/amr-wind/amr-wind/diffusion Directory Reference
+==========================================================================
+
+.. container:: doxygen-content
+
+   
+   .. raw:: html
+     :file: dir_55e55284d9a49d838b251e95ccfd4801.html

@@ -1,0 +1,14 @@
+.. meta::5da551ef50685b9c68a05235e5174708a7a179edd2120e91f7b5dddbfadbac67a31db9daf72aa36fd21454f8871c1bbcd5fecb8d954bd2b478750f436b5db2a6
+
+:orphan:
+
+.. title:: AMR-Wind API: /home/runner/work/amr-wind/amr-wind/amr-wind/utilities/math_ops.H Source File
+
+/home/runner/work/amr-wind/amr-wind/amr-wind/utilities/math\_ops.H Source File
+==============================================================================
+
+.. container:: doxygen-content
+
+   
+   .. raw:: html
+     :file: math__ops_8_h_source.html

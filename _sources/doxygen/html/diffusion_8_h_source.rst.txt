@@ -1,0 +1,14 @@
+.. meta::f4131c156f9a52ce8b7f5ea3556469faad46ed4fa26aedb9f1a4d626fc8ca4e056bdf6423d0d83550ec829ec3e0993dc86f5f2c19c8d591e98e1b34e45abcddc
+
+:orphan:
+
+.. title:: AMR-Wind API: /home/runner/work/amr-wind/amr-wind/amr-wind/diffusion/diffusion.H Source File
+
+/home/runner/work/amr-wind/amr-wind/amr-wind/diffusion/diffusion.H Source File
+==============================================================================
+
+.. container:: doxygen-content
+
+   
+   .. raw:: html
+     :file: diffusion_8_h_source.html

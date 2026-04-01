@@ -1,0 +1,14 @@
+.. meta::2e60b0cb6f7e34217da73fe19b5ad73453babae7671f9f78b8af8d81295b0b2e957ce3e24b1daf86fe3fa3735fdf1f069fb20417eccc11eece7476358e1fa326
+
+:orphan:
+
+.. title:: AMR-Wind API: amr_wind::OversetOps Class Reference
+
+OversetOps Class Reference
+==========================
+
+.. container:: doxygen-content
+
+   
+   .. raw:: html
+     :file: classamr__wind_1_1_overset_ops.html

@@ -1,0 +1,14 @@
+.. meta::c4c6bbc5fdfb60a2e82f80b2600e861e6d2411c6c222daf22bf447ad01701023eba5bdaa22932328746553e2cd8f8674193d342f178d439205d2e71decd46c0e
+
+:orphan:
+
+.. title:: AMR-Wind API: /home/runner/work/amr-wind/amr-wind/amr-wind/fvm/vorticity_mag.H Source File
+
+/home/runner/work/amr-wind/amr-wind/amr-wind/fvm/vorticity\_mag.H Source File
+=============================================================================
+
+.. container:: doxygen-content
+
+   
+   .. raw:: html
+     :file: vorticity__mag_8_h_source.html
