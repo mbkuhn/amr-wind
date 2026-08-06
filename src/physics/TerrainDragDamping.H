@@ -15,10 +15,8 @@ inline bool has_damping_inputs(const amrex::ParmParse& pp)
 {
     return pp.contains("damp_east_slope") || pp.contains("damp_east_full") ||
            pp.contains("damp_west_slope") || pp.contains("damp_west_full") ||
-           pp.contains("damp_north_slope") ||
-           pp.contains("damp_north_full") ||
-           pp.contains("damp_south_slope") ||
-           pp.contains("damp_south_full") ||
+           pp.contains("damp_north_slope") || pp.contains("damp_north_full") ||
+           pp.contains("damp_south_slope") || pp.contains("damp_south_full") ||
            pp.contains("horizontal_time_scale") ||
            pp.contains("horizontal_abl_height") ||
            pp.contains("horizontal_slope_end") ||
