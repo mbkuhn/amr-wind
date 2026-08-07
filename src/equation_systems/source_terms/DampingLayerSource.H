@@ -106,6 +106,8 @@ public:
 
     static std::string identifier() { return "DampingLayerSource"; }
 
+    static std::string alt_identifier() { return "DampingLayer"; }
+
     static constexpr const char* damped_field_name()
     {
         return DampingLayerSourceTraits<T>::field_name;
@@ -120,69 +122,96 @@ public:
     {
 
         // Insert gets and queries about target field profile
-        amrex::ParmParse pp(identifier() + "." + m_damped_field_name);
-        std::string target_type_string;
-        std::string target_function_string{"0.0"};
-        pp.get("target_type", target_type_string);
-        m_target_type = string_to_target_type(target_type_string);
-        if (m_target_type == TargetType::Constant) {
-            pp.getarr("target_value", m_target_value);
-        } else if (m_target_type == TargetType::Profile) {
-            pp.getarr("target_profile_values", m_target_profile_values);
-            pp.getarr("target_profile_heights", m_target_profile_heights);
-        } else if (m_target_type == TargetType::Function) {
-            pp.get("target_function", target_function_string);
-        } else if (m_target_type == TargetType::Field) {
-            pp.get("target_field", m_target_field_name);
-        } else {
-            amrex::Abort(
-                "DampingLayerSource: unknown target_type: " +
-                target_type_string);
-        }
+        int bc_idx = 0;
+        for (const auto& name : m_bc_names) {
+            // Get arguments specific to this boundary
+            amrex::ParmParse pp(
+                alt_identifier() + "." + m_damped_field_name + "." + name);
+            // If thickness > 0, then this boundary has a damping layer
+            amrex::Real thickness = -1.0_rt;
+            pp.query("thickness", thickness);
 
-        pp.queryarr("damped_components", m_damped_components);
-
-        if (m_target_type == TargetType::Constant) {
-            if (!m_damped_components.empty() &&
-                m_target_value.size() != m_damped_components.size()) {
-                amrex::Abort(
-                    "DampingLayerSource: target_value must have the same "
-                    "size as the number of damped components.");
-            } else if (m_target_value.size() != m_damped_field.num_comp()) {
-                amrex::Abort(
-                    "DampingLayerSource: target_value must have the same "
-                    "size as the number of components in the damped field.");
+            if (thickness <= 0.0_rt) {
+                ++bc_idx;
+                continue;
             }
-            const auto num_comp_val = m_target_value.size();
-            m_dev_target_value.resize(num_comp_val);
-            amrex::Gpu::copy(
-                amrex::Gpu::hostToDevice, m_target_value.begin(),
-                m_target_value.end(), m_dev_target_value.begin());
-        }
-        if (m_target_type == TargetType::Profile) {
-            // What about profiles for multiple-component fields?
-            if (m_target_profile_values.size() !=
-                m_target_profile_heights.size()) {
-                amrex::Abort(
-                    "DampingLayerSource: target_profile_values and "
-                    "target_profile_heights must have the same size.");
-            }
-            const auto num_prof_val = m_target_profile_values.size();
-            m_dev_target_profile_values.resize(num_prof_val);
-            m_dev_target_profile_heights.resize(num_prof_val);
 
-            amrex::Gpu::copy(
-                amrex::Gpu::hostToDevice, m_target_profile_heights.begin(),
-                m_target_profile_heights.end(),
-                m_dev_target_profile_heights.begin());
-            amrex::Gpu::copy(
-                amrex::Gpu::hostToDevice, m_target_profile_values.begin(),
-                m_target_profile_values.end(),
-                m_dev_target_profile_values.begin());
-        }
-        if (m_target_type == TargetType::Function) {
-            m_function_parser.define(target_function_string);
-            m_function_parser.registerVariables({"t", "x", "y", "z", "n"});
+            std::string target_type_string;
+            std::string target_function_string{"0.0"};
+            pp.get("target_type", target_type_string);
+            auto target_type = string_to_target_type(target_type_string);
+            m_target_type[bc_idx] = target_type;
+            if (target_type == TargetType::Constant) {
+                pp.getarr("target_value", m_target_value[bc_idx]);
+            } else if (target_type == TargetType::Profile) {
+                pp.getarr(
+                    "target_profile_values", m_target_profile_values[bc_idx]);
+                pp.getarr(
+                    "target_profile_heights", m_target_profile_heights[bc_idx]);
+            } else if (target_type == TargetType::Function) {
+                pp.get("target_function", target_function_string);
+            } else if (target_type == TargetType::Field) {
+                pp.get("target_field", m_target_field_name[bc_idx]);
+            } else {
+                amrex::Abort(
+                    "DampingLayerSource: unknown target_type: " +
+                    target_type_string);
+            }
+
+            pp.queryarr("damped_components", m_damped_components[bc_idx]);
+
+            if (target_type == TargetType::Constant) {
+                if (!m_damped_components[bc_idx].empty() &&
+                    m_target_value[bc_idx].size() !=
+                        m_damped_components[bc_idx].size()) {
+                    amrex::Abort(
+                        "DampingLayerSource: target_value must have the same "
+                        "size as the number of damped components.");
+                } else if (
+                    m_target_value[bc_idx].size() !=
+                    m_damped_field.num_comp()) {
+                    amrex::Abort(
+                        "DampingLayerSource: target_value must have the same "
+                        "size as the number of components in the damped "
+                        "field.");
+                }
+                const auto num_comp_val = m_target_value[bc_idx].size();
+                m_dev_target_value[bc_idx].resize(num_comp_val);
+                amrex::Gpu::copy(
+                    amrex::Gpu::hostToDevice, m_target_value[bc_idx].begin(),
+                    m_target_value[bc_idx].end(),
+                    m_dev_target_value[bc_idx].begin());
+            }
+            if (target_type == TargetType::Profile) {
+                // What about profiles for multiple-component fields?
+                if (m_target_profile_values[bc_idx].size() !=
+                    m_target_profile_heights[bc_idx].size()) {
+                    amrex::Abort(
+                        "DampingLayerSource: target_profile_values and "
+                        "target_profile_heights must have the same size.");
+                }
+                const auto num_prof_val =
+                    m_target_profile_values[bc_idx].size();
+                m_dev_target_profile_values[bc_idx].resize(num_prof_val);
+                m_dev_target_profile_heights[bc_idx].resize(num_prof_val);
+
+                amrex::Gpu::copy(
+                    amrex::Gpu::hostToDevice,
+                    m_target_profile_heights[bc_idx].begin(),
+                    m_target_profile_heights[bc_idx].end(),
+                    m_dev_target_profile_heights[bc_idx].begin());
+                amrex::Gpu::copy(
+                    amrex::Gpu::hostToDevice,
+                    m_target_profile_values[bc_idx].begin(),
+                    m_target_profile_values[bc_idx].end(),
+                    m_dev_target_profile_values[bc_idx].begin());
+            }
+            if (target_type == TargetType::Function) {
+                m_function_parser[bc_idx].define(target_function_string);
+                m_function_parser[bc_idx].registerVariables(
+                    {"t", "x", "y", "z", "n"});
+            }
+            ++bc_idx;
         }
     }
 
@@ -191,13 +220,6 @@ public:
     void operator()(
         int lev, FieldState fstate, amrex::MultiFab& src_term) const override
     {
-
-        /*const auto& dx = geom.CellSizeArray();
-        const auto& prob_lo = geom.ProbLoArray();
-        const auto& prob_hi = geom.ProbHiArray();*/
-
-        const auto target_type = m_target_type;
-
         Field* damping_layer_ptr{nullptr};
 
         auto const& src_arrs = src_term.arrays();
@@ -214,6 +236,7 @@ public:
             const auto damping_coefficient_field_name =
                 "damping_layer_" + m_damped_field_name + "_" +
                 m_bc_names[bc_idx];
+            // If damping layer exists, coefficient field exists
             if (m_repo.field_exists(damping_coefficient_field_name)) {
                 // Form damping layer field name
                 damping_layer_ptr =
@@ -221,28 +244,35 @@ public:
                 auto& damping_mfab = (*damping_layer_ptr)(lev);
                 auto const& damping_arrs = damping_mfab.const_arrays();
 
+                const auto target_type = m_target_type[bc_idx];
+
                 // Get constant target value if being used
                 const amrex::Real* const_target_value =
                     (target_type == TargetType::Constant)
-                        ? m_dev_target_value.data()
+                        ? m_dev_target_value[bc_idx].data()
                         : nullptr;
 
                 // Get target profile values, positions if being used
                 const bool use_profile = (target_type == TargetType::Profile);
                 const amrex::Real* prof_z =
-                    use_profile ? m_dev_target_profile_heights.data() : nullptr;
+                    use_profile ? m_dev_target_profile_heights[bc_idx].data()
+                                : nullptr;
                 const amrex::Real* prof_z_end =
-                    use_profile ? m_dev_target_profile_heights.end() : nullptr;
+                    use_profile ? m_dev_target_profile_heights[bc_idx].end()
+                                : nullptr;
                 const amrex::Real* prof_v =
-                    use_profile ? m_dev_target_profile_values.data() : nullptr;
+                    use_profile ? m_dev_target_profile_values[bc_idx].data()
+                                : nullptr;
 
                 // Set up the user-defined function, whether used or not
-                auto udf_func = m_function_parser.compile<AMREX_SPACEDIM + 2>();
+                auto udf_func = m_function_parser[bc_idx]
+                                    .template compile<AMREX_SPACEDIM + 2>();
 
                 // Get target field arrays if being used
                 Field* target_field_ptr{nullptr};
                 if (target_type == TargetType::Field) {
-                    target_field_ptr = &m_repo.get_field(m_target_field_name);
+                    target_field_ptr =
+                        &m_repo.get_field(m_target_field_name[bc_idx]);
                 }
                 auto const& target_field_arrs =
                     (target_type == TargetType::Field)
@@ -284,7 +314,7 @@ public:
                         }
 
                         bool damp_this_component = true;
-                        // Add logic to select component to damp
+                        // Add logic to select component to damp!!!!
 
                         if (damp_this_component) {
                             src_arrs[nbx](i, j, k, n) +=
@@ -303,22 +333,24 @@ private:
     const SimTime& m_time;
     std::string m_damped_field_name;
     Field& m_damped_field;
-    TargetType m_target_type;
-    amrex::Vector<amrex::Real> m_target_value;
-    amrex::Vector<amrex::Real> m_target_profile_values;
-    amrex::Vector<amrex::Real> m_target_profile_heights;
-    std::string m_target_field_name;
     const amrex::Vector<std::string> m_bc_names = {"xlo", "xhi", "ylo",
                                                    "yhi", "zlo", "zhi"};
-    amrex::Vector<int> m_damped_components;
 
-    // Device copies of the above arrays
-    amrex::Gpu::DeviceVector<amrex::Real> m_dev_target_value;
-    amrex::Gpu::DeviceVector<amrex::Real> m_dev_target_profile_values;
-    amrex::Gpu::DeviceVector<amrex::Real> m_dev_target_profile_heights;
+    // Can have different targets for each boundary, so use arrays of size 6
+    amrex::Array<TargetType, 6> m_target_type;
+    amrex::Array<amrex::Vector<amrex::Real>, 6> m_target_value;
+    amrex::Array<amrex::Vector<amrex::Real>, 6> m_target_profile_values;
+    amrex::Array<amrex::Vector<amrex::Real>, 6> m_target_profile_heights;
+    amrex::Array<amrex::Parser, 6> m_function_parser;
+    amrex::Array<std::string, 6> m_target_field_name;
+    amrex::Array<amrex::Vector<int>, 6> m_damped_components;
 
-    // Parser for evaluating user-defined functions on device
-    amrex::Parser m_function_parser;
+    // Device copies of the above vectors
+    amrex::Array<amrex::Gpu::DeviceVector<amrex::Real>, 6> m_dev_target_value;
+    amrex::Array<amrex::Gpu::DeviceVector<amrex::Real>, 6>
+        m_dev_target_profile_values;
+    amrex::Array<amrex::Gpu::DeviceVector<amrex::Real>, 6>
+        m_dev_target_profile_heights;
 };
 
 } // namespace kynema_sgf::pde
