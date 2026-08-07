@@ -71,11 +71,11 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real damping_calc(
         (layer_thickness * blending_fraction);
     if (blend_position_nondim <= 0.0_rt) {
         return 1.0_rt;
-    } else if (blend_position_nondim <= 1.0_rt) {
-        return blending_function(blend_position_nondim, function_type);
-    } else {
-        return 0.0_rt;
     }
+    if (blend_position_nondim <= 1.0_rt) {
+        return blending_function(blend_position_nondim, function_type);
+    }
+    return 0.0_rt;
 }
 
 class DampingLayer : public Physics::Register<DampingLayer>
