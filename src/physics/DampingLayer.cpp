@@ -176,6 +176,10 @@ void DampingLayer::initialize_fields(int level, const amrex::Geometry& geom)
                         case 5: // zhi
                             distance_from_boundary = prob_hi[2] - z;
                             break;
+                        default:
+                            amrex::Abort(
+                                "Invalid boundary index in "
+                                "DampingLayer::initialize_fields");
                         }
 
                         amrex::Real damping_coeff = damping_calc(
