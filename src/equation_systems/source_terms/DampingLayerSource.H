@@ -172,16 +172,16 @@ public:
             }
 
             pp.queryarr("damped_components", m_damped_components[bc_idx]);
+            if (m_damped_components[bc_idx].empty()) {
+                // If no components specified, damp all components
+                m_damped_components[bc_idx].resize(m_damped_field.num_comp());
+                std::iota(
+                    m_damped_components[bc_idx].begin(),
+                    m_damped_components[bc_idx].end(), 0);
+            }
 
             if (target_type == TargetType::Constant) {
-                if (!m_damped_components[bc_idx].empty() &&
-                    m_target_value[bc_idx].size() !=
-                        m_damped_components[bc_idx].size()) {
-                    amrex::Abort(
-                        "DampingLayerSource: target_value must have the same "
-                        "size as the number of damped components.");
-                } else if (
-                    m_target_value[bc_idx].size() !=
+                if (m_target_value[bc_idx].size() !=
                     m_damped_field.num_comp()) {
                     amrex::Abort(
                         "DampingLayerSource: target_value must have the same "
@@ -331,6 +331,11 @@ public:
                         ? (*target_field_ptr)(lev).const_arrays()
                         : amrex::MultiArray4<const amrex::Real>();
 
+                amrex::GpuArray<int, AMREX_SPACEDIM> damp_this_component{0, 0, 0};
+                for (const auto& comp : m_damped_components[bc_idx]) {
+                    damp_this_component[comp] = 1;
+                }
+
                 amrex::ParallelFor(
                     damping_mfab, amrex::IntVect(0), m_damped_field.num_comp(),
                     [=] AMREX_GPU_DEVICE(
@@ -346,8 +351,6 @@ public:
                         // field, damping coefficient field, target value
                         auto target_value = 0.0_rt;
                         if (target_type == TargetType::Constant) {
-                            // Will need to be smarter about the component
-                            // selection!!!!
                             target_value = const_target_value[n];
                         } else if (target_type == TargetType::Profile) {
                             const auto idx =
@@ -368,10 +371,7 @@ public:
                             target_value = target_field_arrs[nbx](i, j, k, n);
                         }
 
-                        bool damp_this_component = true;
-                        // Add logic to select component to damp!!!!
-
-                        if (damp_this_component) {
+                        if (damp_this_component[n]) {
                             src_arrs[nbx](i, j, k, n) +=
                                 damping_arrs[nbx](i, j, k) *
                                 (target_value -
