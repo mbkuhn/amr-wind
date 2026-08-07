@@ -144,8 +144,21 @@ public:
             if (target_type == TargetType::Constant) {
                 pp.getarr("target_value", m_target_value[bc_idx]);
             } else if (target_type == TargetType::Profile) {
-                pp.getarr(
-                    "target_profile_values", m_target_profile_values[bc_idx]);
+                if (pp.contains("target_profile_values")) {
+                    pp.getarr(
+                        "target_profile_values",
+                        m_target_profile_values_x[bc_idx]);
+                } else {
+                    pp.getarr(
+                        "target_profile_values_x",
+                        m_target_profile_values_x[bc_idx]);
+                    pp.queryarr(
+                        "target_profile_values_y",
+                        m_target_profile_values_y[bc_idx]);
+                    pp.queryarr(
+                        "target_profile_values_z",
+                        m_target_profile_values_z[bc_idx]);
+                }
                 pp.getarr(
                     "target_profile_heights", m_target_profile_heights[bc_idx]);
             } else if (target_type == TargetType::Function) {
@@ -183,16 +196,15 @@ public:
                     m_dev_target_value[bc_idx].begin());
             }
             if (target_type == TargetType::Profile) {
-                // What about profiles for multiple-component fields?
-                if (m_target_profile_values[bc_idx].size() !=
+                if (m_target_profile_values_x[bc_idx].size() !=
                     m_target_profile_heights[bc_idx].size()) {
                     amrex::Abort(
                         "DampingLayerSource: target_profile_values and "
                         "target_profile_heights must have the same size.");
                 }
                 const auto num_prof_val =
-                    m_target_profile_values[bc_idx].size();
-                m_dev_target_profile_values[bc_idx].resize(num_prof_val);
+                    m_target_profile_values_x[bc_idx].size();
+                m_dev_target_profile_values_x[bc_idx].resize(num_prof_val);
                 m_dev_target_profile_heights[bc_idx].resize(num_prof_val);
 
                 amrex::Gpu::copy(
@@ -202,9 +214,41 @@ public:
                     m_dev_target_profile_heights[bc_idx].begin());
                 amrex::Gpu::copy(
                     amrex::Gpu::hostToDevice,
-                    m_target_profile_values[bc_idx].begin(),
-                    m_target_profile_values[bc_idx].end(),
-                    m_dev_target_profile_values[bc_idx].begin());
+                    m_target_profile_values_x[bc_idx].begin(),
+                    m_target_profile_values_x[bc_idx].end(),
+                    m_dev_target_profile_values_x[bc_idx].begin());
+                const auto num_prof_val_y =
+                    m_target_profile_values_y[bc_idx].size();
+                if (num_prof_val_y > 0) {
+                    if (num_prof_val_y != num_prof_val) {
+                        amrex::Abort(
+                            "DampingLayerSource: target_profile_values_y must "
+                            "have the same size as target_profile_values_x.");
+                    }
+                    m_dev_target_profile_values_y[bc_idx].resize(
+                        num_prof_val_y);
+                    amrex::Gpu::copy(
+                        amrex::Gpu::hostToDevice,
+                        m_target_profile_values_y[bc_idx].begin(),
+                        m_target_profile_values_y[bc_idx].end(),
+                        m_dev_target_profile_values_y[bc_idx].begin());
+                }
+                const auto num_prof_val_z =
+                    m_target_profile_values_z[bc_idx].size();
+                if (num_prof_val_z > 0) {
+                    if (num_prof_val_z != num_prof_val) {
+                        amrex::Abort(
+                            "DampingLayerSource: target_profile_values_z must "
+                            "have the same size as target_profile_values_x.");
+                    }
+                    m_dev_target_profile_values_z[bc_idx].resize(
+                        num_prof_val_z);
+                    amrex::Gpu::copy(
+                        amrex::Gpu::hostToDevice,
+                        m_target_profile_values_z[bc_idx].begin(),
+                        m_target_profile_values_z[bc_idx].end(),
+                        m_dev_target_profile_values_z[bc_idx].begin());
+                }
             }
             if (target_type == TargetType::Function) {
                 m_function_parser[bc_idx].define(target_function_string);
@@ -260,9 +304,17 @@ public:
                 const amrex::Real* prof_z_end =
                     use_profile ? m_dev_target_profile_heights[bc_idx].end()
                                 : nullptr;
-                const amrex::Real* prof_v =
-                    use_profile ? m_dev_target_profile_values[bc_idx].data()
+                const amrex::Real* prof_v_x =
+                    use_profile ? m_dev_target_profile_values_x[bc_idx].data()
                                 : nullptr;
+                const amrex::Real* prof_v_y =
+                    use_profile && m_target_profile_values_y[bc_idx].size() > 0
+                        ? m_dev_target_profile_values_y[bc_idx].data()
+                        : nullptr;
+                const amrex::Real* prof_v_z =
+                    use_profile && m_target_profile_values_z[bc_idx].size() > 0
+                        ? m_dev_target_profile_values_z[bc_idx].data()
+                        : nullptr;
 
                 // Set up the user-defined function, whether used or not
                 auto udf_func = m_function_parser[bc_idx]
@@ -303,8 +355,11 @@ public:
 
                             // Interpolate the target profile values based on
                             // the cell center height
+                            const amrex::Real* prof = (n == 0)   ? prof_v_x
+                                                      : (n == 1) ? prof_v_y
+                                                                 : prof_v_z;
                             target_value =
-                                interp::linear_impl(prof_z, prof_v, z, idx);
+                                interp::linear_impl(prof_z, prof, z, idx);
                         } else if (target_type == TargetType::Function) {
                             // Evaluate the user-defined function
                             target_value = udf_func(
@@ -339,7 +394,9 @@ private:
     // Can have different targets for each boundary, so use arrays of size 6
     amrex::Array<TargetType, 6> m_target_type;
     amrex::Array<amrex::Vector<amrex::Real>, 6> m_target_value;
-    amrex::Array<amrex::Vector<amrex::Real>, 6> m_target_profile_values;
+    amrex::Array<amrex::Vector<amrex::Real>, 6> m_target_profile_values_x;
+    amrex::Array<amrex::Vector<amrex::Real>, 6> m_target_profile_values_y;
+    amrex::Array<amrex::Vector<amrex::Real>, 6> m_target_profile_values_z;
     amrex::Array<amrex::Vector<amrex::Real>, 6> m_target_profile_heights;
     amrex::Array<amrex::Parser, 6> m_function_parser;
     amrex::Array<std::string, 6> m_target_field_name;
@@ -348,7 +405,11 @@ private:
     // Device copies of the above vectors
     amrex::Array<amrex::Gpu::DeviceVector<amrex::Real>, 6> m_dev_target_value;
     amrex::Array<amrex::Gpu::DeviceVector<amrex::Real>, 6>
-        m_dev_target_profile_values;
+        m_dev_target_profile_values_x;
+    amrex::Array<amrex::Gpu::DeviceVector<amrex::Real>, 6>
+        m_dev_target_profile_values_y;
+    amrex::Array<amrex::Gpu::DeviceVector<amrex::Real>, 6>
+        m_dev_target_profile_values_z;
     amrex::Array<amrex::Gpu::DeviceVector<amrex::Real>, 6>
         m_dev_target_profile_heights;
 };
