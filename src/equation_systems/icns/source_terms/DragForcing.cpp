@@ -262,15 +262,15 @@ void DragForcing::operator()(
 
     const auto& dt = m_time.delta_t();
     const int is_laminar = m_is_laminar ? 1 : 0;
-    const bool limit_terrain_temporal = m_limit_terrain_temporal;
-    const bool do_original_terrain = m_do_original_terrain;
+    const int limit_terrain_temporal = m_limit_terrain_temporal ? 1 : 0;
+    const int do_original_terrain = m_do_original_terrain ? 1 : 0;
     const amrex::Real time_factor = m_forcing_time_factor;
     const amrex::Real min_z = m_min_z;
     const amrex::Real min_z0 = m_min_z0;
     const amrex::Real scale_factor =
         (m_limit_terrain_original && dx[2] < 1.0_rt) ? 1.0_rt : 1.0_rt / dx[2];
     const amrex::Real Cd =
-        (m_limit_terrain_original && is_laminar != 0 && dx[2] < 1)
+        (m_limit_terrain_original && is_laminar != 0 && dx[2] < 1.0_rt)
             ? drag_coefficient
             : drag_coefficient / dx[2];
     const amrex::Real kappa = m_kappa;
@@ -409,12 +409,12 @@ void DragForcing::operator()(
             }
             // Default is temporal implementation
             amrex::Real CdM_m = 1.0_rt / (time_factor * dt);
-            if (do_original_terrain) {
+            if (do_original_terrain == 1) {
                 const amrex::Real CdM = amrex::min<amrex::Real>(
                     Cd / (m + kynema_sgf::constants::EPS),
                     cd_max / scale_factor);
                 CdM_m = CdM * m;
-                if (limit_terrain_temporal) {
+                if (limit_terrain_temporal == 1) {
                     CdM_m = amrex::min<amrex::Real>(CdM_m, 1.0_rt / dt);
                 }
             }
