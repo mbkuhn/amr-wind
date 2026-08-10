@@ -25,6 +25,13 @@ incflo.physics = ABL DampingLayer
 ICNS.source_terms = BoussinesqBuoyancy DampingLayerSource
 temperature.source_terms = DampingLayerSource
 
+incflo.post_processing = avg1
+avg1.type = TimeAveraging
+avg1.labels = means
+avg1.averaging_window = 10.0
+avg1.means.fields = velocity
+avg1.means.averaging_type = ReAveraging
+
 incflo.velocity = 6.0 2.0 0.0
 ABL.temperature_heights = 0.0 1000.0
 ABL.temperature_values = 300.0 304.0
@@ -83,7 +90,7 @@ DampingLayer.velocity.ylo.target_profile_values_y = 0.5 1.0 1.5
 DampingLayer.velocity.ylo.target_profile_values_z = 0.0 0.0 0.0
 
 DampingLayer.velocity.yhi.target_type = field
-DampingLayer.velocity.yhi.target_field = velocity
+DampingLayer.velocity.yhi.target_field = velocity_mean_avg1
 
 DampingLayer.velocity.zlo.target_type = constant
 DampingLayer.velocity.zlo.target_value = 6.0 0.0 0.0
