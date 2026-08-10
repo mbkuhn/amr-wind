@@ -15,11 +15,12 @@ TEST(DampingLayerSource, trait_field_names)
 {
     using namespace kynema_sgf::pde;
 
-    EXPECT_STREQ(DampingLayerSourceTraits<MomentumSource>::field_name, "velocity");
     EXPECT_STREQ(
-        DampingLayerSourceTraits<TemperatureSource>::field_name,
-        "temperature");
-    EXPECT_STREQ(DampingLayerSourceTraits<DensitySource>::field_name, "density");
+        DampingLayerSourceTraits<MomentumSource>::field_name, "velocity");
+    EXPECT_STREQ(
+        DampingLayerSourceTraits<TemperatureSource>::field_name, "temperature");
+    EXPECT_STREQ(
+        DampingLayerSourceTraits<DensitySource>::field_name, "density");
     EXPECT_STREQ(DampingLayerSourceTraits<TKESource>::field_name, "tke");
     EXPECT_STREQ(DampingLayerSourceTraits<SDRSource>::field_name, "sdr");
 }

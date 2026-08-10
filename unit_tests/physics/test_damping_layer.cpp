@@ -36,8 +36,8 @@ TEST(DampingLayerMath, blending_function_values)
         blending_function(1.0_rt, BlendingFunctionType::Linear), 0.0_rt, tol);
 
     EXPECT_NEAR(
-        blending_function(0.5_rt, BlendingFunctionType::Quadratic),
-        0.75_rt, tol);
+        blending_function(0.5_rt, BlendingFunctionType::Quadratic), 0.75_rt,
+        tol);
 
     const amrex::Real exp_mid =
         blending_function(0.5_rt, BlendingFunctionType::Exponential);
@@ -66,7 +66,8 @@ TEST(DampingLayerMath, damping_calc_piecewise_behavior)
             2.0_rt, thickness, blend_frac, BlendingFunctionType::Cosine),
         1.0_rt, tol);
 
-    const amrex::Real blend_pos = (8.0_rt - full_damp_len) / (thickness * blend_frac);
+    const amrex::Real blend_pos =
+        (8.0_rt - full_damp_len) / (thickness * blend_frac);
     const amrex::Real expected_mid =
         blending_function(blend_pos, BlendingFunctionType::Cosine);
     EXPECT_NEAR(
@@ -83,8 +84,7 @@ TEST(DampingLayerMath, damping_calc_piecewise_behavior)
         damping_calc(5.0_rt, thickness, 0.0_rt, BlendingFunctionType::Linear),
         1.0_rt, tol);
     EXPECT_NEAR(
-        damping_calc(
-            10.01_rt, thickness, 0.0_rt, BlendingFunctionType::Linear),
+        damping_calc(10.01_rt, thickness, 0.0_rt, BlendingFunctionType::Linear),
         0.0_rt, tol);
 }
 
