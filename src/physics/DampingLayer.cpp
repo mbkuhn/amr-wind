@@ -53,15 +53,13 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
                         "boundaries.");
                 }
             }
-            // Create field to go with this boundary damping layer if thickness
-            // > 0
+            // Create field to go with this boundary damping layer
+            bc_thickness[bc_index] = thickness;
             if (thickness > 0.0_rt) {
                 const auto field_name = "damping_layer_" + lbl + "_" + name;
                 m_repo.declare_field(field_name, 1, 1, 1);
                 sim.io_manager().register_io_var(field_name);
-                // Record damping layer parameters for field creation (next
-                // step)
-                bc_thickness[bc_index] = thickness;
+                // Record damping layer parameters for field creation
                 bc_blending_fraction[bc_index] = blending_fraction;
                 bc_blending_function_type[bc_index] = blending_function_type;
                 if (name != "zlo" && name != "zhi") {
