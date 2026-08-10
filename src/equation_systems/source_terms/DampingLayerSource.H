@@ -24,7 +24,8 @@ enum class TargetType : std::uint8_t {
     Field = 3
 };
 
-TargetType string_to_target_type(const std::string& target_type_str)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE TargetType
+string_to_target_type(const std::string& target_type_str)
 {
     std::string target_type_lower = amrex::toLower(target_type_str);
     if (target_type_lower == "constant") {
