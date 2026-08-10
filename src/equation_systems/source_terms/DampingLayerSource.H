@@ -29,17 +29,19 @@ TargetType string_to_target_type(const std::string& target_type_str)
     std::string target_type_lower = amrex::toLower(target_type_str);
     if (target_type_lower == "constant") {
         return TargetType::Constant;
-    } else if (target_type_lower == "profile") {
-        return TargetType::Profile;
-    } else if (target_type_lower == "function") {
-        return TargetType::Function;
-    } else if (target_type_lower == "field") {
-        return TargetType::Field;
-    } else {
-        amrex::Abort(
-            "Invalid target type: " + target_type_str +
-            ". Must be one of: constant, profile, function, field.");
     }
+    if (target_type_lower == "profile") {
+        return TargetType::Profile;
+    }
+    if (target_type_lower == "function") {
+        return TargetType::Function;
+    }
+    if (target_type_lower == "field") {
+        return TargetType::Field;
+    }
+    amrex::Abort(
+        "Invalid target type: " + target_type_str +
+        ". Must be one of: constant, profile, function, field.");
     // Unreachable, but avoids compiler warning
     return TargetType::Constant;
 }
@@ -179,6 +181,15 @@ public:
                     m_damped_components[bc_idx].begin(),
                     m_damped_components[bc_idx].end(), 0);
             }
+            // Check values of damped components
+            for (const auto comp : m_damped_components[bc_idx]) {
+                if (comp < 0 || comp >= m_damped_field.num_comp()) {
+                    amrex::Abort(
+                        "DampingLayerSource: damped_components for field " +
+                        m_damped_field_name + " must be in the range [0, " +
+                        std::to_string(m_damped_field.num_comp() - 1) + "]");
+                }
+            }
 
             if (target_type == TargetType::Constant) {
                 if (m_target_value[bc_idx].size() !=
@@ -308,11 +319,11 @@ public:
                     use_profile ? m_dev_target_profile_values_x[bc_idx].data()
                                 : nullptr;
                 const amrex::Real* prof_v_y =
-                    use_profile && m_target_profile_values_y[bc_idx].size() > 0
+                    use_profile && !m_target_profile_values_y[bc_idx].empty()
                         ? m_dev_target_profile_values_y[bc_idx].data()
                         : nullptr;
                 const amrex::Real* prof_v_z =
-                    use_profile && m_target_profile_values_z[bc_idx].size() > 0
+                    use_profile && !m_target_profile_values_z[bc_idx].empty()
                         ? m_dev_target_profile_values_z[bc_idx].data()
                         : nullptr;
 
@@ -372,7 +383,7 @@ public:
                             target_value = target_field_arrs[nbx](i, j, k, n);
                         }
 
-                        if (damp_this_component[n]) {
+                        if (damp_this_component[n] == 1) {
                             src_arrs[nbx](i, j, k, n) +=
                                 damping_arrs[nbx](i, j, k) *
                                 (target_value -
