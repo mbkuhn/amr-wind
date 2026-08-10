@@ -331,7 +331,8 @@ public:
                         ? (*target_field_ptr)(lev).const_arrays()
                         : amrex::MultiArray4<const amrex::Real>();
 
-                amrex::GpuArray<int, AMREX_SPACEDIM> damp_this_component{0, 0, 0};
+                amrex::GpuArray<int, AMREX_SPACEDIM> damp_this_component{
+                    0, 0, 0};
                 for (const auto& comp : m_damped_components[bc_idx]) {
                     damp_this_component[comp] = 1;
                 }
