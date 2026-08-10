@@ -413,7 +413,7 @@ void DragForcing::operator()(
                 const amrex::Real CdM = amrex::min<amrex::Real>(
                     Cd / (m + kynema_sgf::constants::EPS),
                     cd_max / scale_factor);
-                amrex::Real CdM_m = CdM * m;
+                CdM_m = CdM * m;
                 if (limit_terrain_temporal) {
                     CdM_m = amrex::min<amrex::Real>(CdM_m, 1.0_rt / dt);
                 }
