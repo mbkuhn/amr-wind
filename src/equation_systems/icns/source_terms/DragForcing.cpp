@@ -240,6 +240,11 @@ void DragForcing::operator()(
                                       ? (*m_target_levelset)(lev).const_arrays()
                                       : amrex::MultiArray4<amrex::Real const>();
 
+    const amrex::Real* windh = m_windht_d.data();
+    const amrex::Real* uu = m_prof_u_d.data();
+    const amrex::Real* vv = m_prof_v_d.data();
+    const amrex::Real* ww = m_prof_w_d.data();
+
     const auto& geom = m_mesh.Geom(lev);
     const auto& dx = geom.CellSizeArray();
     const auto& prob_lo = geom.ProbLoArray();
@@ -260,10 +265,12 @@ void DragForcing::operator()(
     const int sponge_south = m_sponge_south ? 1 : 0;
     const int sponge_north = m_sponge_north ? 1 : 0;
 
-    const auto& dt = m_time.delta_t();
+    const int nwvals = static_cast<int>(m_wind_heights.size());
     const int is_laminar = m_is_laminar ? 1 : 0;
     const int limit_terrain_temporal = m_limit_terrain_temporal ? 1 : 0;
     const int do_original_terrain = m_do_original_terrain ? 1 : 0;
+
+    const auto& dt = m_time.delta_t();
     const amrex::Real time_factor = m_forcing_time_factor;
     const amrex::Real min_z = m_min_z;
     const amrex::Real min_z0 = m_min_z0;
@@ -287,11 +294,6 @@ void DragForcing::operator()(
             ? MOData::calc_psi_m(
                   0.5_rt * dx[2] / m_monin_obukhov_length, m_beta_m, m_gamma_m)
             : 0.0_rt;
-    const int nwvals = static_cast<int>(m_wind_heights.size());
-    const amrex::Real* windh = m_windht_d.data();
-    const amrex::Real* uu = m_prof_u_d.data();
-    const amrex::Real* vv = m_prof_v_d.data();
-    const amrex::Real* ww = m_prof_w_d.data();
 
     amrex::ParallelFor(
         src_term, amrex::IntVect(0), AMREX_SPACEDIM,
