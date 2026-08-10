@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include "src/physics/DampingLayer.H"
+#include "src/utilities/constants.H"
 #include "AMReX_REAL.H"
 
 using namespace amrex::literals;
@@ -28,7 +29,7 @@ TEST(DampingLayerMath, blending_function_values)
 {
     using namespace kynema_sgf::damping_layer;
 
-    constexpr amrex::Real tol = 1.0e-12_rt;
+    constexpr amrex::Real tol = kynema_sgf::constants::TIGHT_TOL;
 
     EXPECT_NEAR(
         blending_function(0.0_rt, BlendingFunctionType::Linear), 1.0_rt, tol);
@@ -56,7 +57,7 @@ TEST(DampingLayerMath, damping_calc_piecewise_behavior)
 {
     using namespace kynema_sgf::damping_layer;
 
-    constexpr amrex::Real tol = 1.0e-12_rt;
+    constexpr amrex::Real tol = kynema_sgf::constants::TIGHT_TOL;
     constexpr amrex::Real thickness = 10.0_rt;
     constexpr amrex::Real blend_frac = 0.3_rt;
     constexpr amrex::Real full_damp_len = thickness * (1.0_rt - blend_frac);
