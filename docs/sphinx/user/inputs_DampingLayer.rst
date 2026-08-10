@@ -12,9 +12,9 @@ Activate DampingLayer by including it in :input_param:`incflo.physics`.
 
 Activate DampingLayerSource for each equation you want to damp, for example:
 
-- :input_param:`ICNS.source_terms = DampingLayerSource`
-- :input_param:`temperature.source_terms = DampingLayerSource`
-- :input_param:`TKE.source_terms = DampingLayerSource`
+- ``ICNS.source_terms = DampingLayerSource``
+- ``temperature.source_terms = DampingLayerSource``
+- ``TKE.source_terms = DampingLayerSource``
 
 Additional scalar equations that expose source-term controls can also use
 ``DampingLayerSource``.
