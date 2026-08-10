@@ -96,9 +96,10 @@ DragForcing::DragForcing(const CFDSim& sim)
 {
     amrex::ParmParse pp("DragForcing");
     pp.query("drag_coefficient", m_drag_coefficient);
-    pp.query("use_original_drag_limiter", m_limit_drag);
-    pp.query("use_temporal_drag_limiter", m_limit_drag_temporal);
-    pp.query("use_temporal_drag_implementation", m_do_drag_temporal);
+    pp.query("terrain_use_original_implementation", m_do_original_terrain);
+    m_limit_terrain_original = m_do_original_terrain;
+    pp.query("terrain_use_original_limiter", m_limit_terrain_original);
+    pp.query("terrain_use_temporal_limiter", m_limit_terrain_temporal);
     pp.query("max_drag_coefficient", m_cd_max);
     pp.query("minimum_z0", m_min_z0);
     pp.query("sponge_strength", m_sponge_strength);
@@ -261,18 +262,20 @@ void DragForcing::operator()(
 
     const auto& dt = m_time.delta_t();
     const int is_laminar = m_is_laminar ? 1 : 0;
-    const bool limit_drag_temporal = m_limit_drag_temporal;
-    const bool do_drag_temporal = m_do_drag_temporal;
+    const bool limit_terrain_temporal = m_limit_terrain_temporal;
+    const bool do_original_terrain = m_do_original_terrain;
     const amrex::Real time_factor = m_forcing_time_factor;
     const amrex::Real min_z = m_min_z;
     const amrex::Real min_z0 = m_min_z0;
     const amrex::Real scale_factor =
-        (m_limit_drag && dx[2] < 1.0_rt) ? 1.0_rt : 1.0_rt / dx[2];
-    const amrex::Real Cd = (m_limit_drag && is_laminar != 0 && dx[2] < 1)
-                               ? drag_coefficient
-                               : drag_coefficient / dx[2];
+        (m_limit_terrain_original && dx[2] < 1.0_rt) ? 1.0_rt : 1.0_rt / dx[2];
+    const amrex::Real Cd =
+        (m_limit_terrain_original && is_laminar != 0 && dx[2] < 1)
+            ? drag_coefficient
+            : drag_coefficient / dx[2];
     const amrex::Real kappa = m_kappa;
-    const amrex::Real cd_max = m_limit_drag ? m_cd_max : constants::LARGE_NUM;
+    const amrex::Real cd_max =
+        m_limit_terrain_original ? m_cd_max : constants::LARGE_NUM;
 
     const amrex::Real non_neutral_neighbour =
         (m_wall_het_model == "mol")
@@ -404,21 +407,22 @@ void DragForcing::operator()(
                 target_v = target_vel_arrs[nbx](i, j, k, 1);
                 target_w = target_vel_arrs[nbx](i, j, k, 2);
             }
-            const amrex::Real CdM = amrex::min<amrex::Real>(
-                Cd / (m + kynema_sgf::constants::EPS), cd_max / scale_factor);
+            // Default is temporal implementation
+            amrex::Real CdM_m = 1.0_rt / (time_factor * dt);
+            if (do_original_terrain) {
+                const amrex::Real CdM = amrex::min<amrex::Real>(
+                    Cd / (m + kynema_sgf::constants::EPS),
+                    cd_max / scale_factor);
+                amrex::Real CdM_m = CdM * m;
+                if (limit_terrain_temporal) {
+                    CdM_m = amrex::min<amrex::Real>(CdM_m, 1.0_rt / dt);
+                }
+            }
 
             const amrex::Real vel_n = vel_arrs[nbx](i, j, k, n);
             const amrex::Real target_n = (n == 0)   ? target_u
                                          : (n == 1) ? target_v
                                                     : target_w;
-
-            amrex::Real CdM_m = CdM * m;
-            if (limit_drag_temporal) {
-                CdM_m = amrex::min<amrex::Real>(CdM_m, 1.0_rt / dt);
-            }
-            if (do_drag_temporal) {
-                CdM_m = 1.0_rt / (time_factor * dt);
-            }
 
             src_arrs[nbx](i, j, k, n) -=
                 (CdM_m * (vel_n - target_n) * blank_arrs[nbx](i, j, k));
