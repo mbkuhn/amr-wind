@@ -23,7 +23,7 @@ transport.reference_temperature = 300.0
 
 incflo.physics = ABL DampingLayer
 ICNS.source_terms = BoussinesqBuoyancy DampingLayerSource
-temperature.source_terms = DampingLayerSource
+Temperature.source_terms = DampingLayerSource
 
 incflo.post_processing = avg1
 avg1.type = TimeAveraging
