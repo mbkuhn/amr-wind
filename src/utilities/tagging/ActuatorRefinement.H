@@ -4,6 +4,7 @@
 #include "src/utilities/tagging/RefinementCriteria.H"
 #include "src/wind_energy/actuator/actuator_types.H"
 
+#include <cstdint>
 #include <string>
 
 namespace kynema_sgf {
@@ -30,7 +31,7 @@ public:
         override;
 
 private:
-    enum class AxialPaddingType { Epsilon, Diameter, Absolute };
+    enum class AxialPaddingType : std::uint8_t { Epsilon, Diameter, Absolute };
 
     void resolve_actuators();
 

@@ -214,10 +214,12 @@ TEST_F(DroneActuatorTest, composite_lifecycle)
     const auto frame_at_one = drone->reference_frame(1.0_rt);
     ASSERT_TRUE(frame_at_zero.has_value());
     ASSERT_TRUE(frame_at_one.has_value());
-    EXPECT_NEAR(frame_at_zero->position.x(), 0.0_rt, test_tol);
-    EXPECT_NEAR(frame_at_one->position.x(), 0.1_rt, test_tol);
-    EXPECT_NEAR(frame_at_one->position.y(), -0.2_rt, test_tol);
-    EXPECT_NEAR(frame_at_one->position.z(), 0.3_rt, test_tol);
+    const auto& frame_zero = frame_at_zero.value();
+    const auto& frame_one = frame_at_one.value();
+    EXPECT_NEAR(frame_zero.position.x(), 0.0_rt, test_tol);
+    EXPECT_NEAR(frame_one.position.x(), 0.1_rt, test_tol);
+    EXPECT_NEAR(frame_one.position.y(), -0.2_rt, test_tol);
+    EXPECT_NEAR(frame_one.position.z(), 0.3_rt, test_tol);
     ASSERT_EQ(refinement_at_zero.size(), 4U);
     ASSERT_EQ(refinement_at_one.size(), 4U);
     for (int i = 0; i < 4; ++i) {

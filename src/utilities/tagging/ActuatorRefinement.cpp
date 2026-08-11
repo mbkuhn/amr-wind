@@ -117,7 +117,7 @@ void ActuatorRefinement::initialize(const std::string& key)
         m_forward_axial_padding = 0.0_rt;
         m_backward_axial_padding = 0.0_rt;
         amrex::Real shared = 0.0_rt;
-        if (pp.query("axial_padding_diameter", shared)) {
+        if (pp.query("axial_padding_diameter", shared) == 1) {
             m_forward_axial_padding = shared;
             m_backward_axial_padding = shared;
         }
@@ -128,7 +128,7 @@ void ActuatorRefinement::initialize(const std::string& key)
         m_forward_axial_padding = 0.0_rt;
         m_backward_axial_padding = 0.0_rt;
         amrex::Real shared = 0.0_rt;
-        if (pp.query("axial_padding", shared)) {
+        if (pp.query("axial_padding", shared) == 1) {
             m_forward_axial_padding = shared;
             m_backward_axial_padding = shared;
         }

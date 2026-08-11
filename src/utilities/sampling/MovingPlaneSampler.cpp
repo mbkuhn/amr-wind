@@ -76,11 +76,12 @@ bool MovingPlaneSampler::update_geometry(const amrex::Real time)
             "' does not provide a rigid reference frame");
     }
 
-    auto origin = values(frame->apply_point(vector(m_reference.origin)));
-    auto axis1 = values(frame->apply_vector(vector(m_reference.axis1)));
-    auto axis2 = values(frame->apply_vector(vector(m_reference.axis2)));
+    const auto& rigid_frame = frame.value();
+    auto origin = values(rigid_frame.apply_point(vector(m_reference.origin)));
+    auto axis1 = values(rigid_frame.apply_vector(vector(m_reference.axis1)));
+    auto axis2 = values(rigid_frame.apply_vector(vector(m_reference.axis2)));
     auto offset_vector =
-        values(frame->apply_vector(vector(m_reference.offset_vector)));
+        values(rigid_frame.apply_vector(vector(m_reference.offset_vector)));
     const bool geometry_changed =
         changed(origin, m_origin) || changed(axis1, m_axis1) ||
         changed(axis2, m_axis2) || changed(offset_vector, m_offset_vector);
