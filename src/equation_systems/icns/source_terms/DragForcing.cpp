@@ -191,6 +191,8 @@ DragForcing::~DragForcing() = default;
 void DragForcing::operator()(
     const int lev, const FieldState fstate, amrex::MultiFab& src_term) const
 {
+    const auto& geom = m_mesh.Geom(lev);
+
     auto const& src_arrs = src_term.arrays();
     auto const& vel_arrs =
         m_velocity.state(field_impl::dof_state(fstate))(lev).const_arrays();
@@ -201,30 +203,31 @@ void DragForcing::operator()(
     auto const& blank_arrs =
         this->m_sim.repo().get_int_field("terrain_blank")(lev).const_arrays();
 
-    const bool has_terrain_drag_b =
-        this->m_sim.repo().int_field_exists("terrain_drag");
-    const bool has_terrainz0_b = this->m_sim.repo().field_exists("terrainz0");
-    const bool has_terrain_damping_b =
-        this->m_sim.repo().field_exists("terrain_damping");
-    const bool has_terrain_height_b =
-        this->m_sim.repo().field_exists("terrain_height");
+    const int has_terrain_drag =
+        this->m_sim.repo().int_field_exists("terrain_drag") ? 1 : 0;
+    const int has_terrainz0 =
+        this->m_sim.repo().field_exists("terrainz0") ? 1 : 0;
+    const int has_terrain_damping =
+        this->m_sim.repo().field_exists("terrain_damping") ? 1 : 0;
+    const int has_terrain_height =
+        this->m_sim.repo().field_exists("terrain_height") ? 1 : 0;
 
-    auto const& drag_arrs = has_terrain_drag_b
+    auto const& drag_arrs = has_terrain_drag != 0
                                 ? this->m_sim.repo()
                                       .get_int_field("terrain_drag")(lev)
                                       .const_arrays()
                                 : amrex::MultiArray4<int const>();
     auto const& terrainz0_arrs =
-        has_terrainz0_b
+        has_terrainz0 != 0
             ? this->m_sim.repo().get_field("terrainz0")(lev).const_arrays()
             : amrex::MultiArray4<amrex::Real const>();
-    auto const& damping_arrs = has_terrain_damping_b
+    auto const& damping_arrs = has_terrain_damping != 0
                                    ? this->m_sim.repo()
                                          .get_field("terrain_damping")(lev)
                                          .const_arrays()
                                    : amrex::MultiArray4<amrex::Real const>();
     auto const& terrain_height_arrs =
-        has_terrain_height_b
+        has_terrain_height != 0
             ? this->m_sim.repo().get_field("terrain_height")(lev).const_arrays()
             : amrex::MultiArray4<amrex::Real const>();
 
@@ -235,15 +238,15 @@ void DragForcing::operator()(
                                       ? (*m_target_levelset)(lev).const_arrays()
                                       : amrex::MultiArray4<amrex::Real const>();
 
+    const auto& dx = geom.CellSizeArray();
+    const auto& prob_lo = geom.ProbLoArray();
+    const auto& prob_hi = geom.ProbHiArray();
+
     const amrex::Real* windh = m_windht_d.data();
     const amrex::Real* uu = m_prof_u_d.data();
     const amrex::Real* vv = m_prof_v_d.data();
     const amrex::Real* ww = m_prof_w_d.data();
 
-    const auto& geom = m_mesh.Geom(lev);
-    const auto& dx = geom.CellSizeArray();
-    const auto& prob_lo = geom.ProbLoArray();
-    const auto& prob_hi = geom.ProbHiArray();
     const amrex::Real drag_coefficient = m_drag_coefficient;
     const amrex::Real sponge_strength = m_sponge_strength;
     const amrex::Real sponge_density = m_sponge_density;
@@ -282,11 +285,6 @@ void DragForcing::operator()(
             : 0.0_rt;
 
     const int nwvals = static_cast<int>(m_wind_heights.size());
-
-    const int has_terrain_drag = has_terrain_drag_b ? 1 : 0;
-    const int has_terrainz0 = has_terrainz0_b ? 1 : 0;
-    const int has_terrain_damping = has_terrain_damping_b ? 1 : 0;
-    const int has_terrain_height = has_terrain_height_b ? 1 : 0;
 
     const int is_waves = m_terrain_is_waves ? 1 : 0;
     const int model_form_drag = m_apply_MOSD ? 1 : 0;
