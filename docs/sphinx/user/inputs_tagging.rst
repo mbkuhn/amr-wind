@@ -258,7 +258,7 @@ are ``t``, ``x``, ``y``, and ``z``.
    will be active. By default the bounding box will span the entire domain.
 
 Actuator-following refinement
-```````````````````````````
+`````````````````````````````
 
 ``ActuatorRefinement`` maintains rotor-aligned cylindrical refinement regions
 around selected actuator models. A selected ``ActuatorSector`` contributes one
