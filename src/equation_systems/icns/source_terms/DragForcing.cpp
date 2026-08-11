@@ -312,8 +312,10 @@ void DragForcing::operator()(
                 (std::abs(sdist_west) > kynema_sgf::constants::EPS)
                     ? (start_west - x) / (-sdist_west)
                     : 0.0_rt;
-            xi_start = sponge_west * amrex::max<amrex::Real>(xi_start, 0.0_rt);
-            xi_end = sponge_east * amrex::max<amrex::Real>(xi_end, 0.0_rt);
+            xi_start = static_cast<amrex::Real>(sponge_west) *
+                       amrex::max<amrex::Real>(xi_start, 0.0_rt);
+            xi_end = static_cast<amrex::Real>(sponge_east) *
+                     amrex::max<amrex::Real>(xi_end, 0.0_rt);
             const amrex::Real xstart_damping =
                 sponge_strength * xi_start * xi_start;
             const amrex::Real xend_damping = sponge_strength * xi_end * xi_end;
@@ -325,8 +327,10 @@ void DragForcing::operator()(
                 (std::abs(sdist_south) > kynema_sgf::constants::EPS)
                     ? (start_south - y) / (-sdist_south)
                     : 0.0_rt;
-            yi_start = sponge_south * amrex::max<amrex::Real>(yi_start, 0.0_rt);
-            yi_end = sponge_north * amrex::max<amrex::Real>(yi_end, 0.0_rt);
+            yi_start = static_cast<amrex::Real>(sponge_south) *
+                       amrex::max<amrex::Real>(yi_start, 0.0_rt);
+            yi_end = static_cast<amrex::Real>(sponge_north) *
+                     amrex::max<amrex::Real>(yi_end, 0.0_rt);
             const amrex::Real ystart_damping =
                 sponge_strength * yi_start * yi_start;
             const amrex::Real yend_damping = sponge_strength * yi_end * yi_end;
@@ -352,7 +356,7 @@ void DragForcing::operator()(
                 amrex::Math::abs(drag_arrs[nbx](i, j, k)) == 1 &&
                 (!is_laminar)) {
                 int k_off = -1;
-                if (is_waves != 0) {
+                if (is_waves) {
                     const amrex::Real cell_length_2D =
                         std::sqrt((dx[0] * dx[0]) + (dx[2] * dx[2]));
                     if (target_lvs_arrs[nbx](i, j, k) + cell_length_2D >= 0) {
@@ -381,7 +385,7 @@ void DragForcing::operator()(
                 const amrex::Real ustar = viscous_drag_calculations(
                     Dxz, Dyz, ux1r, uy1r, ux2r, uy2r, z0, dx[2], kappa,
                     non_neutral_neighbour);
-                if (model_form_drag != 0) {
+                if (model_form_drag) {
                     form_drag_calculations(
                         Dxz, Dyz, i, j, k, target_lvs_arrs[nbx], dx, ux1r,
                         uy1r);
