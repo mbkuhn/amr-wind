@@ -74,9 +74,10 @@ bool MovingPlaneSampler::update_geometry(const amrex::Real time)
         amrex::Abort(
             "MovingPlaneSampler: actuator '" + m_actuator_label +
             "' does not provide a rigid reference frame");
+        return false;
     }
 
-    const auto& rigid_frame = frame.value();
+    const auto& rigid_frame = *frame;
     auto origin = values(rigid_frame.apply_point(vector(m_reference.origin)));
     auto axis1 = values(rigid_frame.apply_vector(vector(m_reference.axis1)));
     auto axis2 = values(rigid_frame.apply_vector(vector(m_reference.axis2)));

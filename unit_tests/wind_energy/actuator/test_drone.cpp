@@ -212,10 +212,12 @@ TEST_F(DroneActuatorTest, composite_lifecycle)
     const auto refinement_at_one = drone->refinement_geometries(1.0_rt);
     const auto frame_at_zero = drone->reference_frame(0.0_rt);
     const auto frame_at_one = drone->reference_frame(1.0_rt);
-    ASSERT_TRUE(frame_at_zero.has_value());
-    ASSERT_TRUE(frame_at_one.has_value());
-    const auto& frame_zero = frame_at_zero.value();
-    const auto& frame_one = frame_at_one.value();
+    if (!frame_at_zero.has_value() || !frame_at_one.has_value()) {
+        ADD_FAILURE() << "Drone reference frames are unavailable";
+        return;
+    }
+    const auto& frame_zero = *frame_at_zero;
+    const auto& frame_one = *frame_at_one;
     EXPECT_NEAR(frame_zero.position.x(), 0.0_rt, test_tol);
     EXPECT_NEAR(frame_one.position.x(), 0.1_rt, test_tol);
     EXPECT_NEAR(frame_one.position.y(), -0.2_rt, test_tol);
@@ -262,7 +264,10 @@ TEST_F(DroneActuatorTest, actuator_attached_plane)
     actuator.pre_init_actions();
     const auto& model = actuator.get_act_bylabel("D1");
     const auto frame = model.reference_frame(0.0_rt);
-    ASSERT_TRUE(frame.has_value());
+    if (!frame.has_value()) {
+        ADD_FAILURE() << "Drone reference frame is unavailable";
+        return;
+    }
 
     amrex::ParmParse pp_plane("drone_plane");
     pp_plane.add("actuator_label", std::string("D1"));
