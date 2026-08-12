@@ -253,7 +253,7 @@ void DragForcing::operator()(
     const amrex::Real sdist_north = m_sponge_distance_north;
     const amrex::Real sdist_south = m_sponge_distance_south;
 
-    const auto& dt = m_time.delta_t();
+    const amrex::Real dt = m_time.delta_t();
     const amrex::Real time_factor = m_forcing_time_factor;
     const amrex::Real min_z = m_min_z;
     const amrex::Real min_z0 = m_min_z0;
