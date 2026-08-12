@@ -200,14 +200,7 @@ void DragForcing::operator()(
     if (!this->m_sim.repo().int_field_exists("terrain_blank")) {
         amrex::Abort("Need terrain blanking variable to use this source term");
     }
-    auto const& blank_arrs =
-        this->m_sim.repo().get_int_field("terrain_blank")(lev).const_arrays();
 
-    auto const& drag_arrs = this->m_sim.repo().int_field_exists("terrain_drag")
-                                ? this->m_sim.repo()
-                                      .get_int_field("terrain_drag")(lev)
-                                      .const_arrays()
-                                : amrex::MultiArray4<int const>();
     auto const& terrainz0_arrs =
         this->m_sim.repo().field_exists("terrainz0")
             ? this->m_sim.repo().get_field("terrainz0")(lev).const_arrays()
@@ -229,6 +222,15 @@ void DragForcing::operator()(
     auto const& target_lvs_arrs = m_terrain_is_waves
                                       ? (*m_target_levelset)(lev).const_arrays()
                                       : amrex::MultiArray4<amrex::Real const>();
+
+    auto const& blank_arrs =
+        this->m_sim.repo().get_int_field("terrain_blank")(lev).const_arrays();
+
+    auto const& drag_arrs = this->m_sim.repo().int_field_exists("terrain_drag")
+                                ? this->m_sim.repo()
+                                      .get_int_field("terrain_drag")(lev)
+                                      .const_arrays()
+                                : amrex::MultiArray4<int const>();
 
     const auto& dx = geom.CellSizeArray();
     const auto& prob_lo = geom.ProbLoArray();
