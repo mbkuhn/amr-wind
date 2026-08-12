@@ -6,6 +6,7 @@
 #include "src/wind_energy/actuator/ActParser.H"
 #include "src/wind_energy/actuator/sector/ActuatorSector.H"
 #include "src/wind_energy/actuator/sector/actuator_sector_ops.H"
+#include "src/utilities/constants.H"
 #include "src/utilities/tagging/ActuatorRefinement.H"
 
 #include <fstream>
@@ -188,14 +189,15 @@ TEST_F(ActuatorSectorTest, act_model_init)
     const auto refinement = sector.refinement_geometries(0.5_rt);
     ASSERT_EQ(refinement.size(), 1U);
     EXPECT_EQ(refinement[0].label, "R1");
-    EXPECT_NEAR(refinement[0].center.x(), 0.0_rt, 1.0e-14_rt);
-    EXPECT_NEAR(refinement[0].center.y(), 0.0_rt, 1.0e-14_rt);
-    EXPECT_NEAR(refinement[0].center.z(), 0.5_rt, 1.0e-14_rt);
-    EXPECT_NEAR(refinement[0].normal.x(), 1.0_rt, 1.0e-14_rt);
-    EXPECT_NEAR(refinement[0].normal.y(), 0.0_rt, 1.0e-14_rt);
-    EXPECT_NEAR(refinement[0].normal.z(), 0.0_rt, 1.0e-14_rt);
-    EXPECT_NEAR(refinement[0].rotor_radius, 0.05_rt, 1.0e-14_rt);
-    EXPECT_NEAR(refinement[0].epsilon_max, 0.0025_rt, 1.0e-14_rt);
+    constexpr amrex::Real tol = kynema_sgf::constants::TIGHT_TOL;
+    EXPECT_NEAR(refinement[0].center.x(), 0.0_rt, tol);
+    EXPECT_NEAR(refinement[0].center.y(), 0.0_rt, tol);
+    EXPECT_NEAR(refinement[0].center.z(), 0.5_rt, tol);
+    EXPECT_NEAR(refinement[0].normal.x(), 1.0_rt, tol);
+    EXPECT_NEAR(refinement[0].normal.y(), 0.0_rt, tol);
+    EXPECT_NEAR(refinement[0].normal.z(), 0.0_rt, tol);
+    EXPECT_NEAR(refinement[0].rotor_radius, 0.05_rt, tol);
+    EXPECT_NEAR(refinement[0].epsilon_max, 0.0025_rt, tol);
 
     remove_file(m_afname);
 }
@@ -256,8 +258,9 @@ TEST_F(ActuatorSectorRefinementTest, asymmetric_actuator_refinement)
         xmin = amrex::min(xmin, x);
         xmax = amrex::max(xmax, x);
     }
-    EXPECT_NEAR(xmin, -0.0125_rt, 1.0e-14_rt);
-    EXPECT_NEAR(xmax, 0.0625_rt, 1.0e-14_rt);
+    constexpr amrex::Real tol = kynema_sgf::constants::TIGHT_TOL;
+    EXPECT_NEAR(xmin, -0.0125_rt, tol);
+    EXPECT_NEAR(xmax, 0.0625_rt, tol);
 
     remove_file(m_afname);
 }
