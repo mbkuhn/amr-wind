@@ -316,7 +316,10 @@ TEST_F(DroneActuatorTest, actuator_attached_volume)
     auto& actuator = dynamic_cast<kynema_sgf::actuator::Actuator&>(physics);
     actuator.pre_init_actions();
     const auto frame = actuator.get_act_bylabel("D1").reference_frame(0.0_rt);
-    ASSERT_TRUE(frame.has_value());
+    if (!frame.has_value()) {
+        ADD_FAILURE() << "Drone reference frame is unavailable";
+        return;
+    }
 
     const amrex::Vector<amrex::Real> local_lo{-0.02_rt, -0.03_rt, -0.01_rt};
     amrex::ParmParse pp_volume("drone_volume");
@@ -345,7 +348,10 @@ TEST_F(DroneActuatorTest, actuator_attached_volume)
     volume.sampling_locations(updated_locations);
     const auto updated_frame =
         actuator.get_act_bylabel("D1").reference_frame(sim().time().new_time());
-    ASSERT_TRUE(updated_frame.has_value());
+    if (!updated_frame.has_value()) {
+        ADD_FAILURE() << "Updated drone reference frame is unavailable";
+        return;
+    }
     const auto expected_updated = updated_frame->apply_point(
         kynema_sgf::vs::Vector{local_lo[0], local_lo[1], local_lo[2]});
     EXPECT_NEAR(
