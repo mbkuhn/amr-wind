@@ -302,6 +302,7 @@ void DragForcing::operator()(
     const int limit_terrain_temporal = m_limit_terrain_temporal ? 1 : 0;
     const int do_original_terrain = m_do_original_terrain ? 1 : 0;
 
+    // NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding)
     amrex::ParallelFor(
         src_term, amrex::IntVect(0), AMREX_SPACEDIM,
         [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k, int n) {
