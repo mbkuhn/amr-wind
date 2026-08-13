@@ -100,10 +100,15 @@ DragForcing::DragForcing(const CFDSim& sim)
     m_limit_terrain_original = m_do_original_terrain;
     pp.query("terrain_use_original_limiter", m_limit_terrain_original);
     pp.query("terrain_use_temporal_limiter", m_limit_terrain_temporal);
+    pp.query("bc_drag_use_original_implementation", m_do_original_drag);
     pp.query("max_drag_coefficient", m_cd_max);
     pp.query("minimum_z0", m_min_z0);
     pp.query("sponge_strength", m_sponge_strength);
     pp.query("terrain_forcing_time_factor", m_terrain_time_factor);
+    if (m_do_original_drag) {
+        // default value for original drag implementation
+        m_bc_time_factor = 5.0_rt;
+    }
     pp.query("bc_forcing_time_factor", m_bc_time_factor);
     pp.query("sponge_density", m_sponge_density);
     pp.query("sponge_west", m_sponge_west);
@@ -301,6 +306,7 @@ void DragForcing::operator()(
     const int is_laminar = m_is_laminar ? 1 : 0;
     const int limit_terrain_temporal = m_limit_terrain_temporal ? 1 : 0;
     const int do_original_terrain = m_do_original_terrain ? 1 : 0;
+    const int do_original_drag = m_do_original_drag ? 1 : 0;
 
     amrex::ParallelFor(
         src_term, amrex::IntVect(0), AMREX_SPACEDIM,
@@ -443,9 +449,11 @@ void DragForcing::operator()(
             if (has_terrain_drag != 0) {
                 amrex::Real drag_force_n = 0.0_rt;
                 if (n == 0) {
-                    drag_force_n = Dxz + bc_forcing_x;
+                    drag_force_n = bc_forcing_x;
+                    drag_force_n += do_original_drag ? Dxz : 0.0_rt;
                 } else if (n == 1) {
-                    drag_force_n = Dyz + bc_forcing_y;
+                    drag_force_n = bc_forcing_y;
+                    drag_force_n += do_original_drag ? Dyz : 0.0_rt;
                 } else {
                     drag_force_n = CdM_m * (uz1 - target_w);
                 }
