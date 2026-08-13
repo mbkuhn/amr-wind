@@ -45,12 +45,29 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
             pp_bc.query("blending_function_type", blending_function_str);
             BlendingFunctionType blending_function_type =
                 string_to_blending_function_type(blending_function_str);
+            amrex::Real vert_blend_thickness = -1.0_rt;
+            pp_bc.query("vertical_blending_thickness", vert_blend_thickness);
+            std::string vert_blending_function_str = "cosine";
+            pp_bc.query(
+                "vertical_blending_function_type", vert_blending_function_str);
+            BlendingFunctionType vert_blending_function_type =
+                string_to_blending_function_type(vert_blending_function_str);
             // Abort statement if height is specified for a z boundary
             if (name == "zlo" || name == "zhi") {
                 if (pp_bc.contains("minimum_height")) {
                     amrex::Abort(
                         "DampingLayer: minimum_height is not supported for z "
                         "boundaries.");
+                }
+                if (pp_bc.contains("vertical_blending_thickness")) {
+                    amrex::Abort(
+                        "DampingLayer: vertical_blending_thickness is not "
+                        "supported for z boundaries.");
+                }
+                if (pp_bc.contains("vertical_blending_function_type")) {
+                    amrex::Abort(
+                        "DampingLayer: vertical_blending_function_type is not "
+                        "supported for z boundaries.");
                 }
             }
             // Create field to go with this boundary damping layer
@@ -64,6 +81,10 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
                 bc_blending_function_type[bc_index] = blending_function_type;
                 if (name != "zlo" && name != "zhi") {
                     bc_min_height[bc_index] = min_height;
+                    bc_vertical_blending_thickness[bc_index] =
+                        vertical_blending_thickness;
+                    bc_vertical_blending_function_type[bc_index] =
+                        vert_blending_function_type;
                 }
             }
             ++bc_index;
@@ -72,6 +93,10 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
         layers_thickness.emplace_back(bc_thickness);
         layers_blending_fraction.emplace_back(bc_blending_fraction);
         layers_min_height.emplace_back(bc_min_height);
+        layers_vertical_blending_thickness.emplace_back(
+            bc_vertical_blending_thickness);
+        layers_vertical_blending_function_type.emplace_back(
+            bc_vertical_blending_function_type);
         layers_blending_function_type.emplace_back(bc_blending_function_type);
     }
 
@@ -80,6 +105,8 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
     m_layers_blending_fraction.resize(nfields);
     m_layers_min_height.resize(nfields);
     m_layers_blending_function_type.resize(nfields);
+    m_layers_vertical_blending_thickness.resize(nfields);
+    m_layers_vertical_blending_function_type.resize(nfields);
     amrex::Gpu::copy(
         amrex::Gpu::hostToDevice, layers_thickness.begin(),
         layers_thickness.end(), m_layers_thickness.begin());
@@ -89,6 +116,15 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
     amrex::Gpu::copy(
         amrex::Gpu::hostToDevice, layers_min_height.begin(),
         layers_min_height.end(), m_layers_min_height.begin());
+    amrex::Gpu::copy(
+        amrex::Gpu::hostToDevice, layers_vertical_blending_thickness.begin(),
+        layers_vertical_blending_thickness.end(),
+        m_layers_vertical_blending_thickness.begin());
+    amrex::Gpu::copy(
+        amrex::Gpu::hostToDevice,
+        layers_vertical_blending_function_type.begin(),
+        layers_vertical_blending_function_type.end(),
+        m_layers_vertical_blending_function_type.begin());
     amrex::Gpu::copy(
         amrex::Gpu::hostToDevice, layers_blending_function_type.begin(),
         layers_blending_function_type.end(),
@@ -121,6 +157,11 @@ void DampingLayer::initialize_fields(int level, const amrex::Geometry& geom)
             bc_blending_fraction_ptr[field_idx];
         const amrex::Array<amrex::Real, 4>& bc_min_height =
             bc_min_height_ptr[field_idx];
+        const amrex::Array<amrex::Real, 4>& bc_vertical_blending_thickness =
+            m_layers_vertical_blending_thickness[field_idx];
+        const amrex::Array<BlendingFunctionType, 4>&
+            bc_vertical_blending_function_type =
+                m_layers_vertical_blending_function_type[field_idx];
         const amrex::Array<BlendingFunctionType, 6>& bc_blending_function_type =
             bc_blending_function_type_ptr[field_idx];
 
@@ -139,6 +180,12 @@ void DampingLayer::initialize_fields(int level, const amrex::Geometry& geom)
                     bc_blending_fraction[bc_idx];
                 const amrex::Real min_height =
                     (bc_idx < 4) ? bc_min_height[bc_idx] : constants::LOW_NUM;
+                const amrex::Real vertical_blending_thickness =
+                    (bc_idx < 4) ? bc_vertical_blending_thickness[bc_idx]
+                                 : -1.0_rt;
+                const BlendingFunctionType vertical_blending_function_type =
+                    (bc_idx < 4) ? bc_vertical_blending_function_type[bc_idx]
+                                 : BlendingFunctionType::Cosine;
                 const BlendingFunctionType blending_function_type =
                     bc_blending_function_type[bc_idx];
 
@@ -189,10 +236,13 @@ void DampingLayer::initialize_fields(int level, const amrex::Geometry& geom)
                                 prob_hi[2] - z;
                             const amrex::Real vertical_thickness =
                                 prob_hi[2] - min_height;
+                            const amrex::Real vertical_blending_fraction =
+                                vertical_blending_thickness / distance_from_zhi;
                             const amrex::Real vertical_damping_coeff =
                                 damping_calc(
                                     distance_from_zhi, vertical_thickness,
-                                    blending_fraction, blending_function_type);
+                                    vertical_blending_fraction,
+                                    vertical_blending_function_type);
                             damping_coeff =
                                 std::min(damping_coeff, vertical_damping_coeff);
                         }

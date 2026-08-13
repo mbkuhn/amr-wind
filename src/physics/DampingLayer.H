@@ -112,6 +112,10 @@ private:
     amrex::Gpu::DeviceVector<amrex::Array<amrex::Real, 6>>
         m_layers_blending_fraction;
     amrex::Gpu::DeviceVector<amrex::Array<amrex::Real, 4>> m_layers_min_height;
+    amrex::Gpu::DeviceVector<amrex::Array<amrex::Real, 4>>
+        m_layers_vertical_blending_thickness;
+    amrex::Gpu::DeviceVector<amrex::Array<BlendingFunctionType, 4>>
+        m_layers_vertical_blending_function_type;
     amrex::Gpu::DeviceVector<amrex::Array<BlendingFunctionType, 6>>
         m_layers_blending_function_type;
 };
