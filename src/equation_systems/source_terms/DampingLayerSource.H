@@ -178,17 +178,25 @@ public:
             if (m_damped_components[bc_idx].empty()) {
                 // If no components specified, damp all components
                 m_damped_components[bc_idx].resize(m_damped_field.num_comp());
-                std::iota(
-                    m_damped_components[bc_idx].begin(),
-                    m_damped_components[bc_idx].end(), 0);
+                for (int comp = 0; comp < m_damped_field.num_comp(); ++comp) {
+                    m_damped_components[bc_idx][comp] = 1;
+                }
             }
             // Check values of damped components
+            if (m_damped_components[bc_idx].size() !=
+                m_damped_field.num_comp()) {
+                amrex::Abort(
+                    "DampingLayerSource: damped_components for field " +
+                    m_damped_field_name +
+                    " must have the same number of components as the field: " +
+                    std::to_string(m_damped_field.num_comp()));
+            }
             for (const auto comp : m_damped_components[bc_idx]) {
-                if (comp < 0 || comp >= m_damped_field.num_comp()) {
+                if (comp < 0 || comp > 1) {
                     amrex::Abort(
                         "DampingLayerSource: damped_components for field " +
-                        m_damped_field_name + " must be in the range [0, " +
-                        std::to_string(m_damped_field.num_comp() - 1) + "]");
+                        m_damped_field_name +
+                        " must be set as 0 (off) or 1 (on)");
                 }
             }
 
@@ -345,8 +353,9 @@ public:
 
                 amrex::GpuArray<int, AMREX_SPACEDIM> damp_this_component{
                     0, 0, 0};
-                for (const auto& comp : m_damped_components[bc_idx]) {
-                    damp_this_component[comp] = 1;
+                for (int comp = 0; comp < m_damped_field.num_comp(); ++comp) {
+                    damp_this_component[comp] =
+                        m_damped_components[bc_idx][comp];
                 }
 
                 amrex::ParallelFor(
