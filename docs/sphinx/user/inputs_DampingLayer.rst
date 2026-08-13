@@ -61,6 +61,22 @@ per boundary using:
    Adds a vertical limiter so horizontal boundary damping is only applied above
    this height. This parameter is not valid on ``zlo`` or ``zhi``.
 
+.. input_param:: DampingLayer.<field>.<boundary>.vertical_blending_thickness
+
+   **type:** Real, mandatory when ``minimum_height`` is provided
+
+   Vertical blending thickness used by the vertical limiter activated through
+   ``minimum_height``. This parameter is only valid on ``x*`` and ``y*``
+   boundaries.
+
+.. input_param:: DampingLayer.<field>.<boundary>.vertical_blending_function_type
+
+   **type:** String, optional, default = cosine
+
+   Shape for blending in the vertical direction. Supported values are ``linear``,
+   ``quadratic``, ``exponential``, and ``cosine``. This parameter is only
+   valid on ``x*`` and ``y*`` boundaries.
+
 DampingLayerSource target parameters are configured with the same namespace:
 
 ``DampingLayer.<field>.<boundary>.*``
@@ -128,7 +144,9 @@ DampingLayerSource target parameters are configured with the same namespace:
 
    **type:** List of Integer, optional
 
-   Components to damp. If omitted, all components are damped.
+   Per-component on/off mask for damping. The list length must match the
+   number of components in the damped field, and each entry must be either
+   ``0`` (off) or ``1`` (on). If omitted, all components default to ``1``.
 
 Example
 ^^^^^^^
@@ -145,9 +163,11 @@ Example
    DampingLayer.velocity.xlo.blending_fraction = 0.25
    DampingLayer.velocity.xlo.blending_function_type = linear
    DampingLayer.velocity.xlo.minimum_height = 100.0
+   DampingLayer.velocity.xlo.vertical_blending_thickness = 80.0
+   DampingLayer.velocity.xlo.vertical_blending_function_type = cosine
    DampingLayer.velocity.xlo.target_type = constant
    DampingLayer.velocity.xlo.target_value = 8.0 0.0 0.0
-   DampingLayer.velocity.xlo.damped_components = 0
+   DampingLayer.velocity.xlo.damped_components = 1 0 0
 
    DampingLayer.velocity.ylo.thickness = 120.0
    DampingLayer.velocity.ylo.blending_fraction = 0.5

@@ -45,6 +45,8 @@ DampingLayer.velocity.xlo.thickness = 200.0
 DampingLayer.velocity.xlo.blending_fraction = 0.25
 DampingLayer.velocity.xlo.blending_function_type = linear
 DampingLayer.velocity.xlo.minimum_height = 150.0
+DampingLayer.velocity.xlo.vertical_blending_thickness = 120.0
+DampingLayer.velocity.xlo.vertical_blending_function_type = cosine
 
 DampingLayer.velocity.xhi.thickness = 180.0
 DampingLayer.velocity.xhi.blending_fraction = 0.40
@@ -58,6 +60,8 @@ DampingLayer.velocity.yhi.thickness = 150.0
 DampingLayer.velocity.yhi.blending_fraction = 0.35
 DampingLayer.velocity.yhi.blending_function_type = cosine
 DampingLayer.velocity.yhi.minimum_height = 120.0
+DampingLayer.velocity.yhi.vertical_blending_thickness = 100.0
+DampingLayer.velocity.yhi.vertical_blending_function_type = linear
 
 DampingLayer.velocity.zlo.thickness = 80.0
 DampingLayer.velocity.zlo.blending_fraction = 0.20
@@ -78,7 +82,7 @@ DampingLayer.temperature.zhi.blending_function_type = cosine
 # DampingLayerSource targets for velocity
 DampingLayer.velocity.xlo.target_type = constant
 DampingLayer.velocity.xlo.target_value = 8.0 1.0 0.0
-DampingLayer.velocity.xlo.damped_components = 0 1
+DampingLayer.velocity.xlo.damped_components = 1 1 0
 
 DampingLayer.velocity.xhi.target_type = function
 DampingLayer.velocity.xhi.target_function = "6.0 + 0.001*z + 0.2*n"
@@ -94,11 +98,11 @@ DampingLayer.velocity.yhi.target_field = velocity_mean_avg1
 
 DampingLayer.velocity.zlo.target_type = constant
 DampingLayer.velocity.zlo.target_value = 6.0 0.0 0.0
-DampingLayer.velocity.zlo.damped_components = 0
+DampingLayer.velocity.zlo.damped_components = 1 0 0
 
 DampingLayer.velocity.zhi.target_type = constant
 DampingLayer.velocity.zhi.target_value = 6.0 0.0 0.0
-DampingLayer.velocity.zhi.damped_components = 0
+DampingLayer.velocity.zhi.damped_components = 1 0 1
 
 # DampingLayerSource targets for temperature
 # Use legacy profile key to exercise compatibility path
