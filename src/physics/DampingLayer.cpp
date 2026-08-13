@@ -45,8 +45,11 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
             pp_bc.query("blending_function_type", blending_function_str);
             BlendingFunctionType blending_function_type =
                 string_to_blending_function_type(blending_function_str);
-            amrex::Real vert_blend_thickness = -1.0_rt;
-            pp_bc.query("vertical_blending_thickness", vert_blend_thickness);
+            if (pp_bc.contains("minimum_height")) {
+                amrex::Real vert_blend_thickness = -1.0_rt;
+                pp_bc.get(
+                    "vertical_blending_thickness", vert_blend_thickness);
+            }
             std::string vert_blending_function_str = "cosine";
             pp_bc.query(
                 "vertical_blending_function_type", vert_blending_function_str);
