@@ -103,7 +103,8 @@ DragForcing::DragForcing(const CFDSim& sim)
     pp.query("max_drag_coefficient", m_cd_max);
     pp.query("minimum_z0", m_min_z0);
     pp.query("sponge_strength", m_sponge_strength);
-    pp.query("bc_forcing_time_factor", m_forcing_time_factor);
+    pp.query("terrain_forcing_time_factor", m_terrain_time_factor);
+    pp.query("bc_forcing_time_factor", m_bc_time_factor);
     pp.query("sponge_density", m_sponge_density);
     pp.query("sponge_west", m_sponge_west);
     pp.query("sponge_east", m_sponge_east);
@@ -254,7 +255,8 @@ void DragForcing::operator()(
     const amrex::Real sdist_south = m_sponge_distance_south;
 
     const amrex::Real dt = m_time.delta_t();
-    const amrex::Real time_factor = m_forcing_time_factor;
+    const amrex::Real terrain_time_factor = m_terrain_time_factor;
+    const amrex::Real bc_time_factor = m_bc_time_factor;
     const amrex::Real min_z = m_min_z;
     const amrex::Real min_z0 = m_min_z0;
     const amrex::Real scale_factor =
@@ -407,8 +409,8 @@ void DragForcing::operator()(
                     uTarget * uy2r /
                     (kynema_sgf::constants::EPS +
                      std::sqrt((ux2r * ux2r) + (uy2r * uy2r)));
-                bc_forcing_x = -(uxTarget - ux1) / (time_factor * dt);
-                bc_forcing_y = -(uyTarget - uy1) / (time_factor * dt);
+                bc_forcing_x = -(uxTarget - ux1) / (bc_time_factor * dt);
+                bc_forcing_y = -(uyTarget - uy1) / (bc_time_factor * dt);
             }
             amrex::Real target_u = 0.0_rt;
             amrex::Real target_v = 0.0_rt;
@@ -419,7 +421,7 @@ void DragForcing::operator()(
                 target_w = target_vel_arrs[nbx](i, j, k, 2);
             }
             // Default is temporal implementation
-            amrex::Real CdM_m = 1.0_rt / (time_factor * dt);
+            amrex::Real CdM_m = 1.0_rt / (terrain_time_factor * dt);
             if (do_original_terrain != 0) {
                 const amrex::Real CdM = amrex::min<amrex::Real>(
                     Cd / (m + kynema_sgf::constants::EPS),
