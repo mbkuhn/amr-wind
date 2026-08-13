@@ -20,6 +20,10 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
     amrex::Vector<amrex::Array<amrex::Real, 6>> layers_thickness;
     amrex::Vector<amrex::Array<amrex::Real, 6>> layers_blending_fraction;
     amrex::Vector<amrex::Array<amrex::Real, 4>> layers_min_height;
+    amrex::Vector<amrex::Array<amrex::Real, 4>>
+        layers_vertical_blending_thickness;
+    amrex::Vector<amrex::Array<BlendingFunctionType, 4>>
+        layers_vertical_blending_function_type;
     amrex::Vector<amrex::Array<BlendingFunctionType, 6>>
         layers_blending_function_type;
 
@@ -29,6 +33,9 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
         amrex::Array<amrex::Real, 6> bc_thickness;
         amrex::Array<amrex::Real, 6> bc_blending_fraction;
         amrex::Array<amrex::Real, 4> bc_min_height;
+        amrex::Array<amrex::Real, 4> bc_vertical_blending_thickness;
+        amrex::Array<BlendingFunctionType, 4>
+            bc_vertical_blending_function_type;
         amrex::Array<BlendingFunctionType, 6> bc_blending_function_type;
         int bc_index = 0;
         for (const auto& name : m_bc_names) {
@@ -45,15 +52,15 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
             pp_bc.query("blending_function_type", blending_function_str);
             BlendingFunctionType blending_function_type =
                 string_to_blending_function_type(blending_function_str);
+            amrex::Real vert_blend_thickness = -1.0_rt;
             if (pp_bc.contains("minimum_height")) {
-                amrex::Real vert_blend_thickness = -1.0_rt;
                 pp_bc.get("vertical_blending_thickness", vert_blend_thickness);
             }
-            std::string vert_blending_function_str = "cosine";
+            std::string vert_blend_function_str = "cosine";
             pp_bc.query(
-                "vertical_blending_function_type", vert_blending_function_str);
-            BlendingFunctionType vert_blending_function_type =
-                string_to_blending_function_type(vert_blending_function_str);
+                "vertical_blending_function_type", vert_blend_function_str);
+            BlendingFunctionType vert_blend_function_type =
+                string_to_blending_function_type(vert_blend_function_str);
             // Abort statement if height is specified for a z boundary
             if (name == "zlo" || name == "zhi") {
                 if (pp_bc.contains("minimum_height")) {
@@ -84,9 +91,9 @@ DampingLayer::DampingLayer(CFDSim& sim) : m_repo(sim.repo()), m_mesh(sim.mesh())
                 if (name != "zlo" && name != "zhi") {
                     bc_min_height[bc_index] = min_height;
                     bc_vertical_blending_thickness[bc_index] =
-                        vertical_blending_thickness;
+                        vert_blend_thickness;
                     bc_vertical_blending_function_type[bc_index] =
-                        vert_blending_function_type;
+                        vert_blend_function_type;
                 }
             }
             ++bc_index;
