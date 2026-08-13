@@ -13,4 +13,5 @@ target_sources(${kynema_sgf_lib_name}
   ProbeSampler.cpp
   FreeSurfaceSampler.cpp
   VolumeSampler.cpp
+  MovingVolumeSampler.cpp
   )

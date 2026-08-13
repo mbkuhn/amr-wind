@@ -237,6 +237,25 @@ The ``VolumeSampler`` samples a 3D volume that starts at ``lo`` and
 extends to ``hi``. The resolution in all directions is specified by
 ``num_points``.
 
+The ``MovingVolumeSampler`` uses the same inputs and sampling layout, with
+``lo`` and ``hi`` interpreted in an actuator's local frame. The volume
+translates and rotates with the actuator named by ``actuator_label``. NetCDF
+output includes ``points(time, num_points, ndim)`` for the moving coordinates.
+
+Example::
+
+  sampling.drone_volume.type = MovingVolumeSampler
+  sampling.drone_volume.actuator_label = FigureEightQuad
+  sampling.drone_volume.lo = -0.20 -0.20 -0.40
+  sampling.drone_volume.hi =  0.20  0.20  0.10
+  sampling.drone_volume.num_points = 65 65 81
+
+.. input_param:: sampling.MovingVolumeSampler.actuator_label
+
+   **type:** String, required
+
+   Top-level actuator name whose rigid reference frame controls the volume.
+
 Optional input ``snap_to_cell_center = true`` snaps each sampled point to the
 nearest cell center on the finest available level before sampling.
 

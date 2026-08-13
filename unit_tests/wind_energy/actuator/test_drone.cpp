@@ -4,6 +4,7 @@
 #include "src/wind_energy/actuator/ActuatorContainer.H"
 #include "src/wind_energy/actuator/ActuatorModel.H"
 #include "src/utilities/sampling/MovingPlaneSampler.H"
+#include "src/utilities/sampling/MovingVolumeSampler.H"
 #include "src/utilities/constants.H"
 #include "src/utilities/ncutils/nc_interface.H"
 #include "ks_test_utils/MeshTest.H"
@@ -296,6 +297,63 @@ TEST_F(DroneActuatorTest, actuator_attached_plane)
     EXPECT_NEAR(locations.locations()[0][0], expected_first.x(), test_tol);
     EXPECT_NEAR(locations.locations()[0][1], expected_first.y(), test_tol);
     EXPECT_NEAR(locations.locations()[0][2], expected_first.z(), test_tol);
+
+    remove(m_airfoil_file.c_str());
+}
+
+TEST_F(DroneActuatorTest, actuator_attached_volume)
+{
+    write_airfoil();
+    initialize_domain();
+    populate_inputs();
+
+    amrex::ParmParse pp_drone("Actuator.D1");
+    pp_drone.addarr(
+        "body_orientation_degrees",
+        amrex::Vector<amrex::Real>{10.0_rt, 20.0_rt, 30.0_rt});
+
+    auto& physics = sim().physics_manager().create("Actuator", sim());
+    auto& actuator = dynamic_cast<kynema_sgf::actuator::Actuator&>(physics);
+    actuator.pre_init_actions();
+    const auto frame = actuator.get_act_bylabel("D1").reference_frame(0.0_rt);
+    ASSERT_TRUE(frame.has_value());
+
+    const amrex::Vector<amrex::Real> local_lo{-0.02_rt, -0.03_rt, -0.01_rt};
+    amrex::ParmParse pp_volume("drone_volume");
+    pp_volume.add("actuator_label", std::string("D1"));
+    pp_volume.addarr("lo", local_lo);
+    pp_volume.addarr(
+        "hi", amrex::Vector<amrex::Real>{0.02_rt, 0.03_rt, 0.01_rt});
+    pp_volume.addarr("num_points", amrex::Vector<int>{3, 3, 2});
+
+    kynema_sgf::sampling::MovingVolumeSampler volume(sim());
+    volume.initialize("drone_volume");
+    kynema_sgf::sampling::SampleLocType locations;
+    volume.sampling_locations(locations);
+    ASSERT_EQ(locations.locations().size(), 18U);
+
+    const auto expected_first = frame->apply_point(
+        kynema_sgf::vs::Vector{local_lo[0], local_lo[1], local_lo[2]});
+    EXPECT_NEAR(locations.locations()[0][0], expected_first.x(), test_tol);
+    EXPECT_NEAR(locations.locations()[0][1], expected_first.y(), test_tol);
+    EXPECT_NEAR(locations.locations()[0][2], expected_first.z(), test_tol);
+
+    sim().time().delta_t() = 0.01_rt;
+    sim().time().advance_time();
+    EXPECT_TRUE(volume.update_sampling_locations());
+    kynema_sgf::sampling::SampleLocType updated_locations;
+    volume.sampling_locations(updated_locations);
+    const auto updated_frame =
+        actuator.get_act_bylabel("D1").reference_frame(sim().time().new_time());
+    ASSERT_TRUE(updated_frame.has_value());
+    const auto expected_updated = updated_frame->apply_point(
+        kynema_sgf::vs::Vector{local_lo[0], local_lo[1], local_lo[2]});
+    EXPECT_NEAR(
+        updated_locations.locations()[0][0], expected_updated.x(), test_tol);
+    EXPECT_NEAR(
+        updated_locations.locations()[0][1], expected_updated.y(), test_tol);
+    EXPECT_NEAR(
+        updated_locations.locations()[0][2], expected_updated.z(), test_tol);
 
     remove(m_airfoil_file.c_str());
 }
