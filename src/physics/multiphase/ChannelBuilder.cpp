@@ -609,10 +609,9 @@ void ChannelBuilder::initialize_fields(int level, const amrex::Geometry& geom)
 
     // Roughness field is untouched, stick with uniform roughness only
 
-    // Calculate VOF and density now if multiphase; makes it available for tagging
-    if (multiphase) {
-        auto mphase =
-            m_sim.physics_manager().get<kynema_sgf::MultiPhase>();
+    // Calculate VOF and density now; makes it available for tagging
+    if (multiphase && !m_terrain_fields_only) {
+        auto mphase = m_sim.physics_manager().get<kynema_sgf::MultiPhase>();
         mphase.levelset2vof(level);
         mphase.set_density_via_vof(level);
     }
