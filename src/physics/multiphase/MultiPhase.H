@@ -53,8 +53,8 @@ public:
     void set_density_via_vof(
         kynema_sgf::FieldState fstate = kynema_sgf::FieldState::New);
 
-    void set_density_via_vof(int lev,
-        kynema_sgf::FieldState fstate = kynema_sgf::FieldState::New);
+    void set_density_via_vof(
+        int lev, kynema_sgf::FieldState fstate = kynema_sgf::FieldState::New);
 
     void set_nph_density();
 
