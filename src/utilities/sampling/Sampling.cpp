@@ -176,14 +176,23 @@ void Sampling::update_sampling_locations()
     BL_PROFILE("kynema-sgf::Sampling::update_sampling_locations");
 
     amrex::Vector<bool> updated_position;
+    bool rebuild_container = false;
     for (const auto& obj : m_samplers) {
         const bool updated_pos = obj->update_sampling_locations();
         updated_position.push_back(updated_pos);
+        rebuild_container =
+            rebuild_container ||
+            (updated_pos && obj->sampletype() != "MovingPlaneSampler" &&
+             obj->sampletype() != "MovingVolumeSampler");
     }
 
     if (std::ranges::any_of(
             updated_position, [](const auto& v) { return v; })) {
-        update_container();
+        if (rebuild_container) {
+            update_container();
+        } else {
+            m_scontainer->update_positions(m_samplers, updated_position);
+        }
     }
 }
 
