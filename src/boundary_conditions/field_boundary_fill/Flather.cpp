@@ -42,6 +42,10 @@ Flather::Flather(CFDSim& sim)
     m_xhi_uvof_avg.resize(0, m_mesh.Geom());
     m_ylo_uvof_avg.resize(1, m_mesh.Geom());
     m_yhi_uvof_avg.resize(1, m_mesh.Geom());
+    m_xlo_bnd_uvof_avg.resize(0, m_mesh.Geom());
+    m_xhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
+    m_ylo_bnd_uvof_avg.resize(1, m_mesh.Geom());
+    m_yhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
 
     update_target_velocity();
 }
@@ -84,13 +88,18 @@ void Flather::compute_boundary_z_averages()
         m_xhi_uvof_avg.resize(0, m_mesh.Geom());
         m_ylo_uvof_avg.resize(1, m_mesh.Geom());
         m_yhi_uvof_avg.resize(1, m_mesh.Geom());
+        m_xlo_bnd_uvof_avg.resize(0, m_mesh.Geom());
+        m_xhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
+        m_ylo_bnd_uvof_avg.resize(1, m_mesh.Geom());
+        m_yhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
     }
 
     auto accumulate_boundary =
         [&](const int lev,
             const int idir,
             const bool is_low,
-            MultiLevelVector& out_vec) {
+            MultiLevelVector& out_vec,
+            const bool sample_boundary) {
             auto& avg_h = out_vec.host_data(lev);
             const int nline = static_cast<int>(avg_h.size());
 
@@ -103,6 +112,12 @@ void Flather::compute_boundary_z_averages()
             const auto& dom = geom.Domain();
             const int bidx = is_low ? dom.smallEnd(idir) : dom.bigEnd(idir);
             const int off = dom.smallEnd(idir);
+            const int shift_to_boundary =
+                sample_boundary ? (is_low ? -1 : 1) : 0;
+            if (shift_to_boundary != 0) {
+                AMREX_ALWAYS_ASSERT(m_velocity.num_grow()[idir] > 0);
+                AMREX_ALWAYS_ASSERT(m_vof.num_grow()[idir] > 0);
+            }
             const amrex::Real vof_eps = amrex::max(0.0_rt, m_liquid_vof_eps);
 
             const auto& vel_mf = m_velocity(lev);
@@ -135,14 +150,17 @@ void Flather::compute_boundary_z_averages()
 
                 amrex::ParallelFor(
                     bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                        const int ii = (idir == 0) ? (i + shift_to_boundary) : i;
+                        const int jj = (idir == 1) ? (j + shift_to_boundary) : j;
+
                         if (use_terrain && terrain_blank_arr(i, j, k) != 0) {
                             return;
                         }
                         const int idx = (idir == 0) ? (i - off) : (j - off);
                         const amrex::Real vf = amrex::max(
-                            0.0_rt, amrex::min(1.0_rt, vof_arr(i, j, k)));
+                            0.0_rt, amrex::min(1.0_rt, vof_arr(ii, jj, k)));
                         amrex::Gpu::Atomic::Add(
-                            &uvof_sum[idx], vel_arr(i, j, k, idir) * vf);
+                            &uvof_sum[idx], vel_arr(ii, jj, k, idir) * vf);
                         amrex::Gpu::Atomic::Add(&vof_sum[idx], vf);
                     });
             }
@@ -165,16 +183,24 @@ void Flather::compute_boundary_z_averages()
         };
 
     for (int lev = 0; lev < nlevels; ++lev) {
-        accumulate_boundary(lev, 0, true, m_xlo_uvof_avg);
-        accumulate_boundary(lev, 0, false, m_xhi_uvof_avg);
-        accumulate_boundary(lev, 1, true, m_ylo_uvof_avg);
-        accumulate_boundary(lev, 1, false, m_yhi_uvof_avg);
+        accumulate_boundary(lev, 0, true, m_xlo_uvof_avg, false);
+        accumulate_boundary(lev, 0, false, m_xhi_uvof_avg, false);
+        accumulate_boundary(lev, 1, true, m_ylo_uvof_avg, false);
+        accumulate_boundary(lev, 1, false, m_yhi_uvof_avg, false);
+        accumulate_boundary(lev, 0, true, m_xlo_bnd_uvof_avg, true);
+        accumulate_boundary(lev, 0, false, m_xhi_bnd_uvof_avg, true);
+        accumulate_boundary(lev, 1, true, m_ylo_bnd_uvof_avg, true);
+        accumulate_boundary(lev, 1, false, m_yhi_bnd_uvof_avg, true);
     }
 
     m_xlo_uvof_avg.copy_host_to_device();
     m_xhi_uvof_avg.copy_host_to_device();
     m_ylo_uvof_avg.copy_host_to_device();
     m_yhi_uvof_avg.copy_host_to_device();
+    m_xlo_bnd_uvof_avg.copy_host_to_device();
+    m_xhi_bnd_uvof_avg.copy_host_to_device();
+    m_ylo_bnd_uvof_avg.copy_host_to_device();
+    m_yhi_bnd_uvof_avg.copy_host_to_device();
 }
 
 void Flather::set_velocity(
@@ -221,6 +247,14 @@ void Flather::set_velocity(
         const amrex::Real* xhi_uavg = m_xhi_uvof_avg.device_data(lev).data();
         const amrex::Real* ylo_uavg = m_ylo_uvof_avg.device_data(lev).data();
         const amrex::Real* yhi_uavg = m_yhi_uvof_avg.device_data(lev).data();
+        const amrex::Real* xlo_bnd_uavg =
+            m_xlo_bnd_uvof_avg.device_data(lev).data();
+        const amrex::Real* xhi_bnd_uavg =
+            m_xhi_bnd_uvof_avg.device_data(lev).data();
+        const amrex::Real* ylo_bnd_uavg =
+            m_ylo_bnd_uvof_avg.device_data(lev).data();
+        const amrex::Real* yhi_bnd_uavg =
+            m_yhi_bnd_uvof_avg.device_data(lev).data();
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (false)
@@ -243,16 +277,22 @@ void Flather::set_velocity(
                     {AMREX_D_DECL(tvx, tvy, tvz)};
 
                 for (int n = 0; n < numcomp; ++n) {
-                    const amrex::Real boundary_old = arr(iv, dcomp + n);
+                    amrex::Real boundary_old = arr(iv, dcomp + n);
                     amrex::Real interior_val = arr(iv_adj, dcomp + n);
                     if (use_x && (orig_comp + n == 0)) {
                         interior_val = ori.isLow()
                                            ? xlo_uavg[iv_adj[0] - xoff]
                                            : xhi_uavg[iv_adj[0] - xoff];
+                        boundary_old = ori.isLow()
+                                           ? xlo_bnd_uavg[iv_adj[0] - xoff]
+                                           : xhi_bnd_uavg[iv_adj[0] - xoff];
                     } else if (use_y && (orig_comp + n == 1)) {
                         interior_val = ori.isLow()
                                            ? ylo_uavg[iv_adj[1] - yoff]
                                            : yhi_uavg[iv_adj[1] - yoff];
+                        boundary_old = ori.isLow()
+                                           ? ylo_bnd_uavg[iv_adj[1] - yoff]
+                                           : yhi_bnd_uavg[iv_adj[1] - yoff];
                     }
                     const amrex::Real target_val = target_vel[orig_comp + n];
 
