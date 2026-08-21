@@ -60,6 +60,14 @@ private:
     MultiLevelVector m_xhi_bnd_uvof_avg{FieldLoc::CELL};
     MultiLevelVector m_ylo_bnd_uvof_avg{FieldLoc::CELL};
     MultiLevelVector m_yhi_bnd_uvof_avg{FieldLoc::CELL};
+    MultiLevelVector m_xlo_h_avg{FieldLoc::CELL};
+    MultiLevelVector m_xhi_h_avg{FieldLoc::CELL};
+    MultiLevelVector m_ylo_h_avg{FieldLoc::CELL};
+    MultiLevelVector m_yhi_h_avg{FieldLoc::CELL};
+    MultiLevelVector m_xlo_bnd_h_avg{FieldLoc::CELL};
+    MultiLevelVector m_xhi_bnd_h_avg{FieldLoc::CELL};
+    MultiLevelVector m_ylo_bnd_h_avg{FieldLoc::CELL};
+    MultiLevelVector m_yhi_bnd_h_avg{FieldLoc::CELL};
     amrex::Real m_liquid_vof_eps{1.0e-12_rt};
 
     amrex::Real m_relaxation{0.5_rt};

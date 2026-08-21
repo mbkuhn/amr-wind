@@ -98,9 +98,11 @@ void Flather::compute_boundary_z_averages()
         [&](const int lev,
             const int idir,
             const bool is_low,
-            MultiLevelVector& out_vec,
+            MultiLevelVector& out_uvec,
+            MultiLevelVector& out_hvec,
             const bool sample_boundary) {
-            auto& avg_h = out_vec.host_data(lev);
+            auto& avg_h = out_uvec.host_data(lev);
+            auto& dist_h = out_hvec.host_data(lev);
             const int nline = static_cast<int>(avg_h.size());
 
             amrex::Vector<amrex::Real> uvof_sum_h(nline, 0.0_rt);
@@ -109,6 +111,7 @@ void Flather::compute_boundary_z_averages()
             amrex::Gpu::DeviceVector<amrex::Real> vof_sum_d(nline, 0.0_rt);
 
             const auto& geom = m_mesh.Geom(lev);
+            const auto& dz = geom.CellSizeArray()[2];
             const auto& dom = geom.Domain();
             const int bidx = is_low ? dom.smallEnd(idir) : dom.bigEnd(idir);
             const int off = dom.smallEnd(idir);
@@ -160,8 +163,8 @@ void Flather::compute_boundary_z_averages()
                         const amrex::Real vf = amrex::max(
                             0.0_rt, amrex::min(1.0_rt, vof_arr(ii, jj, k)));
                         amrex::Gpu::Atomic::Add(
-                            &uvof_sum[idx], vel_arr(ii, jj, k, idir) * vf);
-                        amrex::Gpu::Atomic::Add(&vof_sum[idx], vf);
+                            &uvof_sum[idx], vel_arr(ii, jj, k, idir) * vf * dz);
+                        amrex::Gpu::Atomic::Add(&vof_sum[idx], vf * dz);
                     });
             }
 
@@ -179,28 +182,40 @@ void Flather::compute_boundary_z_averages()
                 avg_h[n] = (vof_sum_h[n] > vof_eps)
                                ? (uvof_sum_h[n] / vof_sum_h[n])
                                : 0.0_rt;
+                dist_h[n] = (vof_sum_h[n] > vof_eps)
+                               ? (vof_sum_h[n])
+                               : 0.0_rt;
             }
         };
 
     for (int lev = 0; lev < nlevels; ++lev) {
-        accumulate_boundary(lev, 0, true, m_xlo_uvof_avg, false);
-        accumulate_boundary(lev, 0, false, m_xhi_uvof_avg, false);
-        accumulate_boundary(lev, 1, true, m_ylo_uvof_avg, false);
-        accumulate_boundary(lev, 1, false, m_yhi_uvof_avg, false);
-        accumulate_boundary(lev, 0, true, m_xlo_bnd_uvof_avg, true);
-        accumulate_boundary(lev, 0, false, m_xhi_bnd_uvof_avg, true);
-        accumulate_boundary(lev, 1, true, m_ylo_bnd_uvof_avg, true);
-        accumulate_boundary(lev, 1, false, m_yhi_bnd_uvof_avg, true);
+        accumulate_boundary(lev, 0, true, m_xlo_uvof_avg, m_xlo_h_avg, false);
+        accumulate_boundary(lev, 0, false, m_xhi_uvof_avg, m_xhi_h_avg, false);
+        accumulate_boundary(lev, 1, true, m_ylo_uvof_avg, m_ylo_h_avg, false);
+        accumulate_boundary(lev, 1, false, m_yhi_uvof_avg, m_yhi_h_avg, false);
+        accumulate_boundary(lev, 0, true, m_xlo_bnd_uvof_avg, m_xlo_bnd_h_avg, true);
+        accumulate_boundary(lev, 0, false, m_xhi_bnd_uvof_avg, m_xhi_bnd_h_avg, true);
+        accumulate_boundary(lev, 1, true, m_ylo_bnd_uvof_avg, m_ylo_bnd_h_avg, true);
+        accumulate_boundary(lev, 1, false, m_yhi_bnd_uvof_avg, m_yhi_bnd_h_avg, true);
     }
 
     m_xlo_uvof_avg.copy_host_to_device();
     m_xhi_uvof_avg.copy_host_to_device();
     m_ylo_uvof_avg.copy_host_to_device();
     m_yhi_uvof_avg.copy_host_to_device();
+    m_xlo_h_avg.copy_host_to_device();
+    m_xhi_h_avg.copy_host_to_device();
+    m_ylo_h_avg.copy_host_to_device();
+    m_yhi_h_avg.copy_host_to_device();
+
     m_xlo_bnd_uvof_avg.copy_host_to_device();
     m_xhi_bnd_uvof_avg.copy_host_to_device();
     m_ylo_bnd_uvof_avg.copy_host_to_device();
     m_yhi_bnd_uvof_avg.copy_host_to_device();
+    m_xlo_bnd_h_avg.copy_host_to_device();
+    m_xhi_bnd_h_avg.copy_host_to_device();
+    m_ylo_bnd_h_avg.copy_host_to_device();
+    m_yhi_bnd_h_avg.copy_host_to_device();
 }
 
 void Flather::set_velocity(
