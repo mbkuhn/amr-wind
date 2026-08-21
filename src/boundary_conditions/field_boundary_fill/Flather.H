@@ -48,8 +48,7 @@ private:
     const FieldRepo& m_repo;
     const amrex::AmrCore& m_mesh;
     Field& m_velocity;
-    const Field* m_vof{nullptr};
-    bool m_vof_exists{false};
+    const Field& m_vof;
 
     MultiLevelVector m_xlo_uvof_avg{FieldLoc::CELL};
     MultiLevelVector m_xhi_uvof_avg{FieldLoc::CELL};

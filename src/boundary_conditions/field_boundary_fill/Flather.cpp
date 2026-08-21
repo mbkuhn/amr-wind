@@ -18,6 +18,7 @@ Flather::Flather(CFDSim& sim)
     , m_repo(m_sim.repo())
     , m_mesh(m_sim.mesh())
     , m_velocity(m_sim.repo().get_field("velocity"))
+    , m_vof(m_sim.repo().get_field("vof"))
 {
     amrex::ParmParse pp(identifier());
 
@@ -30,9 +31,8 @@ Flather::Flather(CFDSim& sim)
     pp.query("degrees_per_second", m_degrees_per_sec);
     pp.query("liquid_vof_eps", m_liquid_vof_eps);
 
-    m_vof_exists = m_repo.field_exists("vof");
-    if (m_vof_exists) {
-        m_vof = &m_repo.get_field("vof");
+    if (!m_repo.field_exists("vof")) {
+        amrex::Abort("Flather BC requires the vof field");
     }
 
     m_xlo_uvof_avg.resize(0, m_mesh.Geom());
@@ -121,10 +121,7 @@ void Flather::compute_boundary_z_averages()
                 bx.setBig(idir, bidx);
 
                 const auto vel_arr = vel_mf.const_array(mfi);
-                const bool include_vof = m_vof_exists;
-                const auto vof_arr =
-                    include_vof ? (*m_vof)(lev).const_array(mfi)
-                                : amrex::Array4<amrex::Real const>();
+                const auto vof_arr = m_vof(lev).const_array(mfi);
 
                 amrex::Real* uvof_sum = uvof_sum_d.data();
                 amrex::Real* vof_sum = vof_sum_d.data();
@@ -132,12 +129,8 @@ void Flather::compute_boundary_z_averages()
                 amrex::ParallelFor(
                     bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
                         const int idx = (idir == 0) ? (i - off) : (j - off);
-                        const amrex::Real vf =
-                            include_vof
-                                ? amrex::max(
-                                      0.0_rt,
-                                      amrex::min(1.0_rt, vof_arr(i, j, k)))
-                                : 1.0_rt;
+                        const amrex::Real vf = amrex::max(
+                            0.0_rt, amrex::min(1.0_rt, vof_arr(i, j, k)));
                         amrex::Gpu::Atomic::Add(
                             &uvof_sum[idx], vel_arr(i, j, k, idir) * vf);
                         amrex::Gpu::Atomic::Add(&vof_sum[idx], vf);
