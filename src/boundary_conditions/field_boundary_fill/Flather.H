@@ -2,6 +2,7 @@
 #define FLATHER_H
 
 #include "src/core/Field.H"
+#include "src/core/IntField.H"
 #include "src/CFDSim.H"
 #include "src/boundary_conditions/field_boundary_fill/FieldBoundary.H"
 #include "src/utilities/MultiLevelVector.H"
@@ -49,6 +50,7 @@ private:
     const amrex::AmrCore& m_mesh;
     Field& m_velocity;
     const Field& m_vof;
+    const IntField* m_terrain_blank{nullptr};
 
     MultiLevelVector m_xlo_uvof_avg{FieldLoc::CELL};
     MultiLevelVector m_xhi_uvof_avg{FieldLoc::CELL};

@@ -34,6 +34,9 @@ Flather::Flather(CFDSim& sim)
     if (!m_repo.field_exists("vof")) {
         amrex::Abort("Flather BC requires the vof field");
     }
+    if (m_repo.int_field_exists("terrain_blank")) {
+        m_terrain_blank = &m_repo.get_int_field("terrain_blank");
+    }
 
     m_xlo_uvof_avg.resize(0, m_mesh.Geom());
     m_xhi_uvof_avg.resize(0, m_mesh.Geom());
@@ -122,12 +125,19 @@ void Flather::compute_boundary_z_averages()
 
                 const auto vel_arr = vel_mf.const_array(mfi);
                 const auto vof_arr = m_vof(lev).const_array(mfi);
+                const bool use_terrain = (m_terrain_blank != nullptr);
+                const auto terrain_blank_arr =
+                    use_terrain ? (*m_terrain_blank)(lev).const_array(mfi)
+                                : amrex::Array4<int const>();
 
                 amrex::Real* uvof_sum = uvof_sum_d.data();
                 amrex::Real* vof_sum = vof_sum_d.data();
 
                 amrex::ParallelFor(
                     bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                        if (use_terrain && terrain_blank_arr(i, j, k) != 0) {
+                            return;
+                        }
                         const int idx = (idir == 0) ? (i - off) : (j - off);
                         const amrex::Real vf = amrex::max(
                             0.0_rt, amrex::min(1.0_rt, vof_arr(i, j, k)));
