@@ -4,6 +4,7 @@
 #include "src/core/Field.H"
 #include "src/CFDSim.H"
 #include "src/boundary_conditions/field_boundary_fill/FieldBoundary.H"
+#include "src/utilities/MultiLevelVector.H"
 #include "src/utilities/trig_ops.H"
 #include "AMReX_REAL.H"
 #include <limits>
@@ -40,12 +41,18 @@ public:
 
 private:
     void update_target_velocity();
+    void compute_xlo_z_averages();
 
     const CFDSim& m_sim;
     const kynema_sgf::SimTime& m_time;
     const FieldRepo& m_repo;
     const amrex::AmrCore& m_mesh;
     Field& m_velocity;
+    const Field* m_vof{nullptr};
+    bool m_vof_exists{false};
+
+    MultiLevelVector m_xline_uvof_avg{FieldLoc::CELL};
+    amrex::Real m_liquid_vof_eps{1.0e-12_rt};
 
     amrex::Real m_relaxation{0.5_rt};
     amrex::Real m_target_weight{0.5_rt};
