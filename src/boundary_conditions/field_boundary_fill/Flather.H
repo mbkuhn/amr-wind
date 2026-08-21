@@ -41,7 +41,7 @@ public:
 
 private:
     void update_target_velocity();
-    void compute_xlo_z_averages();
+    void compute_boundary_z_averages();
 
     const CFDSim& m_sim;
     const kynema_sgf::SimTime& m_time;
@@ -51,7 +51,10 @@ private:
     const Field* m_vof{nullptr};
     bool m_vof_exists{false};
 
-    MultiLevelVector m_xline_uvof_avg{FieldLoc::CELL};
+    MultiLevelVector m_xlo_uvof_avg{FieldLoc::CELL};
+    MultiLevelVector m_xhi_uvof_avg{FieldLoc::CELL};
+    MultiLevelVector m_ylo_uvof_avg{FieldLoc::CELL};
+    MultiLevelVector m_yhi_uvof_avg{FieldLoc::CELL};
     amrex::Real m_liquid_vof_eps{1.0e-12_rt};
 
     amrex::Real m_relaxation{0.5_rt};

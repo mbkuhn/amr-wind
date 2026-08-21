@@ -35,7 +35,10 @@ Flather::Flather(CFDSim& sim)
         m_vof = &m_repo.get_field("vof");
     }
 
-    m_xline_uvof_avg.resize(0, m_mesh.Geom());
+    m_xlo_uvof_avg.resize(0, m_mesh.Geom());
+    m_xhi_uvof_avg.resize(0, m_mesh.Geom());
+    m_ylo_uvof_avg.resize(1, m_mesh.Geom());
+    m_yhi_uvof_avg.resize(1, m_mesh.Geom());
 
     update_target_velocity();
 }
@@ -43,7 +46,7 @@ Flather::Flather(CFDSim& sim)
 void Flather::post_init_actions()
 {
     m_velocity.register_fill_patch_op<FillFlather>(m_mesh, m_time, *this);
-    compute_xlo_z_averages();
+    compute_boundary_z_averages();
 }
 
 void Flather::pre_advance_work()
@@ -54,7 +57,7 @@ void Flather::pre_advance_work()
         m_wind_direction =
             -m_sim.helics().m_inflow_wind_direction_to_kynema_sgf + 270.0_rt;
         update_target_velocity();
-        compute_xlo_z_averages();
+        compute_boundary_z_averages();
         return;
     }
 #endif
@@ -64,90 +67,111 @@ void Flather::pre_advance_work()
         m_wind_direction -= m_degrees_per_sec * m_time.delta_t();
     }
     update_target_velocity();
-    compute_xlo_z_averages();
+    compute_boundary_z_averages();
 }
 
-void Flather::compute_xlo_z_averages()
+void Flather::compute_boundary_z_averages()
 {
-    BL_PROFILE("kynema-sgf::Flather::compute_xlo_z_averages");
+    BL_PROFILE("kynema-sgf::Flather::compute_boundary_z_averages");
 
     const int nlevels = m_repo.num_active_levels();
     const int nlevels_geom = static_cast<int>(m_mesh.Geom().size());
-    if (m_xline_uvof_avg.size() != nlevels_geom) {
-        m_xline_uvof_avg.resize(0, m_mesh.Geom());
+    if (m_xlo_uvof_avg.size() != nlevels_geom) {
+        m_xlo_uvof_avg.resize(0, m_mesh.Geom());
+        m_xhi_uvof_avg.resize(0, m_mesh.Geom());
+        m_ylo_uvof_avg.resize(1, m_mesh.Geom());
+        m_yhi_uvof_avg.resize(1, m_mesh.Geom());
     }
 
-    for (int lev = 0; lev < nlevels; ++lev) {
-        auto& uavg_h = m_xline_uvof_avg.host_data(lev);
-        const int nx = static_cast<int>(uavg_h.size());
+    auto accumulate_boundary =
+        [&](const int lev,
+            const int idir,
+            const bool is_low,
+            MultiLevelVector& out_vec) {
+            auto& avg_h = out_vec.host_data(lev);
+            const int nline = static_cast<int>(avg_h.size());
 
-        amrex::Vector<amrex::Real> uvof_sum_h(nx, 0.0_rt);
-        amrex::Vector<amrex::Real> vof_sum_h(nx, 0.0_rt);
-        amrex::Gpu::DeviceVector<amrex::Real> uvof_sum_d(nx, 0.0_rt);
-        amrex::Gpu::DeviceVector<amrex::Real> vof_sum_d(nx, 0.0_rt);
+            amrex::Vector<amrex::Real> uvof_sum_h(nline, 0.0_rt);
+            amrex::Vector<amrex::Real> vof_sum_h(nline, 0.0_rt);
+            amrex::Gpu::DeviceVector<amrex::Real> uvof_sum_d(nline, 0.0_rt);
+            amrex::Gpu::DeviceVector<amrex::Real> vof_sum_d(nline, 0.0_rt);
 
-        const auto& geom = m_mesh.Geom(lev);
-        const auto& dom = geom.Domain();
-        const int ilo = dom.smallEnd(0);
-        const int xoff = ilo;
-        const amrex::Real vof_eps = amrex::max(0.0_rt, m_liquid_vof_eps);
+            const auto& geom = m_mesh.Geom(lev);
+            const auto& dom = geom.Domain();
+            const int bidx = is_low ? dom.smallEnd(idir) : dom.bigEnd(idir);
+            const int off = dom.smallEnd(idir);
+            const amrex::Real vof_eps = amrex::max(0.0_rt, m_liquid_vof_eps);
 
-        const auto& vel_mf = m_velocity(lev);
+            const auto& vel_mf = m_velocity(lev);
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
-        for (amrex::MFIter mfi(vel_mf, amrex::TilingIfNotGPU()); mfi.isValid();
-             ++mfi) {
-            amrex::Box bx = mfi.tilebox() & dom;
-            if (!bx.ok()) {
-                continue;
+            for (amrex::MFIter mfi(vel_mf, amrex::TilingIfNotGPU());
+                 mfi.isValid(); ++mfi) {
+                amrex::Box bx = mfi.tilebox() & dom;
+                if (!bx.ok()) {
+                    continue;
+                }
+                if (bidx < bx.smallEnd(idir) || bidx > bx.bigEnd(idir)) {
+                    continue;
+                }
+
+                bx.setSmall(idir, bidx);
+                bx.setBig(idir, bidx);
+
+                const auto vel_arr = vel_mf.const_array(mfi);
+                const bool include_vof = m_vof_exists;
+                const auto vof_arr =
+                    include_vof ? (*m_vof)(lev).const_array(mfi)
+                                : amrex::Array4<amrex::Real const>();
+
+                amrex::Real* uvof_sum = uvof_sum_d.data();
+                amrex::Real* vof_sum = vof_sum_d.data();
+
+                amrex::ParallelFor(
+                    bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                        const int idx = (idir == 0) ? (i - off) : (j - off);
+                        const amrex::Real vf =
+                            include_vof
+                                ? amrex::max(
+                                      0.0_rt,
+                                      amrex::min(1.0_rt, vof_arr(i, j, k)))
+                                : 1.0_rt;
+                        amrex::Gpu::Atomic::Add(
+                            &uvof_sum[idx], vel_arr(i, j, k, idir) * vf);
+                        amrex::Gpu::Atomic::Add(&vof_sum[idx], vf);
+                    });
             }
-            if (ilo < bx.smallEnd(0) || ilo > bx.bigEnd(0)) {
-                continue;
+
+            amrex::Gpu::copy(
+                amrex::Gpu::deviceToHost, uvof_sum_d.begin(),
+                uvof_sum_d.end(), uvof_sum_h.begin());
+            amrex::Gpu::copy(
+                amrex::Gpu::deviceToHost, vof_sum_d.begin(), vof_sum_d.end(),
+                vof_sum_h.begin());
+
+            amrex::ParallelDescriptor::ReduceRealSum(uvof_sum_h.data(), nline);
+            amrex::ParallelDescriptor::ReduceRealSum(vof_sum_h.data(), nline);
+
+            for (int n = 0; n < nline; ++n) {
+                avg_h[n] = (vof_sum_h[n] > vof_eps)
+                               ? (uvof_sum_h[n] / vof_sum_h[n])
+                               : 0.0_rt;
             }
+        };
 
-            bx.setSmall(0, ilo);
-            bx.setBig(0, ilo);
-
-            const auto vel_arr = vel_mf.const_array(mfi);
-            const bool include_vof = m_vof_exists;
-            const auto vof_arr =
-                include_vof ? (*m_vof)(lev).const_array(mfi)
-                            : amrex::Array4<amrex::Real const>();
-
-            amrex::Real* uvof_sum = uvof_sum_d.data();
-            amrex::Real* vof_sum = vof_sum_d.data();
-
-            amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-                const int idx = i - xoff;
-                const amrex::Real vf = include_vof
-                                           ? amrex::max(
-                                                 0.0_rt,
-                                                 amrex::min(1.0_rt, vof_arr(i, j, k)))
-                                           : 1.0_rt;
-                amrex::Gpu::Atomic::Add(&uvof_sum[idx], vel_arr(i, j, k, 0) * vf);
-                amrex::Gpu::Atomic::Add(&vof_sum[idx], vf);
-            });
-        }
-
-        amrex::Gpu::copy(
-            amrex::Gpu::deviceToHost, uvof_sum_d.begin(), uvof_sum_d.end(),
-            uvof_sum_h.begin());
-        amrex::Gpu::copy(
-            amrex::Gpu::deviceToHost, vof_sum_d.begin(), vof_sum_d.end(),
-            vof_sum_h.begin());
-
-        amrex::ParallelDescriptor::ReduceRealSum(uvof_sum_h.data(), nx);
-        amrex::ParallelDescriptor::ReduceRealSum(vof_sum_h.data(), nx);
-
-        for (int i = 0; i < nx; ++i) {
-            uavg_h[i] = (vof_sum_h[i] > vof_eps) ? (uvof_sum_h[i] / vof_sum_h[i])
-                                                 : 0.0_rt;
-        }
+    for (int lev = 0; lev < nlevels; ++lev) {
+        accumulate_boundary(lev, 0, true, m_xlo_uvof_avg);
+        accumulate_boundary(lev, 0, false, m_xhi_uvof_avg);
+        accumulate_boundary(lev, 1, true, m_ylo_uvof_avg);
+        accumulate_boundary(lev, 1, false, m_yhi_uvof_avg);
     }
 
-    m_xline_uvof_avg.copy_host_to_device();
+    m_xlo_uvof_avg.copy_host_to_device();
+    m_xhi_uvof_avg.copy_host_to_device();
+    m_ylo_uvof_avg.copy_host_to_device();
+    m_yhi_uvof_avg.copy_host_to_device();
 }
 
 void Flather::set_velocity(
@@ -186,9 +210,14 @@ void Flather::set_velocity(
                                       : amrex::adjCellHi(domain, idir, nghost);
         const auto shift_to_interior =
             amrex::IntVect::TheDimensionVector(idir) * (ori.isLow() ? 1 : -1);
-        const bool is_xlo = (idir == 0) && ori.isLow();
-        const int ioff = geom.Domain().smallEnd(0);
-        const amrex::Real* xline_uavg = m_xline_uvof_avg.device_data(lev).data();
+        const bool use_x = (idir == 0);
+        const bool use_y = (idir == 1);
+        const int xoff = geom.Domain().smallEnd(0);
+        const int yoff = geom.Domain().smallEnd(1);
+        const amrex::Real* xlo_uavg = m_xlo_uvof_avg.device_data(lev).data();
+        const amrex::Real* xhi_uavg = m_xhi_uvof_avg.device_data(lev).data();
+        const amrex::Real* ylo_uavg = m_ylo_uvof_avg.device_data(lev).data();
+        const amrex::Real* yhi_uavg = m_yhi_uvof_avg.device_data(lev).data();
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (false)
@@ -213,8 +242,14 @@ void Flather::set_velocity(
                 for (int n = 0; n < numcomp; ++n) {
                     const amrex::Real boundary_old = arr(iv, dcomp + n);
                     amrex::Real interior_val = arr(iv_adj, dcomp + n);
-                    if (is_xlo && (orig_comp + n == 0)) {
-                        interior_val = xline_uavg[iv_adj[0] - ioff];
+                    if (use_x && (orig_comp + n == 0)) {
+                        interior_val = ori.isLow()
+                                           ? xlo_uavg[iv_adj[0] - xoff]
+                                           : xhi_uavg[iv_adj[0] - xoff];
+                    } else if (use_y && (orig_comp + n == 1)) {
+                        interior_val = ori.isLow()
+                                           ? ylo_uavg[iv_adj[1] - yoff]
+                                           : yhi_uavg[iv_adj[1] - yoff];
                     }
                     const amrex::Real target_val = target_vel[orig_comp + n];
 
