@@ -51,6 +51,7 @@ private:
     Field& m_velocity;
     const Field& m_vof;
     const IntField* m_terrain_blank{nullptr};
+    amrex::Vector<amrex::Real> m_gravity{0.0_rt, 0.0_rt, -9.81_rt};
 
     MultiLevelVector m_xlo_uvof_avg{FieldLoc::CELL};
     MultiLevelVector m_xhi_uvof_avg{FieldLoc::CELL};
@@ -68,18 +69,6 @@ private:
     MultiLevelVector m_xhi_bnd_h_avg{FieldLoc::CELL};
     MultiLevelVector m_ylo_bnd_h_avg{FieldLoc::CELL};
     MultiLevelVector m_yhi_bnd_h_avg{FieldLoc::CELL};
-    amrex::Real m_liquid_vof_eps{1.0e-12_rt};
-
-    amrex::Real m_relaxation{0.5_rt};
-    amrex::Real m_target_weight{0.5_rt};
-
-    amrex::Real m_wind_speed{8.0_rt};
-    amrex::Real m_wind_direction{270.0_rt};
-    amrex::Vector<amrex::Real> m_uvec{8.0_rt, 0.0_rt, 0.0_rt};
-
-    amrex::Real m_start_time{0.0_rt};
-    amrex::Real m_stop_time{std::numeric_limits<amrex::Real>::max()};
-    amrex::Real m_degrees_per_sec{0.0_rt};
 };
 
 } // namespace kynema_sgf
