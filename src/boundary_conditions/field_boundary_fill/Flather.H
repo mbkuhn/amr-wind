@@ -40,6 +40,14 @@ public:
         int dcomp = 0,
         int orig_comp = 0) const override;
 
+    void accumulate_boundary(
+        int lev,
+        int idir,
+        bool is_low,
+        MultiLevelVector& out_uvec,
+        MultiLevelVector& out_hvec,
+        bool sample_boundary) const;
+
 private:
     void update_target_velocity();
     void compute_boundary_z_averages();
