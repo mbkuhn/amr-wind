@@ -63,7 +63,7 @@ protected:
         std::stringstream ss;
         ss << "1 // Number of levels" << '\n';
         ss << "1 // Number of boxes at this level" << '\n';
-        ss << "3 3 3 5 5 5" << '\n';
+        ss << "0 0 2 8 8 6" << '\n';
 
         create_mesh_instance<RefineMesh>();
         std::unique_ptr<kynema_sgf::CartBoxRefinement> box_refine(

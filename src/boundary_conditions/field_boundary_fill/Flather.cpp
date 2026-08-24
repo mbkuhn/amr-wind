@@ -3,6 +3,7 @@
 #include "src/boundary_conditions/field_boundary_fill/FillFlather.H"
 #include "src/utilities/index_operations.H"
 #include "src/utilities/constants.H"
+#include "AMReX_MultiFabUtil.H"
 #include "AMReX_GpuAtomic.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
@@ -33,14 +34,16 @@ Flather::Flather(CFDSim& sim)
     amrex::ParmParse pp("incflo");
     pp.queryarr("gravity", m_gravity);
 
-    m_xlo_uvof_avg.resize(0, m_mesh.Geom());
-    m_xhi_uvof_avg.resize(0, m_mesh.Geom());
-    m_ylo_uvof_avg.resize(1, m_mesh.Geom());
-    m_yhi_uvof_avg.resize(1, m_mesh.Geom());
-    m_xlo_bnd_uvof_avg.resize(0, m_mesh.Geom());
-    m_xhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
-    m_ylo_bnd_uvof_avg.resize(1, m_mesh.Geom());
-    m_yhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
+    // Vector at the x boundary extends in y direction
+    // Vector at the y boundary extends in x direction
+    m_xlo_uvof_avg.resize(1, m_mesh.Geom());
+    m_xhi_uvof_avg.resize(1, m_mesh.Geom());
+    m_ylo_uvof_avg.resize(0, m_mesh.Geom());
+    m_yhi_uvof_avg.resize(0, m_mesh.Geom());
+    m_xlo_bnd_uvof_avg.resize(1, m_mesh.Geom());
+    m_xhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
+    m_ylo_bnd_uvof_avg.resize(0, m_mesh.Geom());
+    m_yhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
 }
 
 void Flather::post_init_actions()
@@ -52,7 +55,7 @@ void Flather::post_init_actions()
 void Flather::pre_advance_work() { compute_boundary_z_averages(); }
 
 void Flather::accumulate_boundary(
-    const int lev,
+    const int current_level,
     const int idir,
     const bool is_low,
     MultiLevelVector& out_uvec,
@@ -61,8 +64,8 @@ void Flather::accumulate_boundary(
 {
     AMREX_ALWAYS_ASSERT(idir == 0 || idir == 1);
 
-    auto& avg_h = out_uvec.host_data(lev);
-    auto& dist_h = out_hvec.host_data(lev);
+    auto& avg_h = out_uvec.host_data(current_level);
+    auto& dist_h = out_hvec.host_data(current_level);
     const int nline = static_cast<int>(avg_h.size());
 
     amrex::Vector<amrex::Real> uvof_sum_h(nline, 0.0_rt);
@@ -70,60 +73,91 @@ void Flather::accumulate_boundary(
     amrex::Gpu::DeviceVector<amrex::Real> uvof_sum_d(nline, 0.0_rt);
     amrex::Gpu::DeviceVector<amrex::Real> vof_sum_d(nline, 0.0_rt);
 
-    const auto& geom = m_mesh.Geom(lev);
-    const auto& dz = geom.CellSizeArray()[2];
-    const auto& dom = geom.Domain();
-    const int bidx = is_low ? dom.smallEnd(idir) : dom.bigEnd(idir);
-    const int off = dom.smallEnd(idir);
-    const int shift_to_boundary = sample_boundary ? (is_low ? -1 : 1) : 0;
-    if (shift_to_boundary != 0) {
-        AMREX_ALWAYS_ASSERT(m_velocity.num_grow()[idir] > 0);
-        AMREX_ALWAYS_ASSERT(m_vof.num_grow()[idir] > 0);
-    }
     const amrex::Real tiny = constants::TIGHT_TOL;
 
-    const auto& vel_mf = m_velocity(lev);
+    // Loop through current level and all below
+    for (int lev = current_level; lev >= 0; --lev) {
+
+        const auto rr = m_mesh.refRatio(lev)[1 - idir];
+
+        amrex::iMultiFab level_mask;
+        if (lev < current_level) {
+            level_mask = makeFineMask(
+                m_mesh.boxArray(lev), m_mesh.DistributionMap(lev),
+                m_mesh.boxArray(lev + 1), m_mesh.refRatio(lev), 1, 0);
+        } else {
+            level_mask.define(
+                m_mesh.boxArray(lev), m_mesh.DistributionMap(lev), 1, 0,
+                amrex::MFInfo());
+            level_mask.setVal(1);
+        }
+
+        const auto& geom = m_mesh.Geom(lev);
+        const auto& dz = geom.CellSizeArray()[2];
+        const auto& dom = geom.Domain();
+        const int bidx = is_low ? dom.smallEnd(idir) : dom.bigEnd(idir);
+        const int off = dom.smallEnd(idir);
+        const int shift_to_boundary = sample_boundary ? (is_low ? -1 : 1) : 0;
+        if (shift_to_boundary != 0) {
+            AMREX_ALWAYS_ASSERT(m_velocity.num_grow()[idir] > 0);
+            AMREX_ALWAYS_ASSERT(m_vof.num_grow()[idir] > 0);
+        }
+
+        const auto& vel_mf = m_velocity(lev);
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
-    for (amrex::MFIter mfi(vel_mf, amrex::TilingIfNotGPU()); mfi.isValid();
-         ++mfi) {
-        amrex::Box bx = mfi.tilebox() & dom;
-        if (!bx.ok()) {
-            continue;
-        }
-        if (bidx < bx.smallEnd(idir) || bidx > bx.bigEnd(idir)) {
-            continue;
-        }
-
-        bx.setSmall(idir, bidx);
-        bx.setBig(idir, bidx);
-
-        const auto vel_arr = vel_mf.const_array(mfi);
-        const auto vof_arr = m_vof(lev).const_array(mfi);
-        const bool use_terrain = (m_terrain_blank != nullptr);
-        const auto terrain_blank_arr =
-            use_terrain ? (*m_terrain_blank)(lev).const_array(mfi)
-                        : amrex::Array4<int const>();
-
-        amrex::Real* uvof_sum = uvof_sum_d.data();
-        amrex::Real* vof_sum = vof_sum_d.data();
-
-        amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-            const int ii = (idir == 0) ? (i + shift_to_boundary) : i;
-            const int jj = (idir == 1) ? (j + shift_to_boundary) : j;
-
-            if (use_terrain && terrain_blank_arr(i, j, k) != 0) {
-                return;
+        for (amrex::MFIter mfi(vel_mf, amrex::TilingIfNotGPU()); mfi.isValid();
+             ++mfi) {
+            amrex::Box bx = mfi.tilebox() & dom;
+            if (!bx.ok()) {
+                continue;
             }
-            const int idx = (idir == 0) ? (i - off) : (j - off);
-            const amrex::Real vf =
-                amrex::max(0.0_rt, amrex::min(1.0_rt, vof_arr(ii, jj, k)));
-            amrex::Gpu::Atomic::Add(
-                &uvof_sum[idx], vel_arr(ii, jj, k, idir) * vf * dz);
-            amrex::Gpu::Atomic::Add(&vof_sum[idx], vf * dz);
-        });
+            if (bidx < bx.smallEnd(idir) || bidx > bx.bigEnd(idir)) {
+                continue;
+            }
+
+            // Limit box to along boundary
+            bx.setSmall(idir, bidx);
+            bx.setBig(idir, bidx);
+
+            const auto vel_arr = vel_mf.const_array(mfi);
+            const auto vof_arr = m_vof(lev).const_array(mfi);
+            const auto mask_arr = level_mask.const_array(mfi);
+            const bool use_terrain = (m_terrain_blank != nullptr);
+            const auto terrain_blank_arr =
+                use_terrain ? (*m_terrain_blank)(lev).const_array(mfi)
+                            : amrex::Array4<int const>();
+
+            amrex::Real* uvof_sum = uvof_sum_d.data();
+            amrex::Real* vof_sum = vof_sum_d.data();
+
+            amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                const int ii = (idir == 0) ? (i + shift_to_boundary) : i;
+                const int jj = (idir == 1) ? (j + shift_to_boundary) : j;
+
+                if (use_terrain && terrain_blank_arr(i, j, k) != 0) {
+                    return;
+                }
+                // This index is tangent to the boundary
+                const int idx_lev = (idir == 0) ? (j - off) : (i - off);
+                // Convert to current level indices
+                const int idx_min =
+                    idx_lev + idx_lev * (rr - 1) * (current_level - lev);
+                const int idx_max = idx_min + rr * (current_level - lev) - 1;
+
+                for (int idx = idx_min;
+                     idx <= amrex::max<int>(idx_min, idx_max); ++idx) {
+                    const auto liquid_height =
+                        vof_arr(ii, jj, k) * dz * mask_arr(ii, jj, k);
+                    amrex::Gpu::Atomic::Add(
+                        &uvof_sum[idx],
+                        vel_arr(ii, jj, k, idir) * liquid_height);
+                    amrex::Gpu::Atomic::Add(&vof_sum[idx], liquid_height);
+                }
+            });
+        }
     }
 
     amrex::Gpu::copy(
@@ -137,8 +171,8 @@ void Flather::accumulate_boundary(
     amrex::ParallelDescriptor::ReduceRealSum(vof_sum_h.data(), nline);
 
     for (int n = 0; n < nline; ++n) {
-        avg_h[n] = (vof_sum_h[n] > tiny) ? (uvof_sum_h[n] / vof_sum_h[n])
-                                         : 0.0_rt;
+        avg_h[n] =
+            (vof_sum_h[n] > tiny) ? (uvof_sum_h[n] / vof_sum_h[n]) : 0.0_rt;
         dist_h[n] = vof_sum_h[n];
     }
 }
@@ -150,14 +184,14 @@ void Flather::compute_boundary_z_averages()
     const int nlevels = m_repo.num_active_levels();
     const int nlevels_geom = static_cast<int>(m_mesh.Geom().size());
     if (m_xlo_uvof_avg.size() != nlevels_geom) {
-        m_xlo_uvof_avg.resize(0, m_mesh.Geom());
-        m_xhi_uvof_avg.resize(0, m_mesh.Geom());
-        m_ylo_uvof_avg.resize(1, m_mesh.Geom());
-        m_yhi_uvof_avg.resize(1, m_mesh.Geom());
-        m_xlo_bnd_uvof_avg.resize(0, m_mesh.Geom());
-        m_xhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
-        m_ylo_bnd_uvof_avg.resize(1, m_mesh.Geom());
-        m_yhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
+        m_xlo_uvof_avg.resize(1, m_mesh.Geom());
+        m_xhi_uvof_avg.resize(1, m_mesh.Geom());
+        m_ylo_uvof_avg.resize(0, m_mesh.Geom());
+        m_yhi_uvof_avg.resize(0, m_mesh.Geom());
+        m_xlo_bnd_uvof_avg.resize(1, m_mesh.Geom());
+        m_xhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
+        m_ylo_bnd_uvof_avg.resize(0, m_mesh.Geom());
+        m_yhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
     }
 
     for (int lev = 0; lev < nlevels; ++lev) {

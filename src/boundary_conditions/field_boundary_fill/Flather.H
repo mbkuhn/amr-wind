@@ -41,7 +41,7 @@ public:
         int orig_comp = 0) const override;
 
     void accumulate_boundary(
-        int lev,
+        int current_level,
         int idir,
         bool is_low,
         MultiLevelVector& out_uvec,
