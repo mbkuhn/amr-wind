@@ -150,7 +150,7 @@ void Flather::accumulate_boundary(
                 for (int idx = idx_min;
                      idx <= amrex::max<int>(idx_min, idx_max); ++idx) {
                     const auto liquid_height =
-                        vof_arr(ii, jj, k) * dz * mask_arr(ii, jj, k);
+                        vof_arr(ii, jj, k) * dz * mask_arr(i, j, k);
                     amrex::Gpu::Atomic::Add(
                         &uvof_sum[idx],
                         vel_arr(ii, jj, k, idir) * liquid_height);
