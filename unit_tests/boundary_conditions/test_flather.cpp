@@ -7,6 +7,34 @@ using namespace amrex::literals;
 
 namespace kynema_sgf_tests {
 
+namespace {
+void initialize_vof(
+    kynema_sgf::Field& vof,
+    const amrex::Vector<amrex::Geometry>& geom,
+    amrex::Real wlev)
+{
+    for (int lev = 0; lev < vof.repo().num_active_levels(); ++lev) {
+        auto& vof_mfab = vof(lev);
+        auto vof_arrs = vof_mfab.arrays();
+        const auto& zlo = geom[lev].ProbLo(2);
+        const auto& dz = geom[lev].CellSize(2);
+        amrex::ParallelFor(
+            vof_mfab, amrex::IntVect(1),
+            [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) {
+                const amrex::Real z = zlo + (k + 0.5_rt) * dz;
+
+                if (z + 0.5 * dz <= wlev) {
+                    vof_arrs[nbx](i, j, k) = 1.0_rt;
+                } else if (z - 0.5 * dz >= wlev) {
+                    vof_arrs[nbx](i, j, k) = 0.0_rt;
+                } else {
+                    vof_arrs[nbx](i, j, k) = (wlev - (z - 0.5 * dz)) / dz;
+                }
+            });
+    }
+}
+} // namespace
+
 class FlatherBoundaryAverageTest : public MeshTest
 {
 protected:
@@ -35,7 +63,7 @@ protected:
         std::stringstream ss;
         ss << "1 // Number of levels" << '\n';
         ss << "1 // Number of boxes at this level" << '\n';
-        ss << "0 0 0 8 8 8" << '\n';
+        ss << "3 3 3 5 5 5" << '\n';
 
         create_mesh_instance<RefineMesh>();
         std::unique_ptr<kynema_sgf::CartBoxRefinement> box_refine(
@@ -48,21 +76,8 @@ protected:
         }
     }
 
-    static amrex::Real expected_h_x(const amrex::Geometry& geom)
-    {
-        const auto& dom = geom.Domain();
-        return static_cast<amrex::Real>(dom.length(1) * dom.length(2)) *
-               geom.CellSize(2);
-    }
-
-    static amrex::Real expected_h_y(const amrex::Geometry& geom)
-    {
-        const auto& dom = geom.Domain();
-        return static_cast<amrex::Real>(dom.length(0) * dom.length(2)) *
-               geom.CellSize(2);
-    }
-
-    const int m_nx{8};
+    const int m_nx{32};
+    const amrex::Real m_wlev{4.0_rt};
 };
 
 TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
@@ -82,7 +97,7 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
     velocity.setVal(u0, 0, 1, 1);
     velocity.setVal(v0, 1, 1, 1);
     velocity.setVal(0.0_rt, 2, 1, 1);
-    vof.setVal(1.0_rt, 0, 1, 1);
+    initialize_vof(vof, mesh().Geom(), m_wlev);
 
     kynema_sgf::Flather flather(sim());
 
@@ -121,16 +136,15 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
         EXPECT_NEAR(ylo_uavg.host_data(lev)[0], v0, tol);
         EXPECT_NEAR(yhi_uavg.host_data(lev)[yhi_idx], v0, tol);
 
-        const auto hx = expected_h_x(mesh().Geom(lev));
-        const auto hy = expected_h_y(mesh().Geom(lev));
-        EXPECT_NEAR(xlo_havg.host_data(lev)[0], hx, tol);
-        EXPECT_NEAR(xhi_havg.host_data(lev)[xhi_idx], hx, tol);
-        EXPECT_NEAR(ylo_havg.host_data(lev)[0], hy, tol);
-        EXPECT_NEAR(yhi_havg.host_data(lev)[yhi_idx], hy, tol);
+        EXPECT_NEAR(xlo_havg.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(xhi_havg.host_data(lev)[xhi_idx], m_wlev, tol);
+        EXPECT_NEAR(ylo_havg.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(yhi_havg.host_data(lev)[yhi_idx], m_wlev, tol);
     }
 }
 
-TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel_boundary_cells)
+TEST_F(
+    FlatherBoundaryAverageTest, accumulate_boundary_multilevel_boundary_cells)
 {
     constexpr amrex::Real u0 = 4.0_rt;
     constexpr amrex::Real v0 = 1.5_rt;
@@ -147,32 +161,46 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel_boundary_cells
     velocity.setVal(u0, 0, 1, 1);
     velocity.setVal(v0, 1, 1, 1);
     velocity.setVal(0.0_rt, 2, 1, 1);
-    vof.setVal(1.0_rt, 0, 1, 1);
+    initialize_vof(vof, mesh().Geom(), m_wlev);
 
     kynema_sgf::Flather flather(sim());
 
     kynema_sgf::MultiLevelVector xlo_uavg;
     kynema_sgf::MultiLevelVector xlo_havg;
+    kynema_sgf::MultiLevelVector xhi_uavg;
+    kynema_sgf::MultiLevelVector xhi_havg;
     kynema_sgf::MultiLevelVector ylo_uavg;
     kynema_sgf::MultiLevelVector ylo_havg;
+    kynema_sgf::MultiLevelVector yhi_uavg;
+    kynema_sgf::MultiLevelVector yhi_havg;
 
     xlo_uavg.resize(0, mesh().Geom());
     xlo_havg.resize(0, mesh().Geom());
+    xhi_uavg.resize(0, mesh().Geom());
+    xhi_havg.resize(0, mesh().Geom());
     ylo_uavg.resize(1, mesh().Geom());
     ylo_havg.resize(1, mesh().Geom());
+    yhi_uavg.resize(1, mesh().Geom());
+    yhi_havg.resize(1, mesh().Geom());
 
     const int nlevels = repo.num_active_levels();
     EXPECT_EQ(nlevels, 2);
 
     for (int lev = 0; lev < nlevels; ++lev) {
         flather.accumulate_boundary(lev, 0, true, xlo_uavg, xlo_havg, true);
+        flather.accumulate_boundary(lev, 0, false, xhi_uavg, xhi_havg, true);
         flather.accumulate_boundary(lev, 1, true, ylo_uavg, ylo_havg, true);
+        flather.accumulate_boundary(lev, 1, false, yhi_uavg, yhi_havg, true);
 
         EXPECT_NEAR(xlo_uavg.host_data(lev)[0], u0, tol);
+        EXPECT_NEAR(xhi_uavg.host_data(lev)[0], u0, tol);
         EXPECT_NEAR(ylo_uavg.host_data(lev)[0], v0, tol);
+        EXPECT_NEAR(yhi_uavg.host_data(lev)[0], v0, tol);
 
-        EXPECT_NEAR(xlo_havg.host_data(lev)[0], expected_h_x(mesh().Geom(lev)), tol);
-        EXPECT_NEAR(ylo_havg.host_data(lev)[0], expected_h_y(mesh().Geom(lev)), tol);
+        EXPECT_NEAR(xlo_havg.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(xhi_havg.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(ylo_havg.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(yhi_havg.host_data(lev)[0], m_wlev, tol);
     }
 }
 
