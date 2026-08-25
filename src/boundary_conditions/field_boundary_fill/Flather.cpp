@@ -78,7 +78,6 @@ void Flather::accumulate_boundary(
     const int nline = static_cast<int>(avg_h.size());
 
     amrex::Vector<amrex::Real> uvof_sum_h(nline, 0.0_rt);
-    amrex::Vector<amrex::Real> vof_sum_h(nline, 0.0_rt);
     amrex::Gpu::DeviceVector<amrex::Real> uvof_sum_d(nline, 0.0_rt);
     amrex::Gpu::DeviceVector<amrex::Real> vof_sum_d(nline, 0.0_rt);
 
@@ -174,15 +173,14 @@ void Flather::accumulate_boundary(
         uvof_sum_h.begin());
     amrex::Gpu::copy(
         amrex::Gpu::deviceToHost, vof_sum_d.begin(), vof_sum_d.end(),
-        vof_sum_h.begin());
+        dist_h.begin());
 
     amrex::ParallelDescriptor::ReduceRealSum(uvof_sum_h.data(), nline);
-    amrex::ParallelDescriptor::ReduceRealSum(vof_sum_h.data(), nline);
+    amrex::ParallelDescriptor::ReduceRealSum(dist_h.data(), nline);
 
     for (int n = 0; n < nline; ++n) {
         avg_h[n] =
-            (vof_sum_h[n] > tiny) ? (uvof_sum_h[n] / vof_sum_h[n]) : 0.0_rt;
-        dist_h[n] = vof_sum_h[n];
+            (dist_h[n] > tiny) ? (uvof_sum_h[n] / dist_h[n]) : 0.0_rt;
     }
 }
 
