@@ -179,8 +179,7 @@ void Flather::accumulate_boundary(
     amrex::ParallelDescriptor::ReduceRealSum(dist_h.data(), nline);
 
     for (int n = 0; n < nline; ++n) {
-        avg_h[n] =
-            (dist_h[n] > tiny) ? (uvof_sum_h[n] / dist_h[n]) : 0.0_rt;
+        avg_h[n] = (dist_h[n] > tiny) ? (uvof_sum_h[n] / dist_h[n]) : 0.0_rt;
     }
 }
 
@@ -336,33 +335,31 @@ void Flather::set_velocity(
                     amrex::Real interior_val = arr(iv_adj, dcomp + n);
                     amrex::Real boundary_h = 0.0_rt;
                     amrex::Real interior_h = 0.0_rt;
+                    // Vectors at x boundaries extend in y direction
+                    // Vectors at y boundaries extend in x direction
                     if (use_x && (orig_comp + n == 0)) {
-                        interior_val = ori.isLow() ? xlo_uavg[iv_adj[0] - xoff]
-                                                   : xhi_uavg[iv_adj[0] - xoff];
-                        interior_h = ori.isLow() ? xlo_havg[iv_adj[0] - xoff]
-                                                 : xhi_havg[iv_adj[0] - xoff];
-                        boundary_val = ori.isLow()
-                                           ? xlo_bnd_uavg[iv_adj[0] - xoff]
-                                           : xhi_bnd_uavg[iv_adj[0] - xoff];
-                        boundary_h = ori.isLow()
-                                         ? xlo_bnd_havg[iv_adj[0] - xoff]
-                                         : xhi_bnd_havg[iv_adj[0] - xoff];
+                        interior_val = ori.isLow() ? xlo_uavg[iv_adj[1] - xoff]
+                                                   : xhi_uavg[iv_adj[1] - xoff];
+                        interior_h = ori.isLow() ? xlo_havg[iv_adj[1] - xoff]
+                                                 : xhi_havg[iv_adj[1] - xoff];
+                        boundary_val = ori.isLow() ? xlo_bnd_uavg[iv[1] - xoff]
+                                                   : xhi_bnd_uavg[iv[1] - xoff];
+                        boundary_h = ori.isLow() ? xlo_bnd_havg[iv[1] - xoff]
+                                                 : xhi_bnd_havg[iv[1] - xoff];
                     } else if (use_y && (orig_comp + n == 1)) {
-                        interior_val = ori.isLow() ? ylo_uavg[iv_adj[1] - yoff]
-                                                   : yhi_uavg[iv_adj[1] - yoff];
-                        interior_h = ori.isLow() ? ylo_havg[iv_adj[1] - yoff]
-                                                 : yhi_havg[iv_adj[1] - yoff];
-                        boundary_val = ori.isLow()
-                                           ? ylo_bnd_uavg[iv_adj[1] - yoff]
-                                           : yhi_bnd_uavg[iv_adj[1] - yoff];
-                        boundary_h = ori.isLow()
-                                         ? ylo_bnd_havg[iv_adj[1] - yoff]
-                                         : yhi_bnd_havg[iv_adj[1] - yoff];
+                        interior_val = ori.isLow() ? ylo_uavg[iv_adj[0] - yoff]
+                                                   : yhi_uavg[iv_adj[0] - yoff];
+                        interior_h = ori.isLow() ? ylo_havg[iv_adj[0] - yoff]
+                                                 : yhi_havg[iv_adj[0] - yoff];
+                        boundary_val = ori.isLow() ? ylo_bnd_uavg[iv[0] - yoff]
+                                                   : yhi_bnd_uavg[iv[0] - yoff];
+                        boundary_h = ori.isLow() ? ylo_bnd_havg[iv[0] - yoff]
+                                                 : yhi_bnd_havg[iv[0] - yoff];
                     }
 
                     // Set velocity to zero and skip for terrain
-                    if (use_terrain && terrain_blank_arr(iv) != 0) {
-                        arr(iv_adj, dcomp + n) = 0.0_rt;
+                    if (use_terrain && terrain_blank_arr(iv_adj) != 0) {
+                        arr(iv, dcomp + n) = 0.0_rt;
                         continue;
                     }
                     // Check interior or boundary vof for liquid
@@ -381,8 +378,8 @@ void Flather::set_velocity(
                                            boundary_h *
                                            (interior_h - boundary_h);
 
-                    arr(iv_adj, dcomp + n) =
-                        arr(iv, dcomp + n) * (Flather_val / interior_val);
+                    arr(iv, dcomp + n) =
+                        arr(iv_adj, dcomp + n) * (Flather_val / interior_val);
                 }
             });
         }
