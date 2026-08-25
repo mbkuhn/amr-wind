@@ -23,9 +23,6 @@ void PlaneFillInflow::fillpatch(
     const amrex::IntVect& nghost,
     const FieldState fstate)
 {
-    FieldFillPatchOps<FieldBCDirichlet>::fillpatch(
-        lev, time, mfab, nghost, fstate);
-
     m_bndry_plane.populate_data(lev, time, m_field, mfab);
 }
 
@@ -36,9 +33,6 @@ void PlaneFillInflow::fillpatch_from_coarse(
     const amrex::IntVect& nghost,
     const FieldState fstate)
 {
-    FieldFillPatchOps<FieldBCDirichlet>::fillpatch_from_coarse(
-        lev, time, mfab, nghost, fstate);
-
     m_bndry_plane.populate_data(lev, time, m_field, mfab);
 }
 
@@ -49,9 +43,6 @@ void PlaneFillInflow::fillphysbc(
     const amrex::IntVect& nghost,
     const FieldState fstate)
 {
-    FieldFillPatchOps<FieldBCDirichlet>::fillphysbc(
-        lev, time, mfab, nghost, fstate);
-
     m_bndry_plane.populate_data(lev, time, m_field, mfab);
 }
 

@@ -57,7 +57,7 @@ Flather::Flather(CFDSim& sim)
 
 void Flather::post_init_actions()
 {
-    m_velocity.register_fill_patch_op<FillFlather>(m_mesh, m_time, *this);
+    m_velocity.add_fill_patch_op<FillFlather>(m_mesh, m_time, *this);
     compute_boundary_z_averages();
 }
 
