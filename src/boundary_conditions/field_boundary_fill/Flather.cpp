@@ -104,7 +104,6 @@ void Flather::accumulate_boundary(
         const auto& dz = geom.CellSizeArray()[2];
         const auto& dom = geom.Domain();
         const int bidx = is_low ? dom.smallEnd(idir) : dom.bigEnd(idir);
-        const int off = dom.smallEnd(idir);
         const int shift_to_boundary = sample_boundary ? (is_low ? -1 : 1) : 0;
         if (shift_to_boundary != 0) {
             AMREX_ALWAYS_ASSERT(m_velocity.num_grow()[idir] > 0);
@@ -149,7 +148,7 @@ void Flather::accumulate_boundary(
                     return;
                 }
                 // This index is tangent to the boundary
-                const int idx_lev = (idir == 0) ? (j - off) : (i - off);
+                const int idx_lev = (idir == 0) ? j : i;
                 // Convert to current level indices
                 const int idx_min =
                     idx_lev + idx_lev * (rr - 1) * (current_level - lev);
@@ -279,8 +278,6 @@ void Flather::set_velocity(
             amrex::IntVect::TheDimensionVector(idir) * (ori.isLow() ? 1 : -1);
         const bool use_x = (idir == 0);
         const bool use_y = (idir == 1);
-        const int xoff = geom.Domain().smallEnd(0);
-        const int yoff = geom.Domain().smallEnd(1);
         const amrex::Real* xlo_uavg = m_xlo_uvof_avg.device_data(lev).data();
         const amrex::Real* xhi_uavg = m_xhi_uvof_avg.device_data(lev).data();
         const amrex::Real* ylo_uavg = m_ylo_uvof_avg.device_data(lev).data();
@@ -338,23 +335,23 @@ void Flather::set_velocity(
                     // Vectors at x boundaries extend in y direction
                     // Vectors at y boundaries extend in x direction
                     if (use_x && (orig_comp + n == 0)) {
-                        interior_val = ori.isLow() ? xlo_uavg[iv_adj[1] - xoff]
-                                                   : xhi_uavg[iv_adj[1] - xoff];
-                        interior_h = ori.isLow() ? xlo_havg[iv_adj[1] - xoff]
-                                                 : xhi_havg[iv_adj[1] - xoff];
-                        boundary_val = ori.isLow() ? xlo_bnd_uavg[iv[1] - xoff]
-                                                   : xhi_bnd_uavg[iv[1] - xoff];
-                        boundary_h = ori.isLow() ? xlo_bnd_havg[iv[1] - xoff]
-                                                 : xhi_bnd_havg[iv[1] - xoff];
+                        interior_val = ori.isLow() ? xlo_uavg[iv_adj[1]]
+                                                   : xhi_uavg[iv_adj[1]];
+                        interior_h = ori.isLow() ? xlo_havg[iv_adj[1]]
+                                                 : xhi_havg[iv_adj[1]];
+                        boundary_val = ori.isLow() ? xlo_bnd_uavg[iv[1]]
+                                                   : xhi_bnd_uavg[iv[1]];
+                        boundary_h = ori.isLow() ? xlo_bnd_havg[iv[1]]
+                                                 : xhi_bnd_havg[iv[1]];
                     } else if (use_y && (orig_comp + n == 1)) {
-                        interior_val = ori.isLow() ? ylo_uavg[iv_adj[0] - yoff]
-                                                   : yhi_uavg[iv_adj[0] - yoff];
-                        interior_h = ori.isLow() ? ylo_havg[iv_adj[0] - yoff]
-                                                 : yhi_havg[iv_adj[0] - yoff];
-                        boundary_val = ori.isLow() ? ylo_bnd_uavg[iv[0] - yoff]
-                                                   : yhi_bnd_uavg[iv[0] - yoff];
-                        boundary_h = ori.isLow() ? ylo_bnd_havg[iv[0] - yoff]
-                                                 : yhi_bnd_havg[iv[0] - yoff];
+                        interior_val = ori.isLow() ? ylo_uavg[iv_adj[0]]
+                                                   : yhi_uavg[iv_adj[0]];
+                        interior_h = ori.isLow() ? ylo_havg[iv_adj[0]]
+                                                 : yhi_havg[iv_adj[0]];
+                        boundary_val = ori.isLow() ? ylo_bnd_uavg[iv[0]]
+                                                   : yhi_bnd_uavg[iv[0]];
+                        boundary_h = ori.isLow() ? ylo_bnd_havg[iv[0]]
+                                                 : yhi_bnd_havg[iv[0]];
                     }
 
                     // Set velocity to zero and skip for terrain
