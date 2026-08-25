@@ -44,6 +44,15 @@ Flather::Flather(CFDSim& sim)
     m_xhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
     m_ylo_bnd_uvof_avg.resize(0, m_mesh.Geom());
     m_yhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
+
+    m_xlo_h_avg.resize(1, m_mesh.Geom());
+    m_xhi_h_avg.resize(1, m_mesh.Geom());
+    m_ylo_h_avg.resize(0, m_mesh.Geom());
+    m_yhi_h_avg.resize(0, m_mesh.Geom());
+    m_xlo_bnd_h_avg.resize(1, m_mesh.Geom());
+    m_xhi_bnd_h_avg.resize(1, m_mesh.Geom());
+    m_ylo_bnd_h_avg.resize(0, m_mesh.Geom());
+    m_yhi_bnd_h_avg.resize(0, m_mesh.Geom());
 }
 
 void Flather::post_init_actions()
@@ -192,6 +201,15 @@ void Flather::compute_boundary_z_averages()
         m_xhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
         m_ylo_bnd_uvof_avg.resize(0, m_mesh.Geom());
         m_yhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
+
+        m_xlo_h_avg.resize(1, m_mesh.Geom());
+        m_xhi_h_avg.resize(1, m_mesh.Geom());
+        m_ylo_h_avg.resize(0, m_mesh.Geom());
+        m_yhi_h_avg.resize(0, m_mesh.Geom());
+        m_xlo_bnd_h_avg.resize(1, m_mesh.Geom());
+        m_xhi_bnd_h_avg.resize(1, m_mesh.Geom());
+        m_ylo_bnd_h_avg.resize(0, m_mesh.Geom());
+        m_yhi_bnd_h_avg.resize(0, m_mesh.Geom());
     }
 
     for (int lev = 0; lev < nlevels; ++lev) {
@@ -217,15 +235,15 @@ void Flather::compute_boundary_z_averages()
     m_xhi_uvof_avg.copy_host_to_device();
     m_ylo_uvof_avg.copy_host_to_device();
     m_yhi_uvof_avg.copy_host_to_device();
-    m_xlo_h_avg.copy_host_to_device();
-    m_xhi_h_avg.copy_host_to_device();
-    m_ylo_h_avg.copy_host_to_device();
-    m_yhi_h_avg.copy_host_to_device();
-
     m_xlo_bnd_uvof_avg.copy_host_to_device();
     m_xhi_bnd_uvof_avg.copy_host_to_device();
     m_ylo_bnd_uvof_avg.copy_host_to_device();
     m_yhi_bnd_uvof_avg.copy_host_to_device();
+
+    m_xlo_h_avg.copy_host_to_device();
+    m_xhi_h_avg.copy_host_to_device();
+    m_ylo_h_avg.copy_host_to_device();
+    m_yhi_h_avg.copy_host_to_device();
     m_xlo_bnd_h_avg.copy_host_to_device();
     m_xhi_bnd_h_avg.copy_host_to_device();
     m_ylo_bnd_h_avg.copy_host_to_device();
