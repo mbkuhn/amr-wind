@@ -259,6 +259,7 @@ void Flather::set_velocity(
     const auto& geom = m_mesh.Geom(lev);
     const auto& bctype = fld.bc_type();
     const int nghost = 1;
+    const int numcomp = mfab.nComp();
     const auto& domain = geom.growPeriodicDomain(nghost);
 
     const amrex::Real tiny = constants::TIGHT_TOL;
@@ -272,12 +273,26 @@ void Flather::set_velocity(
         }
 
         const int idir = ori.coordDir();
+        // Check if orientation aligns with supplied field and choose component
+        bool skip_fill = false;
+        int fcomp = 0;
+        if (numcomp == 1) {
+            // MAC velocity: only normal field is valid
+            skip_fill = (orig_comp != idir);
+            // Only a single component available
+        } else {
+            // Cell-centered velocity: field always valid
+            fcomp = idir;
+            // Select valid component
+        }
+        if (skip_fill) {
+            continue;
+        }
+
         const auto& dbx = ori.isLow() ? amrex::adjCellLo(domain, idir, nghost)
                                       : amrex::adjCellHi(domain, idir, nghost);
         const auto shift_to_interior =
             amrex::IntVect::TheDimensionVector(idir) * (ori.isLow() ? 1 : -1);
-        const bool use_x = (idir == 0);
-        const bool use_y = (idir == 1);
         const amrex::Real* xlo_uavg = m_xlo_uvof_avg.device_data(lev).data();
         const amrex::Real* xhi_uavg = m_xhi_uvof_avg.device_data(lev).data();
         const amrex::Real* ylo_uavg = m_ylo_uvof_avg.device_data(lev).data();
@@ -315,7 +330,6 @@ void Flather::set_velocity(
             }
 
             const auto& arr = mfab[mfi].array();
-            const int numcomp = mfab.nComp();
 
             const auto vof_arr = m_vof(lev).const_array(mfi);
             const bool use_terrain = (m_terrain_blank != nullptr);
@@ -327,57 +341,54 @@ void Flather::set_velocity(
                 const amrex::IntVect iv{i, j, k};
                 const amrex::IntVect iv_adj = iv + shift_to_interior;
 
-                for (int n = 0; n < numcomp; ++n) {
-                    amrex::Real boundary_val = arr(iv, dcomp + n);
-                    amrex::Real interior_val = arr(iv_adj, dcomp + n);
-                    amrex::Real boundary_h = 0.0_rt;
-                    amrex::Real interior_h = 0.0_rt;
-                    // Vectors at x boundaries extend in y direction
-                    // Vectors at y boundaries extend in x direction
-                    if (use_x && (orig_comp + n == 0)) {
-                        interior_val = ori.isLow() ? xlo_uavg[iv_adj[1]]
-                                                   : xhi_uavg[iv_adj[1]];
-                        interior_h = ori.isLow() ? xlo_havg[iv_adj[1]]
-                                                 : xhi_havg[iv_adj[1]];
-                        boundary_val = ori.isLow() ? xlo_bnd_uavg[iv[1]]
-                                                   : xhi_bnd_uavg[iv[1]];
-                        boundary_h = ori.isLow() ? xlo_bnd_havg[iv[1]]
-                                                 : xhi_bnd_havg[iv[1]];
-                    } else if (use_y && (orig_comp + n == 1)) {
-                        interior_val = ori.isLow() ? ylo_uavg[iv_adj[0]]
-                                                   : yhi_uavg[iv_adj[0]];
-                        interior_h = ori.isLow() ? ylo_havg[iv_adj[0]]
-                                                 : yhi_havg[iv_adj[0]];
-                        boundary_val = ori.isLow() ? ylo_bnd_uavg[iv[0]]
-                                                   : yhi_bnd_uavg[iv[0]];
-                        boundary_h = ori.isLow() ? ylo_bnd_havg[iv[0]]
-                                                 : yhi_bnd_havg[iv[0]];
-                    }
-
-                    // Set velocity to zero and skip for terrain
-                    if (use_terrain && terrain_blank_arr(iv_adj) != 0) {
-                        arr(iv, dcomp + n) = 0.0_rt;
-                        continue;
-                    }
-                    // Check interior or boundary vof for liquid
-                    const amrex::Real interior_vof = vof_arr(iv_adj);
-                    const amrex::Real boundary_vof = vof_arr(iv);
-                    // Do nothing here if not liquid
-                    if ((interior_vof < tiny) && (boundary_vof < tiny)) {
-                        continue;
-                    }
-
-                    // Wave speed
-                    const amrex::Real c = std::sqrt(grav_z * interior_h);
-
-                    const auto Flather_val =
-                        boundary_val + (ori.isLow() ? -1.0_rt : 1.0_rt) * c /
-                                           boundary_h *
-                                           (interior_h - boundary_h);
-
-                    arr(iv, dcomp + n) =
-                        arr(iv_adj, dcomp + n) * (Flather_val / interior_val);
+                amrex::Real boundary_val = arr(iv, fcomp);
+                amrex::Real interior_val = arr(iv_adj, fcomp);
+                amrex::Real boundary_h = 0.0_rt;
+                amrex::Real interior_h = 0.0_rt;
+                // Vectors at x boundaries extend in y direction
+                // Vectors at y boundaries extend in x direction
+                if (idir == 0) {
+                    interior_val =
+                        ori.isLow() ? xlo_uavg[iv_adj[1]] : xhi_uavg[iv_adj[1]];
+                    interior_h =
+                        ori.isLow() ? xlo_havg[iv_adj[1]] : xhi_havg[iv_adj[1]];
+                    boundary_val =
+                        ori.isLow() ? xlo_bnd_uavg[iv[1]] : xhi_bnd_uavg[iv[1]];
+                    boundary_h =
+                        ori.isLow() ? xlo_bnd_havg[iv[1]] : xhi_bnd_havg[iv[1]];
+                } else {
+                    interior_val =
+                        ori.isLow() ? ylo_uavg[iv_adj[0]] : yhi_uavg[iv_adj[0]];
+                    interior_h =
+                        ori.isLow() ? ylo_havg[iv_adj[0]] : yhi_havg[iv_adj[0]];
+                    boundary_val =
+                        ori.isLow() ? ylo_bnd_uavg[iv[0]] : yhi_bnd_uavg[iv[0]];
+                    boundary_h =
+                        ori.isLow() ? ylo_bnd_havg[iv[0]] : yhi_bnd_havg[iv[0]];
                 }
+
+                // Set velocity to zero and skip for terrain
+                if (use_terrain && terrain_blank_arr(iv_adj) != 0) {
+                    arr(iv, fcomp) = 0.0_rt;
+                    return;
+                }
+                // Check interior or boundary vof for liquid
+                const amrex::Real interior_vof = vof_arr(iv_adj);
+                const amrex::Real boundary_vof = vof_arr(iv);
+                // Do nothing here if not liquid
+                if ((interior_vof < tiny) && (boundary_vof < tiny)) {
+                    return;
+                }
+
+                // Wave speed
+                const amrex::Real c = std::sqrt(grav_z * interior_h);
+
+                const auto Flather_val =
+                    boundary_val + (ori.isLow() ? -1.0_rt : 1.0_rt) * c /
+                                       boundary_h * (interior_h - boundary_h);
+
+                arr(iv, fcomp) =
+                    arr(iv_adj, fcomp) * (Flather_val / interior_val);
             });
         }
     }
