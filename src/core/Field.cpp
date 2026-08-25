@@ -404,7 +404,7 @@ void Field::set_default_fillpatch_bc(
         bc_op();
     }
 
-    if (!m_info->m_fillpatch_ops[0]) {
+    if (m_info->m_fillpatch_ops.empty()) {
         register_fill_patch_op<FieldFillPatchOps<FieldBCNoOp>>(
             repo().mesh(), time);
     }
