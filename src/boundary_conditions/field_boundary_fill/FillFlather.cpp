@@ -63,10 +63,8 @@ void FillFlather::fillpatch_sibling_fields(
     const amrex::Vector<amrex::BCRec>& /* unused */,
     const FieldState fstate)
 {
-    if (m_field.base_name() == "velocity") {
-        for (int i = 0; std::cmp_less(i, mfabs.size()); ++i) {
-            m_flather.set_velocity(lev, time, m_field, *mfabs[i], 0, i);
-        }
+    for (int i = 0; std::cmp_less(i, mfabs.size()); ++i) {
+        m_flather.set_velocity(lev, time, m_field, *mfabs[i], 0, i);
     }
 }
 
