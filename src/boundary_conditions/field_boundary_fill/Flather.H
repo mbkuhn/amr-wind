@@ -40,6 +40,8 @@ public:
         int dcomp = 0,
         int orig_comp = 0) const override;
 
+    void update_flather_variables(int lev) { compute_boundary_z_averages(lev); }
+
     void accumulate_boundary(
         int current_level,
         int idir,
@@ -49,8 +51,8 @@ public:
         bool sample_boundary) const;
 
 private:
-    void update_target_velocity();
-    void compute_boundary_z_averages();
+    void compute_internal_z_averages();
+    void compute_boundary_z_averages(int lev);
 
     const CFDSim& m_sim;
     const kynema_sgf::SimTime& m_time;

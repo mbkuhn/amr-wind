@@ -58,10 +58,10 @@ Flather::Flather(CFDSim& sim)
 void Flather::post_init_actions()
 {
     m_velocity.add_fill_patch_op<FillFlather>(m_mesh, m_time, *this);
-    compute_boundary_z_averages();
+    compute_internal_z_averages();
 }
 
-void Flather::pre_advance_work() { compute_boundary_z_averages(); }
+void Flather::pre_advance_work() { compute_internal_z_averages(); }
 
 void Flather::accumulate_boundary(
     const int current_level,
@@ -183,9 +183,9 @@ void Flather::accumulate_boundary(
     }
 }
 
-void Flather::compute_boundary_z_averages()
+void Flather::compute_internal_z_averages()
 {
-    BL_PROFILE("kynema-sgf::Flather::compute_boundary_z_averages");
+    BL_PROFILE("kynema-sgf::Flather::compute_internal_z_averages");
 
     const int nlevels = m_repo.num_active_levels();
     const int nlevels_geom = static_cast<int>(m_mesh.Geom().size());
@@ -218,33 +218,67 @@ void Flather::compute_boundary_z_averages()
             lev, 1, true, m_ylo_uvof_avg, m_ylo_h_avg, false);
         this->accumulate_boundary(
             lev, 1, false, m_yhi_uvof_avg, m_yhi_h_avg, false);
-        this->accumulate_boundary(
-            lev, 0, true, m_xlo_bnd_uvof_avg, m_xlo_bnd_h_avg, true);
-        this->accumulate_boundary(
-            lev, 0, false, m_xhi_bnd_uvof_avg, m_xhi_bnd_h_avg, true);
-        this->accumulate_boundary(
-            lev, 1, true, m_ylo_bnd_uvof_avg, m_ylo_bnd_h_avg, true);
-        this->accumulate_boundary(
-            lev, 1, false, m_yhi_bnd_uvof_avg, m_yhi_bnd_h_avg, true);
     }
 
     m_xlo_uvof_avg.copy_host_to_device();
     m_xhi_uvof_avg.copy_host_to_device();
     m_ylo_uvof_avg.copy_host_to_device();
     m_yhi_uvof_avg.copy_host_to_device();
-    m_xlo_bnd_uvof_avg.copy_host_to_device();
-    m_xhi_bnd_uvof_avg.copy_host_to_device();
-    m_ylo_bnd_uvof_avg.copy_host_to_device();
-    m_yhi_bnd_uvof_avg.copy_host_to_device();
 
     m_xlo_h_avg.copy_host_to_device();
     m_xhi_h_avg.copy_host_to_device();
     m_ylo_h_avg.copy_host_to_device();
     m_yhi_h_avg.copy_host_to_device();
-    m_xlo_bnd_h_avg.copy_host_to_device();
-    m_xhi_bnd_h_avg.copy_host_to_device();
-    m_ylo_bnd_h_avg.copy_host_to_device();
-    m_yhi_bnd_h_avg.copy_host_to_device();
+}
+
+void Flather::compute_boundary_z_averages(int lev)
+{
+    BL_PROFILE("kynema-sgf::Flather::compute_boundary_z_averages");
+
+    // accumulating boundaries needs to happen prior to applying fillpatch op
+
+    this->accumulate_boundary(
+        lev, 0, true, m_xlo_bnd_uvof_avg, m_xlo_bnd_h_avg, true);
+    this->accumulate_boundary(
+        lev, 0, false, m_xhi_bnd_uvof_avg, m_xhi_bnd_h_avg, true);
+    this->accumulate_boundary(
+        lev, 1, true, m_ylo_bnd_uvof_avg, m_ylo_bnd_h_avg, true);
+    this->accumulate_boundary(
+        lev, 1, false, m_yhi_bnd_uvof_avg, m_yhi_bnd_h_avg, true);
+
+    amrex::Gpu::copyAsync(
+        amrex::Gpu::hostToDevice, m_xlo_bnd_uvof_avg.host_data(lev).begin(),
+        m_xlo_bnd_uvof_avg.host_data(lev).end(),
+        m_xlo_bnd_uvof_avg.device_data(lev).begin());
+    amrex::Gpu::copyAsync(
+        amrex::Gpu::hostToDevice, m_xhi_bnd_uvof_avg.host_data(lev).begin(),
+        m_xhi_bnd_uvof_avg.host_data(lev).end(),
+        m_xhi_bnd_uvof_avg.device_data(lev).begin());
+    amrex::Gpu::copyAsync(
+        amrex::Gpu::hostToDevice, m_ylo_bnd_uvof_avg.host_data(lev).begin(),
+        m_ylo_bnd_uvof_avg.host_data(lev).end(),
+        m_ylo_bnd_uvof_avg.device_data(lev).begin());
+    amrex::Gpu::copyAsync(
+        amrex::Gpu::hostToDevice, m_yhi_bnd_uvof_avg.host_data(lev).begin(),
+        m_yhi_bnd_uvof_avg.host_data(lev).end(),
+        m_yhi_bnd_uvof_avg.device_data(lev).begin());
+
+    amrex::Gpu::copyAsync(
+        amrex::Gpu::hostToDevice, m_xlo_bnd_h_avg.host_data(lev).begin(),
+        m_xlo_bnd_h_avg.host_data(lev).end(),
+        m_xlo_bnd_h_avg.device_data(lev).begin());
+    amrex::Gpu::copyAsync(
+        amrex::Gpu::hostToDevice, m_xhi_bnd_h_avg.host_data(lev).begin(),
+        m_xhi_bnd_h_avg.host_data(lev).end(),
+        m_xhi_bnd_h_avg.device_data(lev).begin());
+    amrex::Gpu::copyAsync(
+        amrex::Gpu::hostToDevice, m_ylo_bnd_h_avg.host_data(lev).begin(),
+        m_ylo_bnd_h_avg.host_data(lev).end(),
+        m_ylo_bnd_h_avg.device_data(lev).begin());
+    amrex::Gpu::copyAsync(
+        amrex::Gpu::hostToDevice, m_yhi_bnd_h_avg.host_data(lev).begin(),
+        m_yhi_bnd_h_avg.host_data(lev).end(),
+        m_yhi_bnd_h_avg.device_data(lev).begin());
 }
 
 void Flather::set_velocity(

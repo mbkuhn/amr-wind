@@ -15,7 +15,7 @@ public:
         Field& field,
         const amrex::AmrCore& mesh,
         const SimTime& time,
-        const Flather& flather);
+        Flather& flather);
 
     ~FillFlather() override;
 
@@ -52,7 +52,7 @@ public:
         FieldState fstate = FieldState::New) override;
 
 protected:
-    const Flather& m_flather;
+    Flather& m_flather;
 };
 
 } // namespace kynema_sgf
