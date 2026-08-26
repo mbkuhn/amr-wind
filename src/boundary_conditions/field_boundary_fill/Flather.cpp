@@ -152,10 +152,11 @@ void Flather::accumulate_boundary(
                 // Convert to current level indices
                 const int idx_min =
                     idx_lev + idx_lev * (rr - 1) * (current_level - lev);
-                const int idx_max = idx_min + rr * (current_level - lev) - 1;
+                const int idx_max =
+                    idx_min +
+                    amrex::max<int>(0, rr * (current_level - lev) - 1);
 
-                for (int idx = idx_min;
-                     idx <= amrex::max<int>(idx_min, idx_max); ++idx) {
+                for (int idx = idx_min; idx <= idx_max; ++idx) {
                     const auto liquid_height =
                         vof_arr(ii, jj, k) * dz * mask_arr(i, j, k);
                     amrex::Gpu::Atomic::Add(
