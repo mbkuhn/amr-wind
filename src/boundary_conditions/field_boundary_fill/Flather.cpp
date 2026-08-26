@@ -249,7 +249,7 @@ void Flather::compute_boundary_z_averages()
 
 void Flather::set_velocity(
     const int lev,
-    const amrex::Real /*time*/,
+    const amrex::Real time,
     const Field& fld,
     amrex::MultiFab& mfab,
     const int dcomp,
@@ -263,6 +263,7 @@ void Flather::set_velocity(
     const int numcomp = mfab.nComp();
     const auto& domain = geom.growPeriodicDomain(nghost);
 
+    const auto fstate = time > 0.0_rt ? FieldState::Old : FieldState::New;
     const amrex::Real tiny = constants::TIGHT_TOL;
     const auto grav_z = -m_gravity[2];
 
@@ -331,8 +332,9 @@ void Flather::set_velocity(
             }
 
             const auto& arr = mfab[mfi].array();
+            const auto& ref_arr = fld.state(fstate)(lev)[mfi].const_array();
 
-            const auto vof_arr = m_vof(lev).const_array(mfi);
+            const auto vof_arr = m_vof.state(fstate)(lev).const_array(mfi);
             const bool use_terrain = (m_terrain_blank != nullptr);
             const auto terrain_blank_arr =
                 use_terrain ? (*m_terrain_blank)(lev).const_array(mfi)
@@ -389,7 +391,7 @@ void Flather::set_velocity(
                                        boundary_h * (interior_h - boundary_h);
 
                 const auto scaled_interior_vel =
-                    arr(iv_adj, fcomp) * (Flather_val / interior_val);
+                    ref_arr(iv_adj, idir) * (Flather_val / interior_val);
 
                 // Only use if pointing outward or pulling liquid in
                 // Zero velocity is fine either way
