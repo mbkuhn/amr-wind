@@ -388,8 +388,18 @@ void Flather::set_velocity(
                     boundary_val + (ori.isLow() ? -1.0_rt : 1.0_rt) * c /
                                        boundary_h * (interior_h - boundary_h);
 
-                arr(iv, fcomp) =
+                const auto scaled_interior_vel =
                     arr(iv_adj, fcomp) * (Flather_val / interior_val);
+
+                // Only use if pointing outward or pulling liquid in
+                // Zero velocity is fine either way
+                const bool outflow = ori.isLow()
+                                         ? scaled_interior_vel <= 0.0_rt
+                                         : scaled_interior_vel >= 0.0_rt;
+                const bool inflow_liq = !outflow && boundary_vof >= tiny;
+                if (outflow || inflow_liq) {
+                    arr(iv, fcomp) = scaled_interior_vel;
+                }
             });
         }
     }
