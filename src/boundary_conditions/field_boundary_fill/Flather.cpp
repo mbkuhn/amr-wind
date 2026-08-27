@@ -377,8 +377,9 @@ void Flather::set_velocity(
 #endif
         for (amrex::MFIter mfi(mfab); mfi.isValid(); ++mfi) {
             auto gbx = amrex::grow(mfi.validbox(), nghost);
+            auto shift_to_cc = amrex::IntVect(0);
             const auto& bx =
-                utils::face_aware_boundary_box_intersection(gbx, dbx, ori);
+                utils::face_aware_boundary_box_intersection(shift_to_cc, gbx, dbx, ori);
             if (!bx.ok()) {
                 continue;
             }
@@ -394,8 +395,9 @@ void Flather::set_velocity(
 
             amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
                 const amrex::IntVect iv{i, j, k};
-                // Need to account for shift to cell center, too!!
+                const amrex::IntVect iv_cc = iv + shift_to_cc;
                 const amrex::IntVect iv_adj = iv + shift_to_interior;
+                const amrex::IntVect iv_adj_cc = iv_adj + shift_to_cc;
 
                 amrex::Real boundary_val = arr(iv, fcomp);
                 amrex::Real interior_val = arr(iv_adj, fcomp);
@@ -424,13 +426,13 @@ void Flather::set_velocity(
                 }
 
                 // Set velocity to zero and skip for terrain
-                if (use_terrain && terrain_blank_arr(iv_adj) != 0) {
+                if (use_terrain && terrain_blank_arr(iv_adj_cc) != 0) {
                     arr(iv, fcomp) = 0.0_rt;
                     return;
                 }
                 // Check interior or boundary vof for liquid
-                const amrex::Real interior_vof = vof_arr(iv_adj);
-                const amrex::Real boundary_vof = vof_arr(iv);
+                const amrex::Real interior_vof = vof_arr(iv_adj_cc);
+                const amrex::Real boundary_vof = vof_arr(iv_cc);
                 // Do nothing here if not liquid
                 if ((interior_vof < tiny) && (boundary_vof < tiny)) {
                     return;
@@ -444,7 +446,7 @@ void Flather::set_velocity(
                                        boundary_h * (interior_h - boundary_h);
 
                 const auto scaled_interior_vel =
-                    ref_arr(iv_adj, idir) * (Flather_val / interior_val);
+                    ref_arr(iv_adj_cc, idir) * (Flather_val / interior_val);
 
                 // Only use if pointing outward or pulling liquid in
                 // Zero velocity is fine either way
