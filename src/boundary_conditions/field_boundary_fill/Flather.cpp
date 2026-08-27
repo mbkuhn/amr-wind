@@ -116,7 +116,8 @@ void Flather::accumulate_boundary(
             AMREX_ALWAYS_ASSERT(m_vof.num_grow()[idir] > 0);
         }
 
-        const auto& vel_mf = src_vel.state(fstate)(lev);
+        const auto& vel_mf =
+            src_vel.state(use_mac_fields ? FieldState::New : fstate)(lev);
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
