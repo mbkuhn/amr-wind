@@ -131,7 +131,10 @@ void Flather::accumulate_boundary(
             bx.setBig(idir, bidx);
 
             const auto vel_arr = vel_mf.const_array(mfi);
-            const auto vof_arr = m_vof.state(fstate)(lev).const_array(mfi);
+            // Due to the order that fillphysbc is called in prepare_boundaries
+            // (velocity, then scalars), the vof data is not available at
+            // alternate (nph) states when this is called.
+            const auto vof_arr = m_vof(lev).const_array(mfi);
             const auto mask_arr = level_mask.const_array(mfi);
             const bool use_terrain = (m_terrain_blank != nullptr);
             const auto terrain_blank_arr =
