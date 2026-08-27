@@ -71,9 +71,8 @@ private:
     const FieldRepo& m_repo;
     const amrex::AmrCore& m_mesh;
     Field& m_velocity;
-    Field& m_u_mac;
-    Field& m_v_mac;
-    Field& m_w_mac;
+    const Field& m_u_mac;
+    const Field& m_v_mac;
     const Field& m_vof;
     const IntField* m_terrain_blank{nullptr};
     amrex::Vector<amrex::Real> m_gravity{0.0_rt, 0.0_rt, -9.81_rt};
