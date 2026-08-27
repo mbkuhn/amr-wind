@@ -40,7 +40,10 @@ public:
         int dcomp = 0,
         int orig_comp = 0) const override;
 
-    void update_flather_variables(int lev) { compute_boundary_z_averages(lev); }
+    void update_flather_variables(const int lev, const FieldState fstate)
+    {
+        compute_boundary_z_averages(lev, fstate);
+    }
 
     void accumulate_boundary(
         int current_level,
@@ -48,11 +51,12 @@ public:
         bool is_low,
         MultiLevelVector& out_uvec,
         MultiLevelVector& out_hvec,
-        bool sample_boundary) const;
+        bool sample_boundary,
+        FieldState fstate) const;
 
 private:
     void compute_internal_z_averages();
-    void compute_boundary_z_averages(int lev);
+    void compute_boundary_z_averages(int lev, FieldState fstate);
 
     const CFDSim& m_sim;
     const kynema_sgf::SimTime& m_time;

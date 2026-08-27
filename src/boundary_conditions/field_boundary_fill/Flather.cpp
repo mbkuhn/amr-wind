@@ -69,7 +69,8 @@ void Flather::accumulate_boundary(
     const bool is_low,
     MultiLevelVector& out_uvec,
     MultiLevelVector& out_hvec,
-    const bool sample_boundary) const
+    const bool sample_boundary,
+    const FieldState fstate) const
 {
     AMREX_ALWAYS_ASSERT(idir == 0 || idir == 1);
 
@@ -110,7 +111,7 @@ void Flather::accumulate_boundary(
             AMREX_ALWAYS_ASSERT(m_vof.num_grow()[idir] > 0);
         }
 
-        const auto& vel_mf = m_velocity(lev);
+        const auto& vel_mf = m_velocity.state(fstate)(lev);
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
@@ -130,7 +131,7 @@ void Flather::accumulate_boundary(
             bx.setBig(idir, bidx);
 
             const auto vel_arr = vel_mf.const_array(mfi);
-            const auto vof_arr = m_vof(lev).const_array(mfi);
+            const auto vof_arr = m_vof.state(fstate)(lev).const_array(mfi);
             const auto mask_arr = level_mask.const_array(mfi);
             const bool use_terrain = (m_terrain_blank != nullptr);
             const auto terrain_blank_arr =
@@ -211,13 +212,13 @@ void Flather::compute_internal_z_averages()
 
     for (int lev = 0; lev < nlevels; ++lev) {
         this->accumulate_boundary(
-            lev, 0, true, m_xlo_uvof_avg, m_xlo_h_avg, false);
+            lev, 0, true, m_xlo_uvof_avg, m_xlo_h_avg, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 0, false, m_xhi_uvof_avg, m_xhi_h_avg, false);
+            lev, 0, false, m_xhi_uvof_avg, m_xhi_h_avg, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 1, true, m_ylo_uvof_avg, m_ylo_h_avg, false);
+            lev, 1, true, m_ylo_uvof_avg, m_ylo_h_avg, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 1, false, m_yhi_uvof_avg, m_yhi_h_avg, false);
+            lev, 1, false, m_yhi_uvof_avg, m_yhi_h_avg, false, FieldState::New);
     }
 
     m_xlo_uvof_avg.copy_host_to_device();
@@ -231,20 +232,21 @@ void Flather::compute_internal_z_averages()
     m_yhi_h_avg.copy_host_to_device();
 }
 
-void Flather::compute_boundary_z_averages(int lev)
+void Flather::compute_boundary_z_averages(
+    const int lev, const FieldState fstate)
 {
     BL_PROFILE("kynema-sgf::Flather::compute_boundary_z_averages");
 
     // accumulating boundaries needs to happen prior to applying fillpatch op
 
     this->accumulate_boundary(
-        lev, 0, true, m_xlo_bnd_uvof_avg, m_xlo_bnd_h_avg, true);
+        lev, 0, true, m_xlo_bnd_uvof_avg, m_xlo_bnd_h_avg, true, fstate);
     this->accumulate_boundary(
-        lev, 0, false, m_xhi_bnd_uvof_avg, m_xhi_bnd_h_avg, true);
+        lev, 0, false, m_xhi_bnd_uvof_avg, m_xhi_bnd_h_avg, true, fstate);
     this->accumulate_boundary(
-        lev, 1, true, m_ylo_bnd_uvof_avg, m_ylo_bnd_h_avg, true);
+        lev, 1, true, m_ylo_bnd_uvof_avg, m_ylo_bnd_h_avg, true, fstate);
     this->accumulate_boundary(
-        lev, 1, false, m_yhi_bnd_uvof_avg, m_yhi_bnd_h_avg, true);
+        lev, 1, false, m_yhi_bnd_uvof_avg, m_yhi_bnd_h_avg, true, fstate);
 
     amrex::Gpu::copyAsync(
         amrex::Gpu::hostToDevice, m_xlo_bnd_uvof_avg.host_data(lev).begin(),
@@ -376,6 +378,7 @@ void Flather::set_velocity(
 
             amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
                 const amrex::IntVect iv{i, j, k};
+                // Need to account for shift to cell center, too!!
                 const amrex::IntVect iv_adj = iv + shift_to_interior;
 
                 amrex::Real boundary_val = arr(iv, fcomp);

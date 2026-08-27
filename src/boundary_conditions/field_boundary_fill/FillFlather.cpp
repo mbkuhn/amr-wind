@@ -24,7 +24,7 @@ void FillFlather::fillpatch(
     const FieldState fstate)
 {
     if (m_field.base_name() == "velocity") {
-        m_flather.update_flather_variables(lev);
+        m_flather.update_flather_variables(lev, fstate);
         m_flather.set_velocity(lev, time, m_field, mfab);
     }
 }
@@ -37,7 +37,7 @@ void FillFlather::fillpatch_from_coarse(
     const FieldState fstate)
 {
     if (m_field.base_name() == "velocity") {
-        m_flather.update_flather_variables(lev);
+        m_flather.update_flather_variables(lev, fstate);
         m_flather.set_velocity(lev, time, m_field, mfab);
     }
 }
@@ -50,7 +50,7 @@ void FillFlather::fillphysbc(
     const FieldState fstate)
 {
     if (m_field.base_name() == "velocity") {
-        m_flather.update_flather_variables(lev);
+        m_flather.update_flather_variables(lev, fstate);
         m_flather.set_velocity(lev, time, m_field, mfab);
     }
 }
@@ -66,7 +66,7 @@ void FillFlather::fillpatch_sibling_fields(
     const amrex::Vector<amrex::BCRec>& /* unused */,
     const FieldState fstate)
 {
-    m_flather.update_flather_variables(lev);
+    m_flather.update_flather_variables(lev, fstate);
     for (int i = 0; std::cmp_less(i, mfabs.size()); ++i) {
         m_flather.set_velocity(lev, time, m_field, *mfabs[i], 0, i);
     }
