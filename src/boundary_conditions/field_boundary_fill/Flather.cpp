@@ -153,8 +153,12 @@ void Flather::accumulate_boundary(
             amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
                 const int ii = (idir == 0) ? (i + shift_to_boundary) : i;
                 const int jj = (idir == 1) ? (j + shift_to_boundary) : j;
-                const int ii_v = ii + static_cast<int>(idir == 0 && !is_low);
-                const int jj_v = jj + static_cast<int>(idir == 1 && !is_low);
+                const int ii_v =
+                    ii +
+                    static_cast<int>(use_mac_fields && idir == 0 && !is_low);
+                const int jj_v =
+                    jj +
+                    static_cast<int>(use_mac_fields && idir == 1 && !is_low);
 
                 if (use_terrain && terrain_blank_arr(i, j, k) != 0) {
                     return;
