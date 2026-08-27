@@ -378,8 +378,8 @@ void Flather::set_velocity(
         for (amrex::MFIter mfi(mfab); mfi.isValid(); ++mfi) {
             auto gbx = amrex::grow(mfi.validbox(), nghost);
             auto shift_to_cc = amrex::IntVect(0);
-            const auto& bx =
-                utils::face_aware_boundary_box_intersection(shift_to_cc, gbx, dbx, ori);
+            const auto& bx = utils::face_aware_boundary_box_intersection(
+                shift_to_cc, gbx, dbx, ori);
             if (!bx.ok()) {
                 continue;
             }
@@ -441,21 +441,32 @@ void Flather::set_velocity(
                 // Wave speed
                 const amrex::Real c = std::sqrt(grav_z * interior_h);
 
-                const auto Flather_val =
+                const auto Flather_vel =
                     boundary_val + (ori.isLow() ? -1.0_rt : 1.0_rt) * c /
                                        boundary_h * (interior_h - boundary_h);
 
-                const auto scaled_interior_vel =
-                    ref_arr(iv_adj_cc, idir) * (Flather_val / interior_val);
+                // Use external (prescribed) velocity if inflow
+                // Assesses inflow by the whole column, not the local value
+                // Assumes values are up-to-date from another fillpatch op
+                const bool prescribed_inflow =
+                    ori.isLow() ? boundary_val > 0.0_rt : boundary_val < 0.0_rt;
 
-                // Only use if pointing outward or pulling liquid in
-                // Zero velocity is fine either way
-                const bool outflow = ori.isLow()
-                                         ? scaled_interior_vel <= 0.0_rt
-                                         : scaled_interior_vel >= 0.0_rt;
+                const auto local_vel = prescribed_inflow
+                                           ? arr(iv, fcomp)
+                                           : ref_arr(iv_adj_cc, idir);
+
+                const auto averaged_vel =
+                    prescribed_inflow ? boundary_val : interior_val;
+
+                const auto scaled_vel =
+                    local_vel * (Flather_vel / averaged_vel);
+
+                // Only use if pointing outward or pulling liquid in (or zero)
+                const bool outflow =
+                    ori.isLow() ? scaled_vel <= 0.0_rt : scaled_vel >= 0.0_rt;
                 const bool inflow_liq = !outflow && boundary_vof >= tiny;
                 if (outflow || inflow_liq) {
-                    arr(iv, fcomp) = scaled_interior_vel;
+                    arr(iv, fcomp) = scaled_vel;
                 }
             });
         }
