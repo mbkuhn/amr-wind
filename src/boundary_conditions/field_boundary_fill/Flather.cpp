@@ -20,6 +20,8 @@ Flather::Flather(CFDSim& sim)
     , m_repo(m_sim.repo())
     , m_mesh(m_sim.mesh())
     , m_velocity(m_sim.repo().get_field("velocity"))
+    , m_u_mac(m_sim.repo().get_field("u_mac"))
+    , m_v_mac(m_sim.repo().get_field("v_mac"))
     , m_vof(m_sim.repo().get_field("vof"))
 {
     // amrex::ParmParse pp(identifier());
@@ -64,13 +66,14 @@ void Flather::post_init_actions()
 void Flather::pre_advance_work() { compute_internal_z_averages(); }
 
 void Flather::accumulate_boundary(
-    const int current_level,
-    const int idir,
-    const bool is_low,
+    int current_level,
+    int idir,
+    bool is_low,
     MultiLevelVector& out_uvec,
     MultiLevelVector& out_hvec,
-    const bool sample_boundary,
-    const FieldState fstate) const
+    bool sample_boundary,
+    FieldState fstate,
+    bool use_mac_fields) const
 {
     AMREX_ALWAYS_ASSERT(idir == 0 || idir == 1);
 
@@ -106,12 +109,14 @@ void Flather::accumulate_boundary(
         const auto& dom = geom.Domain();
         const int bidx = is_low ? dom.smallEnd(idir) : dom.bigEnd(idir);
         const int shift_to_boundary = sample_boundary ? (is_low ? -1 : 1) : 0;
+        const auto& src_vel =
+            use_mac_fields ? ((idir == 0) ? m_u_mac : m_v_mac) : m_velocity;
         if (shift_to_boundary != 0) {
-            AMREX_ALWAYS_ASSERT(m_velocity.num_grow()[idir] > 0);
+            AMREX_ALWAYS_ASSERT(src_vel.num_grow()[idir] > 0);
             AMREX_ALWAYS_ASSERT(m_vof.num_grow()[idir] > 0);
         }
 
-        const auto& vel_mf = m_velocity.state(fstate)(lev);
+        const auto& vel_mf = src_vel.state(fstate)(lev);
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
@@ -165,7 +170,8 @@ void Flather::accumulate_boundary(
                         vof_arr(ii, jj, k) * dz * mask_arr(i, j, k);
                     amrex::Gpu::Atomic::Add(
                         &uvof_sum[idx],
-                        vel_arr(ii, jj, k, idir) * liquid_height);
+                        vel_arr(ii, jj, k, use_mac_fields ? 0 : idir) *
+                            liquid_height);
                     amrex::Gpu::Atomic::Add(&vof_sum[idx], liquid_height);
                 }
             });
@@ -236,20 +242,24 @@ void Flather::compute_internal_z_averages()
 }
 
 void Flather::compute_boundary_z_averages(
-    const int lev, const FieldState fstate)
+    int lev, FieldState fstate, bool use_mac_fields)
 {
     BL_PROFILE("kynema-sgf::Flather::compute_boundary_z_averages");
 
     // accumulating boundaries needs to happen prior to applying fillpatch op
 
     this->accumulate_boundary(
-        lev, 0, true, m_xlo_bnd_uvof_avg, m_xlo_bnd_h_avg, true, fstate);
+        lev, 0, true, m_xlo_bnd_uvof_avg, m_xlo_bnd_h_avg, true, fstate,
+        use_mac_fields);
     this->accumulate_boundary(
-        lev, 0, false, m_xhi_bnd_uvof_avg, m_xhi_bnd_h_avg, true, fstate);
+        lev, 0, false, m_xhi_bnd_uvof_avg, m_xhi_bnd_h_avg, true, fstate,
+        use_mac_fields);
     this->accumulate_boundary(
-        lev, 1, true, m_ylo_bnd_uvof_avg, m_ylo_bnd_h_avg, true, fstate);
+        lev, 1, true, m_ylo_bnd_uvof_avg, m_ylo_bnd_h_avg, true, fstate,
+        use_mac_fields);
     this->accumulate_boundary(
-        lev, 1, false, m_yhi_bnd_uvof_avg, m_yhi_bnd_h_avg, true, fstate);
+        lev, 1, false, m_yhi_bnd_uvof_avg, m_yhi_bnd_h_avg, true, fstate,
+        use_mac_fields);
 
     amrex::Gpu::copyAsync(
         amrex::Gpu::hostToDevice, m_xlo_bnd_uvof_avg.host_data(lev).begin(),

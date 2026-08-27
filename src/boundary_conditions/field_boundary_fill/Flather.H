@@ -42,7 +42,13 @@ public:
 
     void update_flather_variables(const int lev, const FieldState fstate)
     {
-        compute_boundary_z_averages(lev, fstate);
+        compute_boundary_z_averages(lev, fstate, false);
+    }
+
+    void update_flather_variables(
+        const int lev, const FieldState fstate, const bool use_mac_fields)
+    {
+        compute_boundary_z_averages(lev, fstate, use_mac_fields);
     }
 
     void accumulate_boundary(
@@ -52,17 +58,22 @@ public:
         MultiLevelVector& out_uvec,
         MultiLevelVector& out_hvec,
         bool sample_boundary,
-        FieldState fstate) const;
+        FieldState fstate,
+        bool use_mac_fields = false) const;
 
 private:
     void compute_internal_z_averages();
-    void compute_boundary_z_averages(int lev, FieldState fstate);
+    void compute_boundary_z_averages(
+        int lev, FieldState fstate, bool use_mac_fields = false);
 
     const CFDSim& m_sim;
     const kynema_sgf::SimTime& m_time;
     const FieldRepo& m_repo;
     const amrex::AmrCore& m_mesh;
     Field& m_velocity;
+    Field& m_u_mac;
+    Field& m_v_mac;
+    Field& m_w_mac;
     const Field& m_vof;
     const IntField* m_terrain_blank{nullptr};
     amrex::Vector<amrex::Real> m_gravity{0.0_rt, 0.0_rt, -9.81_rt};
