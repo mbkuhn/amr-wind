@@ -173,7 +173,7 @@ void Field::fillpatch(
     const amrex::IntVect& nghost)
 {
     BL_PROFILE("kynema-sgf::Field::fillpatch 2");
-    BL_ASSERT(!m_info->m_fillpatch_ops.empty()); 
+    BL_ASSERT(!m_info->m_fillpatch_ops.empty());
     BL_ASSERT(m_info->bc_initialized() && m_info->m_bc_copied_to_device);
 
     for (const auto& fop : m_info->m_fillpatch_ops) {

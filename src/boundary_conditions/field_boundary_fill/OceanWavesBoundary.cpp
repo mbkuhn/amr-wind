@@ -35,9 +35,8 @@ void OceanWavesBoundary::post_init_actions()
     if (m_vof_exists) {
         m_repo.get_field("vof").add_fill_patch_op<OceanWavesFillInflow>(
             m_mesh, m_time, *this);
-        m_repo.get_field("density")
-            .add_fill_patch_op<OceanWavesFillInflow>(
-                m_mesh, m_time, *this);
+        m_repo.get_field("density").add_fill_patch_op<OceanWavesFillInflow>(
+            m_mesh, m_time, *this);
     }
 
     m_terrain_exists = m_repo.int_field_exists("terrain_blank");
