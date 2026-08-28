@@ -465,11 +465,16 @@ void Flather::set_velocity(
                 const auto scaled_vel =
                     local_vel * (Flather_vel / averaged_vel);
 
-                // Only use if pointing outward or pulling liquid in (or zero)
+                // Only use if advecting liquid (or zero velocity)
+                // This is important because the averages used to calculate
+                // the Flather velocity are only performed on cells containing
+                // liquid; therefore, the scaling of the velocity is only valid
+                // on those cells.
                 const bool outflow =
                     ori.isLow() ? scaled_vel <= 0.0_rt : scaled_vel >= 0.0_rt;
-                const bool inflow_liq = !outflow && boundary_vof >= tiny;
-                if (outflow || inflow_liq) {
+                const bool inflow_liq = !outflow && boundary_vof > tiny;
+                const bool outflow_liq = outflow && interior_vof > tiny;
+                if (outflow_liq || inflow_liq) {
                     arr(iv, fcomp) = scaled_vel;
                 }
             });
