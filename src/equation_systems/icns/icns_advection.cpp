@@ -1,7 +1,7 @@
 #include <memory>
 #include "AMReX.H"
 #include "src/equation_systems/icns/icns_advection.H"
-#include "src/utilities/AdaptInflowSolvability.H"
+#include "src/projection/AdaptInflowSolvability.H"
 #include "src/core/MLMGOptions.H"
 #include "src/utilities/console_io.H"
 #include "src/boundary_conditions/field_boundary_fill/BoundaryPlane.H"

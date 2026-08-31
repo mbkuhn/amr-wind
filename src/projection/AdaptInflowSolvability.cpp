@@ -1,4 +1,4 @@
-#include "src/utilities/AdaptInflowSolvability.H"
+#include "src/projection/AdaptInflowSolvability.H"
 
 #include "AMReX_BC_TYPES.H"
 #include "AMReX_GpuReduce.H"

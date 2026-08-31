@@ -5,7 +5,7 @@
 #include "src/utilities/console_io.H"
 #include "src/core/field_ops.H"
 #include "src/projection/nodal_projection_ops.H"
-#include "src/utilities/AdaptInflowSolvability.H"
+#include "src/projection/AdaptInflowSolvability.H"
 #include "hydro_utils.H"
 #include "src/utilities/math_ops.H"
 
