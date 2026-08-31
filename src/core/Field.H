@@ -413,6 +413,12 @@ public:
     //! Set the inout_bndry flag
     void set_inout_bndry() { m_inout_bndry = true; }
 
+    //! Check if any of the boundaries is adapt-inflow
+    [[nodiscard]] bool has_adapt_inflow_bndry() const { return m_adapt_inflow_bndry; }
+
+    //! Set the adapt_inflow_bndry flag
+    void set_adapt_inflow_bndry() { m_adapt_inflow_bndry = true; }
+
 protected:
     Field(
         FieldRepo& repo,
@@ -445,6 +451,9 @@ protected:
 
     //! Flag to indicate whether any of the boundaries is mass-inflow-outflow
     bool m_inout_bndry{false};
+
+    //! Flag to indicate whether any of the boundaries is adapt-inflow
+    bool m_adapt_inflow_bndry{false};
 };
 
 } // namespace kynema_sgf

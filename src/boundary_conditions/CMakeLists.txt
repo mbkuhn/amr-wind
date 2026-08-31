@@ -1,6 +1,7 @@
 target_sources(${kynema_sgf_lib_name}
    PRIVATE
       #C++
+      AdaptInflowBC.cpp
       BCInterface.cpp
       FixedGradientBC.cpp
       scalar_bcs.cpp

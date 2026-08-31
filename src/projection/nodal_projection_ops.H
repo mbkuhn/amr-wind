@@ -30,6 +30,11 @@ void enforce_inout_solvability(
     const amrex::Vector<amrex::Geometry>& geom,
     int num_levels);
 
+void enforce_adapt_inflow_solvability(
+    kynema_sgf::Field& velocity,
+    const amrex::Vector<amrex::Geometry>& geom,
+    int num_levels);
+
 } // namespace kynema_sgf::nodal_projection
 
 #endif

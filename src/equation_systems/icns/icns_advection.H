@@ -56,6 +56,10 @@ private:
         const amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>>&
             a_umac);
 
+    void enforce_adapt_inflow_solvability(
+        const amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>>&
+            a_umac);
+
     FieldRepo& m_repo;
     FieldBoundaryMgr& m_fb_mgr;
     std::unique_ptr<Hydro::MacProjector> m_mac_proj;

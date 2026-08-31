@@ -1,6 +1,7 @@
 target_sources(${kynema_sgf_lib_name}
    PRIVATE
       #C++
+      AdaptInflowSolvability.cpp
       diagnostics.cpp
       io.cpp
       bc_ops.cpp

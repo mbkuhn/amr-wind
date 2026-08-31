@@ -14,6 +14,7 @@ enum struct BC : std::uint8_t {
     pressure_outflow,
     mass_inflow,
     mass_inflow_outflow,
+    adapt_inflow,
     zero_gradient,
     no_slip_wall,
     slip_wall,

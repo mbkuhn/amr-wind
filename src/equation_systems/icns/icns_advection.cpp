@@ -1,6 +1,7 @@
 #include <memory>
 #include "AMReX.H"
 #include "src/equation_systems/icns/icns_advection.H"
+#include "src/utilities/AdaptInflowSolvability.H"
 #include "src/core/MLMGOptions.H"
 #include "src/utilities/console_io.H"
 #include "src/boundary_conditions/field_boundary_fill/BoundaryPlane.H"
@@ -75,6 +76,15 @@ void MacProjOp::enforce_inout_solvability(
     const amrex::Vector<amrex::Geometry>& geom = m_repo.mesh().Geom();
 
     HydroUtils::enforceInOutSolvability(a_umac, bc_type, geom);
+}
+
+void MacProjOp::enforce_adapt_inflow_solvability(
+    const amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>>& a_umac)
+{
+    auto& velocity = m_repo.get_field("velocity");
+    const auto& bc_types = velocity.bc_type();
+    const amrex::Vector<amrex::Geometry>& geom = m_repo.mesh().Geom();
+    kynema_sgf::enforceAdaptInflowSolvability(a_umac, bc_types, geom);
 }
 
 void MacProjOp::init_projector(const MacProjOp::FaceFabPtrVec& beta)
@@ -318,6 +328,12 @@ void MacProjOp::operator()(const FieldState fstate, const amrex::Real dt)
         (m_repo.get_field("velocity")).has_inout_bndry();
     if (has_inout_bndry) {
         enforce_inout_solvability(mac_vec);
+    }
+
+    const bool has_adapt_inflow_bndry =
+        (m_repo.get_field("velocity")).has_adapt_inflow_bndry();
+    if (has_adapt_inflow_bndry) {
+        enforce_adapt_inflow_solvability(mac_vec);
     }
 
 #ifdef KYNEMA_SGF_USE_FFT

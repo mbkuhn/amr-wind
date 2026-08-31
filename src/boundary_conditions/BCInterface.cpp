@@ -1,5 +1,6 @@
 #include "src/boundary_conditions/BCInterface.H"
 #include "src/core/FieldRepo.H"
+#include "src/boundary_conditions/AdaptInflowBC.H"
 #include "src/boundary_conditions/FixedGradientBC.H"
 #include "src/boundary_conditions/MassInflowOutflowBC.H"
 #include "AMReX_ParmParse.H"
@@ -69,6 +70,8 @@ void BCIface::read_bctype()
             ibctype[ori] = BC::mass_inflow;
         } else if ((bcstr == "mass_inflow_outflow") || (bcstr == "mio")) {
             ibctype[ori] = BC::mass_inflow_outflow;
+        } else if ((bcstr == "adapt_inflow") || (bcstr == "ai")) {
+            ibctype[ori] = BC::adapt_inflow;
         } else if ((bcstr == "no_slip_wall") || (bcstr == "nsw")) {
             ibctype[ori] = BC::no_slip_wall;
         } else if ((bcstr == "slip_wall") || (bcstr == "sw")) {
@@ -112,6 +115,13 @@ void BCIface::set_bcfuncs()
 
             m_field.register_custom_bc<MassInflowOutflowBC>(ori);
         }
+
+        if (((m_field.name() == "velocity") ||
+             (m_field.name() == "temperature")) &&
+            (bct == BC::adapt_inflow)) {
+
+            m_field.register_custom_bc<AdaptInflowBC>(ori);
+        }
     }
 }
 
@@ -150,7 +160,7 @@ amrex::Array<const std::string, 3> BCIface::get_dirichlet_udfs()
             }
         }
 
-        if (bct == BC::mass_inflow_outflow) {
+        if ((bct == BC::mass_inflow_outflow) || (bct == BC::adapt_inflow)) {
             if (pp.contains(inflow_outflow_key)) {
                 std::string val;
                 pp.get(inflow_outflow_key, val);
@@ -226,6 +236,15 @@ void BCVelocity::set_bcrec()
 
         case BC::mass_inflow_outflow:
             m_field.set_inout_bndry();
+            if (side == amrex::Orientation::low) {
+                set_bcrec_lo(dir, amrex::BCType::direction_dependent);
+            } else {
+                set_bcrec_hi(dir, amrex::BCType::direction_dependent);
+            }
+            break;
+
+        case BC::adapt_inflow:
+            m_field.set_adapt_inflow_bndry();
             if (side == amrex::Orientation::low) {
                 set_bcrec_lo(dir, amrex::BCType::direction_dependent);
             } else {
@@ -334,6 +353,15 @@ void BCScalar::set_bcrec()
             }
             break;
 
+        case BC::adapt_inflow:
+            m_field.set_adapt_inflow_bndry();
+            if (side == amrex::Orientation::low) {
+                set_bcrec_lo(dir, amrex::BCType::direction_dependent);
+            } else {
+                set_bcrec_hi(dir, amrex::BCType::direction_dependent);
+            }
+            break;
+
         case BC::slip_wall:
         case BC::wall_model:
         case BC::fixed_gradient:
@@ -367,7 +395,7 @@ void BCScalar::read_values()
 
         amrex::ParmParse pp(bcid);
         if (((bct == BC::mass_inflow) && (const_dirichlet_inflow)) ||
-            ((bct == BC::mass_inflow_outflow) &&
+            ((bct == BC::mass_inflow_outflow || bct == BC::adapt_inflow) &&
              (const_dirichlet_inflow_outflow))) {
             pp.getarr(fname, bcval[ori], 0, ndim);
         } else {

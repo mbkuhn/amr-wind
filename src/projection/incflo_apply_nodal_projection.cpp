@@ -5,6 +5,7 @@
 #include "src/utilities/console_io.H"
 #include "src/core/field_ops.H"
 #include "src/projection/nodal_projection_ops.H"
+#include "src/utilities/AdaptInflowSolvability.H"
 #include "hydro_utils.H"
 #include "src/utilities/math_ops.H"
 
@@ -94,6 +95,27 @@ void kynema_sgf::nodal_projection::enforce_inout_solvability(
     }
 
     HydroUtils::enforceInOutSolvability(vel_vec, bc_type, geom, true);
+}
+
+void kynema_sgf::nodal_projection::enforce_adapt_inflow_solvability(
+    kynema_sgf::Field& velocity,
+    const amrex::Vector<amrex::Geometry>& geom,
+    const int num_levels)
+{
+    const auto& bc_types = velocity.bc_type();
+    amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>> vel_vec(
+        num_levels);
+
+    for (int lev = 0; lev < num_levels; ++lev) {
+        vel_vec[lev][0] =
+            new amrex::MultiFab(velocity(lev), amrex::make_alias, 0, 1);
+        vel_vec[lev][1] =
+            new amrex::MultiFab(velocity(lev), amrex::make_alias, 1, 1);
+        vel_vec[lev][2] =
+            new amrex::MultiFab(velocity(lev), amrex::make_alias, 2, 1);
+    }
+
+    kynema_sgf::enforceAdaptInflowSolvability(vel_vec, bc_types, geom, true);
 }
 
 /** Perform nodal projection
@@ -335,6 +357,12 @@ void incflo::ApplyProjection(
     // enforce solvability by matching outflow to inflow
     if (!proj_for_small_dt and !incremental and velocity.has_inout_bndry()) {
         kynema_sgf::nodal_projection::enforce_inout_solvability(
+            velocity, m_repo.mesh().Geom(), m_repo.num_active_levels());
+    }
+
+    if (!proj_for_small_dt and !incremental and velocity.has_adapt_inflow_bndry()) {
+        velocity.apply_bc_funcs(kynema_sgf::FieldState::New);
+        kynema_sgf::nodal_projection::enforce_adapt_inflow_solvability(
             velocity, m_repo.mesh().Geom(), m_repo.num_active_levels());
     }
 
