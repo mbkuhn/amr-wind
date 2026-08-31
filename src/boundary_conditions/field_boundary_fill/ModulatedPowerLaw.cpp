@@ -163,7 +163,8 @@ void ModulatedPowerLaw::set_velocity(
     for (amrex::OrientationIter oit; oit != nullptr; ++oit) {
         auto ori = oit();
         if ((bctype[ori] != BC::mass_inflow) &&
-            (bctype[ori] != BC::mass_inflow_outflow)) {
+            (bctype[ori] != BC::mass_inflow_outflow) &&
+            (bctype[ori] != BC::adapt_inflow)) {
             continue;
         }
 
@@ -238,7 +239,8 @@ void ModulatedPowerLaw::set_temperature(
     for (amrex::OrientationIter oit; oit != nullptr; ++oit) {
         auto ori = oit();
         if ((bctype[ori] != BC::mass_inflow) &&
-            (bctype[ori] != BC::mass_inflow_outflow)) {
+            (bctype[ori] != BC::mass_inflow_outflow) &&
+            (bctype[ori] != BC::adapt_inflow)) {
             continue;
         }
 

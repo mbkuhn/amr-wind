@@ -45,6 +45,7 @@ kynema_sgf::nodal_projection::get_projection_bc(
                 break;
             }
             case BC::mass_inflow_outflow:
+            case BC::adapt_inflow:
             case BC::mass_inflow:
             case BC::wave_generation: {
                 r[dir] = amrex::LinOpBCType::inflow;

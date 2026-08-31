@@ -95,6 +95,7 @@ void OceanWavesBoundary::set_velocity(
         auto ori = oit();
         if ((bctype[ori] != BC::mass_inflow) &&
             (bctype[ori] != BC::mass_inflow_outflow) &&
+            (bctype[ori] != BC::adapt_inflow) &&
             (bctype[ori] != BC::wave_generation)) {
             continue;
         }
@@ -161,6 +162,7 @@ void OceanWavesBoundary::set_vof(
         auto ori = oit();
         if ((bctype[ori] != BC::mass_inflow) &&
             (bctype[ori] != BC::mass_inflow_outflow) &&
+            (bctype[ori] != BC::adapt_inflow) &&
             (bctype[ori] != BC::wave_generation)) {
             continue;
         }
@@ -210,6 +212,7 @@ void OceanWavesBoundary::set_density(
         auto ori = oit();
         if ((bctype[ori] != BC::mass_inflow) &&
             (bctype[ori] != BC::mass_inflow_outflow) &&
+            (bctype[ori] != BC::adapt_inflow) &&
             (bctype[ori] != BC::wave_generation)) {
             continue;
         }
@@ -254,6 +257,7 @@ void OceanWavesBoundary::set_inflow_sibling_velocity(
         const auto ori = oit();
         if ((bctype[ori] != BC::mass_inflow) &&
             (bctype[ori] != BC::mass_inflow_outflow) &&
+            (bctype[ori] != BC::adapt_inflow) &&
             (bctype[ori] != BC::wave_generation)) {
             continue;
         }

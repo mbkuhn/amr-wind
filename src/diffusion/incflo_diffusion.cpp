@@ -32,6 +32,7 @@ get_diffuse_tensor_bc(
             case BC::wave_generation:
             case BC::mass_inflow:
             case BC::mass_inflow_outflow:
+            case BC::adapt_inflow:
             case BC::no_slip_wall: {
                 // All three components are Dirichlet
                 r[0][dir] = amrex::LinOpBCType::Dirichlet;
@@ -93,6 +94,7 @@ get_diffuse_scalar_bc(kynema_sgf::Field& scalar, amrex::Orientation::Side side)
             case BC::wave_generation:
             case BC::mass_inflow:
             case BC::mass_inflow_outflow:
+            case BC::adapt_inflow:
             case BC::no_slip_wall: {
                 r[dir] = amrex::LinOpBCType::Dirichlet;
                 break;

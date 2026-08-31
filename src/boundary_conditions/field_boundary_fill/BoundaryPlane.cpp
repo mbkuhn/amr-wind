@@ -1027,7 +1027,8 @@ void BoundaryPlane::read_header()
             if (std::ranges::all_of(m_fields, [ori](const auto* fld) {
                     return (
                         (fld->bc_type()[ori] != BC::mass_inflow) &&
-                        (fld->bc_type()[ori] != BC::mass_inflow_outflow));
+                        (fld->bc_type()[ori] != BC::mass_inflow_outflow) &&
+                        (fld->bc_type()[ori] != BC::adapt_inflow));
                 })) {
                 continue;
             }
@@ -1066,7 +1067,8 @@ void BoundaryPlane::read_header()
             if (std::ranges::all_of(m_fields, [ori](const auto* fld) {
                     return (
                         (fld->bc_type()[ori] != BC::mass_inflow) &&
-                        (fld->bc_type()[ori] != BC::mass_inflow_outflow));
+                        (fld->bc_type()[ori] != BC::mass_inflow_outflow) &&
+                        (fld->bc_type()[ori] != BC::adapt_inflow));
                 })) {
                 continue;
             }
@@ -1110,7 +1112,8 @@ amrex::Vector<amrex::BoxArray> BoundaryPlane::read_bndry_native_boxarrays(
         auto ori = oit();
 
         if ((field.bc_type()[ori] != BC::mass_inflow) &&
-            (field.bc_type()[ori] != BC::mass_inflow_outflow)) {
+            (field.bc_type()[ori] != BC::mass_inflow_outflow) &&
+            (field.bc_type()[ori] != BC::adapt_inflow)) {
             continue;
         }
 
@@ -1136,7 +1139,8 @@ amrex::Vector<amrex::BoxArray> BoundaryPlane::read_bndry_native_boxarrays(
         auto ori = oit();
 
         if ((field.bc_type()[ori] != BC::mass_inflow) &&
-            (field.bc_type()[ori] != BC::mass_inflow_outflow)) {
+            (field.bc_type()[ori] != BC::mass_inflow_outflow) &&
+            (field.bc_type()[ori] != BC::adapt_inflow)) {
             continue;
         }
 
@@ -1426,7 +1430,8 @@ void BoundaryPlane::read_file(const bool nph_target_time)
 
                     if ((!m_in_data.is_populated(ori)) ||
                         ((field.bc_type()[ori] != BC::mass_inflow) &&
-                         (field.bc_type()[ori] != BC::mass_inflow_outflow))) {
+                         (field.bc_type()[ori] != BC::mass_inflow_outflow) &&
+                         (field.bc_type()[ori] != BC::adapt_inflow))) {
                         continue;
                     }
 
@@ -1513,7 +1518,8 @@ void BoundaryPlane::populate_data(
         auto ori = oit();
         if ((!m_in_data.is_populated(ori)) ||
             ((fld.bc_type()[ori] != BC::mass_inflow) &&
-             (fld.bc_type()[ori] != BC::mass_inflow_outflow))) {
+             (fld.bc_type()[ori] != BC::mass_inflow_outflow) &&
+             (fld.bc_type()[ori] != BC::adapt_inflow))) {
             continue;
         }
 

@@ -406,7 +406,8 @@ public:
         for (amrex::OrientationIter oit; oit != nullptr; ++oit) {
             const auto ori = oit();
             if ((bctype[ori] != BC::mass_inflow) &&
-                (bctype[ori] != BC::mass_inflow_outflow)) {
+                (bctype[ori] != BC::mass_inflow_outflow) &&
+                (bctype[ori] != BC::adapt_inflow)) {
                 continue;
             }
 
@@ -452,6 +453,7 @@ public:
             const auto ori = oit();
             if ((bctype[ori] != BC::mass_inflow) &&
                 (bctype[ori] != BC::mass_inflow_outflow) &&
+                (bctype[ori] != BC::adapt_inflow) &&
                 (bctype[ori] != BC::wave_generation)) {
                 continue;
             }
@@ -494,7 +496,8 @@ public:
                             const bool is_outflow =
                                 (ori.isLow() && tmp_marr(i, j, k) < 0) ||
                                 (ori.isHigh() && tmp_marr(i, j, k) > 0);
-                            if ((bctype[ori] == BC::mass_inflow_outflow) &&
+                            if (((bctype[ori] == BC::mass_inflow_outflow) ||
+                                 (bctype[ori] == BC::adapt_inflow)) &&
                                 is_outflow) {
                                 marr(i, j, k) = marr(i, j, k);
                             } else {
