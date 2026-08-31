@@ -23,12 +23,13 @@ namespace kynema_sgf {
  *                   extrap_out)
  *
  *  The total outflux is the sum of the outflow and extrap_out contributions.
- *  If the total outflux exceeds influx, a uniform inward velocity is applied
- *  only to passive cells on boundaries upstream of the net (signed) outflux
- *  vector (e.g. xlo if the vector has a positive x component). If influx
- *  exceeds the total outflux, the extrap_out cells are instead extrapolated
- *  from the adjacent interior velocity and scaled by a single factor so that
- *  the total outflux matches influx.
+ *  extrap_out boundary values are always extrapolated from the adjacent
+ *  interior velocity, regardless of the flux balance. If influx exceeds the
+ *  total outflux, that extrapolated value is additionally scaled by a single
+ *  factor so that the total outflux matches influx. If the total outflux
+ *  exceeds influx instead, a uniform inward velocity is applied to passive
+ *  cells on boundaries upstream of the net (signed) outflux vector (e.g. xlo
+ *  if the vector has a positive x component).
  *
  *  \param vels_vec     Per-level, per-direction normal velocity MultiFabs
  *  \param bc_types     Incflo BC type for each orientation

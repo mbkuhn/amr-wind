@@ -398,13 +398,15 @@ void apply_passive_flux(
     }
 }
 
-/** Extrapolate and scale extrap_out cells to supply additional outflow.
+/** Extrapolate extrap_out cells from the interior, optionally scaled.
  *
  *  Each extrap_out cell is re-identified locally (boundary velocity is zero
  *  and the adjacent interior velocity points outward) and its boundary
- *  velocity is set to vel_interior * alpha, i.e. the natural extrapolation
- *  from the interior scaled to hit the required total outflux. Cells whose
- *  adjacent interior cell is terrain-blanked are left untouched.
+ *  velocity is set to vel_interior * alpha. This is always called with at
+ *  least alpha = 1 so that extrap_out boundary values are always populated;
+ *  alpha is only different from 1 when additional outflow is needed to
+ *  match influx. Cells whose adjacent interior cell is terrain-blanked are
+ *  left untouched.
  */
 void apply_extrap_out_scale(
     const int lev,
@@ -579,35 +581,34 @@ void enforceAdaptInflowSolvability(
     // means outflux must be added
     const Real total_outflux = outflow_flux + extrap_out_flux;
     const Real deficit = total_outflux - influx;
-    if (std::abs(deficit) <= small_vel) { return; }
 
-    const bool need_more_inflow = deficit > 0;
-
-    if (!need_more_inflow) {
-        // Additional outflow is needed: extrapolate extrap_out cells from
-        // their adjacent interior velocity and scale them so that the total
-        // outflux matches influx. The outflow tag cells are left untouched.
-        const Real desired_extra_outflow = influx - outflow_flux;
+    // extrap_out cells always get their boundary value extrapolated from the
+    // adjacent interior velocity (alpha = 1); they are additionally scaled
+    // only when more outflow is needed to match influx (deficit < 0).
+    Real alpha = 1.0_rt;
+    if (deficit < -small_vel) {
         if (extrap_out_flux < small_vel) {
             amrex::Abort(
                 "enforceAdaptInflowSolvability: no extrap_out cells are "
                 "available on any adapt_inflow boundary to supply the "
                 "required additional outflow");
         }
-
-        const Real alpha = desired_extra_outflow / extrap_out_flux;
-        for (int lev = 0; lev < nlevs; ++lev) {
-            apply_extrap_out_scale(
-                lev, vels_vec, bc_types, geom[lev].Domain(), alpha,
-                include_bndry_corners,
-                terrain_blank ? &(*terrain_blank)(lev) : nullptr);
-        }
-        return;
+        alpha = (influx - outflow_flux) / extrap_out_flux;
     }
 
-    // Select, for each direction, which side of the domain is upstream of
-    // the net outflux vector. Only those boundaries receive the passive
-    // inflow correction.
+    for (int lev = 0; lev < nlevs; ++lev) {
+        apply_extrap_out_scale(
+            lev, vels_vec, bc_types, geom[lev].Domain(), alpha,
+            include_bndry_corners,
+            terrain_blank ? &(*terrain_blank)(lev) : nullptr);
+    }
+
+    // Balance already satisfied (or resolved via the extrap_out scaling
+    // above); no need to touch passive cells.
+    if (deficit <= small_vel) { return; }
+
+    // Additional inflow is needed: add a uniform inward velocity to passive
+    // cells upstream of the net outflux vector.
     GpuArray<bool, AMREX_SPACEDIM> selected_lo{};
     GpuArray<bool, AMREX_SPACEDIM> selected_hi{};
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
