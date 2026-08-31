@@ -447,11 +447,28 @@ void enforceAdaptInflowSolvability(
         }
     }
 
+    // Failsafe: no passive area on the correct upstream/downstream
+    // boundaries, so fall back to spreading the correction over every
+    // adapt_inflow passive boundary instead of aborting.
+    if (selected_area < small_vel) {
+        amrex::Print() << "enforceAdaptInflowSolvability: no passive area "
+                          "upstream/downstream of the net outflux direction; "
+                          "falling back to all passive boundaries\n";
+        for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
+            selected_lo[idim] = true;
+            selected_hi[idim] = true;
+        }
+        selected_area = 0.0;
+        for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
+            selected_area +=
+                passive_area[idim] + passive_area[idim + AMREX_SPACEDIM];
+        }
+    }
+
     if (selected_area < small_vel) {
         amrex::Abort(
             "enforceAdaptInflowSolvability: no passive cells are available "
-            "upstream/downstream of the net outflux direction to balance "
-            "the flux");
+            "on any adapt_inflow boundary to balance the flux");
     }
 
     const Real v_corr = deficit / selected_area;
