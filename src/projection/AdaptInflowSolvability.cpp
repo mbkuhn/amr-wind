@@ -121,24 +121,42 @@ void set_adapt_inflow_masks(
     }
 }
 
-/** Accumulate influx, outflux, and total passive face area from the masks. */
+/** Accumulate influx, outflux, the directional (signed) outflux vector, and
+ *  the passive face area of each individual boundary (orientation) from the
+ *  masks.
+ *
+ *  passive_area is indexed the same way as bc_types, i.e. orientation index
+ *  `dim` is the low side of direction `dim` and `dim + AMREX_SPACEDIM` is the
+ *  high side.
+ */
 void compute_adapt_inflow_fluxes(
     const int lev,
     const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& vels_vec,
     const Array<iMultiFab, AMREX_SPACEDIM>& masks,
+    const Box& domain,
     const Real* a_dx,
     Real& influx,
     Real& outflux,
-    Real& passive_area,
+    GpuArray<Real, AMREX_SPACEDIM>& outflux_vector,
+    GpuArray<Real, AMREX_SPACEDIM * 2>& passive_area,
     const bool corners)
 {
-    influx = 0.0; outflux = 0.0; passive_area = 0.0;
+    influx = 0.0; outflux = 0.0;
+    for (int i = 0; i < AMREX_SPACEDIM; i++) { outflux_vector[i] = 0.0; }
+    for (int i = 0; i < AMREX_SPACEDIM * 2; i++) { passive_area[i] = 0.0; }
 
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
         const Real ds = a_dx[(idim + 1) % AMREX_SPACEDIM]
                       * a_dx[(idim + 2) % AMREX_SPACEDIM];
 
         const auto& vel_mf = vels_vec[lev][idim];
+
+        const IndexType::CellIndex dir_idx_type =
+            (vel_mf->ixType()).ixType(idim);
+        const int dlo = (dir_idx_type == IndexType::CellIndex::CELL)
+                            ? domain.smallEnd(idim) - 1
+                            : domain.smallEnd(idim);
+        const int dhi = domain.bigEnd(idim) + 1;
 
         // grow vector: 1 in normal dir for cell-centered, 0 for face-centered
         IndexType idx_type = vel_mf->ixType();
@@ -179,36 +197,71 @@ void compute_adapt_inflow_fluxes(
                 return {0.0_rt};
             });
 
-        passive_area += ds *
+        // signed sum gives the net direction the outflow is moving in
+        outflux_vector[idim] = ds *
             ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
                       *vel_mf, ngrow,
             [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
                 noexcept -> GpuTuple<Real>
             {
-                if (mask_ma[box_no](i, j, k) == AI_PASSIVE_TAG) {
-                    return {1.0_rt};
+                if (mask_ma[box_no](i, j, k) == AI_OUTFLOW_TAG) {
+                    return {vel_ma[box_no](i, j, k)};
                 }
                 return {0.0_rt};
+            });
+
+        passive_area[idim] = ds *
+            ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
+                      *vel_mf, ngrow,
+            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
+                noexcept -> GpuTuple<Real>
+            {
+                if (mask_ma[box_no](i, j, k) != AI_PASSIVE_TAG) {
+                    return {0.0_rt};
+                }
+                const int idx = (idim == 0) ? i : ((idim == 1) ? j : k);
+                return {(idx == dlo) ? 1.0_rt : 0.0_rt};
+            });
+
+        passive_area[idim + AMREX_SPACEDIM] = ds *
+            ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
+                      *vel_mf, ngrow,
+            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
+                noexcept -> GpuTuple<Real>
+            {
+                if (mask_ma[box_no](i, j, k) != AI_PASSIVE_TAG) {
+                    return {0.0_rt};
+                }
+                const int idx = (idim == 0) ? i : ((idim == 1) ? j : k);
+                return {(idx == dhi) ? 1.0_rt : 0.0_rt};
             });
     }
 
     ParallelDescriptor::ReduceRealSum(influx);
     ParallelDescriptor::ReduceRealSum(outflux);
-    ParallelDescriptor::ReduceRealSum(passive_area);
+    ParallelDescriptor::ReduceRealSum(outflux_vector.data(), AMREX_SPACEDIM);
+    ParallelDescriptor::ReduceRealSum(
+        passive_area.data(), AMREX_SPACEDIM * 2);
 }
 
 /** Set boundary velocity for passive cells to achieve mass balance.
+ *
+ *  Only boundaries marked active in \p selected_lo / \p selected_hi (chosen
+ *  by the caller based on the direction of the net outflux vector) are
+ *  modified; passive cells on other adapt_inflow boundaries are left as-is.
  *
  *  Passive cells are identified by the same two-velocity check used in
  *  set_adapt_inflow_masks rather than reading the mask iMultiFab, so that
  *  this function can be called in a second pass after all fluxes are known.
  */
-void apply_passive_inflow(
+void apply_passive_flux(
     const int lev,
     const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& vels_vec,
     const GpuArray<BC, AMREX_SPACEDIM * 2>& bc_types,
     const Box& domain,
-    const Real v_passive,
+    const Real v_corr,
+    const GpuArray<bool, AMREX_SPACEDIM>& selected_lo,
+    const GpuArray<bool, AMREX_SPACEDIM>& selected_hi,
     const bool corners)
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
@@ -218,6 +271,11 @@ void apply_passive_inflow(
         const int dir = ori.coordDir();
         const bool oriIsLow  = ori.isLow();
         const bool oriIsHigh = ori.isHigh();
+
+        if ((oriIsLow && !selected_lo[dir]) ||
+            (oriIsHigh && !selected_hi[dir])) {
+            continue;
+        }
 
         const auto& vel_mf = vels_vec[lev][dir];
 
@@ -235,7 +293,7 @@ void apply_passive_inflow(
         const int dk = (dir == 2) ? 1 : 0;
 
         // inward speed: positive for low boundary, negative for high
-        const Real v_inward = oriIsLow ? v_passive : -v_passive;
+        const Real v_inward = oriIsLow ? v_corr : -v_corr;
 
         for (MFIter mfi(*vel_mf, false); mfi.isValid(); ++mfi) {
             Box box = mfi.validbox();
@@ -292,7 +350,11 @@ void enforceAdaptInflowSolvability(
     if (!has_adapt_inflow) { return; }
 
     const int nlevs = static_cast<int>(vels_vec.size());
-    Real influx = 0.0, outflux = 0.0, passive_area = 0.0;
+    Real influx = 0.0, outflux = 0.0;
+    GpuArray<Real, AMREX_SPACEDIM> outflux_vector{};
+    GpuArray<Real, AMREX_SPACEDIM * 2> passive_area{};
+    for (int i = 0; i < AMREX_SPACEDIM; i++) { outflux_vector[i] = 0.0; }
+    for (int i = 0; i < AMREX_SPACEDIM * 2; i++) { passive_area[i] = 0.0; }
 
     for (int lev = 0; lev < nlevs; ++lev) {
         const Box domain = geom[lev].Domain();
@@ -342,30 +404,62 @@ void enforceAdaptInflowSolvability(
             include_bndry_corners);
 
         const Real* a_dx = geom[lev].CellSize();
-        Real inf_lev = 0.0, out_lev = 0.0, pa_lev = 0.0;
+        Real inf_lev = 0.0, out_lev = 0.0;
+        GpuArray<Real, AMREX_SPACEDIM> outvec_lev{};
+        GpuArray<Real, AMREX_SPACEDIM * 2> pa_lev{};
         compute_adapt_inflow_fluxes(
-            lev, vels_vec, masks, a_dx, inf_lev, out_lev, pa_lev,
-            include_bndry_corners);
-        influx       += inf_lev;
-        outflux      += out_lev;
-        passive_area += pa_lev;
+            lev, vels_vec, masks, domain, a_dx, inf_lev, out_lev, outvec_lev,
+            pa_lev, include_bndry_corners);
+        influx  += inf_lev;
+        outflux += out_lev;
+        for (int i = 0; i < AMREX_SPACEDIM; i++) {
+            outflux_vector[i] += outvec_lev[i];
+        }
+        for (int i = 0; i < AMREX_SPACEDIM * 2; i++) {
+            passive_area[i] += pa_lev[i];
+        }
     }
 
-    // nothing to do if outflux does not exceed influx
-    if (outflux <= influx + small_vel) { return; }
+    // net imbalance to fix: positive means influx must be added, negative
+    // means outflux must be added
+    const Real deficit = outflux - influx;
+    if (std::abs(deficit) <= small_vel) { return; }
 
-    if (passive_area < small_vel) {
+    const bool need_more_inflow = deficit > 0;
+
+    // Select, for each direction, which side of the domain is upstream
+    // (need_more_inflow) or downstream (!need_more_inflow) of the net
+    // outflux vector. Only those boundaries receive the passive correction.
+    GpuArray<bool, AMREX_SPACEDIM> selected_lo{};
+    GpuArray<bool, AMREX_SPACEDIM> selected_hi{};
+    for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
+        const bool vec_positive = outflux_vector[idim] > 0;
+        const bool vec_negative = outflux_vector[idim] < 0;
+        selected_lo[idim] = need_more_inflow ? vec_positive : vec_negative;
+        selected_hi[idim] = need_more_inflow ? vec_negative : vec_positive;
+    }
+
+    Real selected_area = 0.0;
+    for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
+        if (selected_lo[idim]) { selected_area += passive_area[idim]; }
+        if (selected_hi[idim]) {
+            selected_area += passive_area[idim + AMREX_SPACEDIM];
+        }
+    }
+
+    if (selected_area < small_vel) {
         amrex::Abort(
-            "enforceAdaptInflowSolvability: outflux exceeds influx but no "
-            "passive cells are available to supply the deficit inflow");
+            "enforceAdaptInflowSolvability: no passive cells are available "
+            "upstream/downstream of the net outflux direction to balance "
+            "the flux");
     }
 
-    const Real v_passive = (outflux - influx) / passive_area;
+    const Real v_corr = deficit / selected_area;
 
     for (int lev = 0; lev < nlevs; ++lev) {
-        apply_passive_inflow(
-            lev, vels_vec, bc_types, geom[lev].Domain(), v_passive,
-            include_bndry_corners);
+        apply_passive_flux(
+            lev, vels_vec, bc_types, geom[lev].Domain(), v_corr, selected_lo,
+            selected_hi, include_bndry_corners);
     }
 }
 

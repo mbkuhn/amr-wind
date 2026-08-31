@@ -17,8 +17,13 @@ namespace kynema_sgf {
  *    - outflow: velocity just inside the domain points outward
  *    - passive: neither inflow nor outflow
  *
- *  If total outflux exceeds total influx, a uniform inward velocity is applied
- *  to all passive cells to restore mass balance.
+ *  In addition to the scalar influx/outflux totals, the net (signed) outflux
+ *  vector is computed to determine the direction the outflow is moving in.
+ *  If outflux exceeds influx, a uniform inward velocity is applied only to
+ *  passive cells on boundaries upstream of the outflux vector (e.g. xlo if
+ *  the vector has a positive x component). If influx exceeds outflux, a
+ *  uniform outward velocity is applied only to passive cells on boundaries
+ *  downstream of the outflux vector instead.
  *
  *  \param vels_vec     Per-level, per-direction normal velocity MultiFabs
  *  \param bc_types     Incflo BC type for each orientation
