@@ -13,18 +13,22 @@ namespace kynema_sgf {
 
 /** Enforce mass conservation for the adapt_inflow boundary condition.
  *
- *  Classifies each adapt_inflow boundary cell into one of three categories:
- *    - inflow:  velocity at the boundary points into the domain
- *    - outflow: velocity just inside the domain points outward
- *    - passive: neither inflow nor outflow
+ *  Classifies each adapt_inflow boundary cell into one of four categories:
+ *    - inflow:      velocity at the boundary points into the domain
+ *    - outflow:     velocity at the boundary itself points outward
+ *    - extrap_out:  boundary velocity is zero, but velocity just inside the
+ *                   domain points outward (i.e. an outflow cell whose
+ *                   boundary value has not yet been extrapolated)
+ *    - passive:     the remaining cells (neither inflow, outflow, nor
+ *                   extrap_out)
  *
- *  In addition to the scalar influx/outflux totals, the net (signed) outflux
- *  vector is computed to determine the direction the outflow is moving in.
- *  If outflux exceeds influx, a uniform inward velocity is applied only to
- *  passive cells on boundaries upstream of the outflux vector (e.g. xlo if
- *  the vector has a positive x component). If influx exceeds outflux, a
- *  uniform outward velocity is applied only to passive cells on boundaries
- *  downstream of the outflux vector instead.
+ *  The total outflux is the sum of the outflow and extrap_out contributions.
+ *  If the total outflux exceeds influx, a uniform inward velocity is applied
+ *  only to passive cells on boundaries upstream of the net (signed) outflux
+ *  vector (e.g. xlo if the vector has a positive x component). If influx
+ *  exceeds the total outflux, the extrap_out cells are instead extrapolated
+ *  from the adjacent interior velocity and scaled by a single factor so that
+ *  the total outflux matches influx.
  *
  *  \param vels_vec     Per-level, per-direction normal velocity MultiFabs
  *  \param bc_types     Incflo BC type for each orientation

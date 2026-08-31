@@ -18,18 +18,22 @@ namespace kynema_sgf {
 namespace {
 
 // Mask values used to tag each boundary cell category
-constexpr int AI_INFLOW_TAG  = -1;
-constexpr int AI_OUTFLOW_TAG = +1;
-constexpr int AI_PASSIVE_TAG = +2;
+constexpr int AI_INFLOW_TAG      = -1;
+constexpr int AI_OUTFLOW_TAG     = +1;
+constexpr int AI_PASSIVE_TAG     = +2;
+constexpr int AI_EXTRAP_OUT_TAG  = +3;
 
 constexpr Real small_vel = 1.e-8_rt;
 
-/** Tag each adapt_inflow boundary cell as inflow, outflow, or passive.
+/** Tag each adapt_inflow boundary cell as inflow, outflow, extrap_out, or
+ *  passive.
  *
  *  For a low boundary, the categorisation is:
- *    inflow:  vel_boundary > 0        (points into domain)
- *    outflow: vel_boundary <= 0  AND  vel_interior < 0
- *    passive: vel_boundary <= 0  AND  vel_interior >= 0
+ *    inflow:      vel_boundary > 0  (points into domain)
+ *    outflow:     vel_boundary < 0  (boundary value itself points outward)
+ *    extrap_out:  vel_boundary == 0 AND vel_interior < 0 (outward, but the
+ *                 boundary value has not been extrapolated yet)
+ *    passive:     vel_boundary == 0 AND vel_interior >= 0
  *
  *  The sign conventions are reversed for high boundaries.
  */
@@ -122,8 +126,10 @@ void set_adapt_inflow_masks(
 
                 if ((oriIsLow && vb > 0) || (oriIsHigh && vb < 0)) {
                     mask_arr(i, j, k) = AI_INFLOW_TAG;
-                } else if ((oriIsLow && vi < 0) || (oriIsHigh && vi > 0)) {
+                } else if ((oriIsLow && vb < 0) || (oriIsHigh && vb > 0)) {
                     mask_arr(i, j, k) = AI_OUTFLOW_TAG;
+                } else if ((oriIsLow && vi < 0) || (oriIsHigh && vi > 0)) {
+                    mask_arr(i, j, k) = AI_EXTRAP_OUT_TAG;
                 } else {
                     mask_arr(i, j, k) = AI_PASSIVE_TAG;
                 }
@@ -132,9 +138,14 @@ void set_adapt_inflow_masks(
     }
 }
 
-/** Accumulate influx, outflux, the directional (signed) outflux vector, and
- *  the passive face area of each individual boundary (orientation) from the
- *  masks.
+/** Accumulate influx, the outflow and extrap_out fluxes, the directional
+ *  (signed) outflux vector, and the passive face area of each individual
+ *  boundary (orientation) from the masks.
+ *
+ *  outflow_flux sums abs(vel_boundary) over outflow-tagged cells, while
+ *  extrap_out_flux sums abs(vel_interior) over extrap_out-tagged cells since
+ *  their boundary value is still zero. outflux_vector is the signed
+ *  combination of both, giving the net direction the outflow is moving in.
  *
  *  passive_area is indexed the same way as bc_types, i.e. orientation index
  *  `dim` is the low side of direction `dim` and `dim + AMREX_SPACEDIM` is the
@@ -147,12 +158,13 @@ void compute_adapt_inflow_fluxes(
     const Box& domain,
     const Real* a_dx,
     Real& influx,
-    Real& outflux,
+    Real& outflow_flux,
+    Real& extrap_out_flux,
     GpuArray<Real, AMREX_SPACEDIM>& outflux_vector,
     GpuArray<Real, AMREX_SPACEDIM * 2>& passive_area,
     const bool corners)
 {
-    influx = 0.0; outflux = 0.0;
+    influx = 0.0; outflow_flux = 0.0; extrap_out_flux = 0.0;
     for (int i = 0; i < AMREX_SPACEDIM; i++) { outflux_vector[i] = 0.0; }
     for (int i = 0; i < AMREX_SPACEDIM * 2; i++) { passive_area[i] = 0.0; }
 
@@ -168,6 +180,11 @@ void compute_adapt_inflow_fluxes(
                             ? domain.smallEnd(idim) - 1
                             : domain.smallEnd(idim);
         const int dhi = domain.bigEnd(idim) + 1;
+
+        // unit step from boundary toward domain interior
+        const int di = (idim == 0) ? 1 : 0;
+        const int dj = (idim == 1) ? 1 : 0;
+        const int dk = (idim == 2) ? 1 : 0;
 
         // grow vector: 1 in normal dir for cell-centered, 0 for face-centered
         IndexType idx_type = vel_mf->ixType();
@@ -196,7 +213,7 @@ void compute_adapt_inflow_fluxes(
                 return {0.0_rt};
             });
 
-        outflux += ds *
+        outflow_flux += ds *
             ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
                       *vel_mf, ngrow,
             [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
@@ -208,6 +225,22 @@ void compute_adapt_inflow_fluxes(
                 return {0.0_rt};
             });
 
+        extrap_out_flux += ds *
+            ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
+                      *vel_mf, ngrow,
+            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
+                noexcept -> GpuTuple<Real>
+            {
+                if (mask_ma[box_no](i, j, k) != AI_EXTRAP_OUT_TAG) {
+                    return {0.0_rt};
+                }
+                const int idx = (idim == 0) ? i : ((idim == 1) ? j : k);
+                const Real vi = (idx == dlo)
+                                    ? vel_ma[box_no](i + di, j + dj, k + dk)
+                                    : vel_ma[box_no](i - di, j - dj, k - dk);
+                return {std::abs(vi)};
+            });
+
         // signed sum gives the net direction the outflow is moving in
         outflux_vector[idim] = ds *
             ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
@@ -215,8 +248,17 @@ void compute_adapt_inflow_fluxes(
             [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
                 noexcept -> GpuTuple<Real>
             {
-                if (mask_ma[box_no](i, j, k) == AI_OUTFLOW_TAG) {
+                const int tag = mask_ma[box_no](i, j, k);
+                if (tag == AI_OUTFLOW_TAG) {
                     return {vel_ma[box_no](i, j, k)};
+                }
+                if (tag == AI_EXTRAP_OUT_TAG) {
+                    const int idx = (idim == 0) ? i : ((idim == 1) ? j : k);
+                    const Real vi =
+                        (idx == dlo)
+                            ? vel_ma[box_no](i + di, j + dj, k + dk)
+                            : vel_ma[box_no](i - di, j - dj, k - dk);
+                    return {vi};
                 }
                 return {0.0_rt};
             });
@@ -249,7 +291,8 @@ void compute_adapt_inflow_fluxes(
     }
 
     ParallelDescriptor::ReduceRealSum(influx);
-    ParallelDescriptor::ReduceRealSum(outflux);
+    ParallelDescriptor::ReduceRealSum(outflow_flux);
+    ParallelDescriptor::ReduceRealSum(extrap_out_flux);
     ParallelDescriptor::ReduceRealSum(outflux_vector.data(), AMREX_SPACEDIM);
     ParallelDescriptor::ReduceRealSum(
         passive_area.data(), AMREX_SPACEDIM * 2);
@@ -355,6 +398,92 @@ void apply_passive_flux(
     }
 }
 
+/** Extrapolate and scale extrap_out cells to supply additional outflow.
+ *
+ *  Each extrap_out cell is re-identified locally (boundary velocity is zero
+ *  and the adjacent interior velocity points outward) and its boundary
+ *  velocity is set to vel_interior * alpha, i.e. the natural extrapolation
+ *  from the interior scaled to hit the required total outflux. Cells whose
+ *  adjacent interior cell is terrain-blanked are left untouched.
+ */
+void apply_extrap_out_scale(
+    const int lev,
+    const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& vels_vec,
+    const GpuArray<BC, AMREX_SPACEDIM * 2>& bc_types,
+    const Box& domain,
+    const Real alpha,
+    const bool corners,
+    const iMultiFab* terrain_blank_mf)
+{
+    for (OrientationIter oit; oit != nullptr; ++oit) {
+        const auto ori = oit();
+        if (bc_types[ori] != BC::adapt_inflow) { continue; }
+
+        const int dir = ori.coordDir();
+        const bool oriIsLow  = ori.isLow();
+        const bool oriIsHigh = ori.isHigh();
+
+        const auto& vel_mf = vels_vec[lev][dir];
+
+        const IndexType::CellIndex dir_idx_type =
+            (vel_mf->ixType()).ixType(dir);
+
+        const int dlo = (dir_idx_type == IndexType::CellIndex::CELL)
+                            ? domain.smallEnd(dir) - 1
+                            : domain.smallEnd(dir);
+        const int dhi  = domain.bigEnd(dir) + 1;
+        const int bndry = oriIsLow ? dlo : dhi;
+
+        const int di = (dir == 0) ? 1 : 0;
+        const int dj = (dir == 1) ? 1 : 0;
+        const int dk = (dir == 2) ? 1 : 0;
+
+        for (MFIter mfi(*vel_mf, false); mfi.isValid(); ++mfi) {
+            Box box = mfi.validbox();
+            if (dir_idx_type == IndexType::CellIndex::CELL) {
+                box.grow(dir, 1);
+            }
+            if (corners) {
+                box.grow((dir + 1) % AMREX_SPACEDIM, 1);
+#if (AMREX_SPACEDIM == 3)
+                box.grow((dir + 2) % AMREX_SPACEDIM, 1);
+#endif
+            }
+
+            if ((oriIsLow  && (box.smallEnd(dir) != dlo)) ||
+                (oriIsHigh && (box.bigEnd(dir)   != dhi))) {
+                continue;
+            }
+
+            Box box2d(box); box2d.setRange(dir, bndry);
+            auto vel_arr = vel_mf->array(mfi);
+            const auto terrain_arr =
+                terrain_blank_mf ? terrain_blank_mf->const_array(mfi)
+                                 : Array4<int const>();
+
+            ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+            {
+                if (terrain_arr) {
+                    IntVect terrain_iv{AMREX_D_DECL(i, j, k)};
+                    terrain_iv[dir] =
+                        oriIsLow ? domain.smallEnd(dir) : domain.bigEnd(dir);
+                    if (terrain_arr(terrain_iv) == 1) { return; }
+                }
+
+                const Real vb = vel_arr(i, j, k);
+                const Real vi = oriIsLow ? vel_arr(i + di, j + dj, k + dk)
+                                         : vel_arr(i - di, j - dj, k - dk);
+
+                const bool is_extrap_out =
+                    (vb == 0) &&
+                    ((oriIsLow && vi < 0) || (oriIsHigh && vi > 0));
+
+                if (is_extrap_out) { vel_arr(i, j, k) = vi * alpha; }
+            });
+        }
+    }
+}
+
 } // file-local namespace
 
 void enforceAdaptInflowSolvability(
@@ -374,7 +503,7 @@ void enforceAdaptInflowSolvability(
     if (!has_adapt_inflow) { return; }
 
     const int nlevs = static_cast<int>(vels_vec.size());
-    Real influx = 0.0, outflux = 0.0;
+    Real influx = 0.0, outflow_flux = 0.0, extrap_out_flux = 0.0;
     GpuArray<Real, AMREX_SPACEDIM> outflux_vector{};
     GpuArray<Real, AMREX_SPACEDIM * 2> passive_area{};
     for (int i = 0; i < AMREX_SPACEDIM; i++) { outflux_vector[i] = 0.0; }
@@ -429,14 +558,15 @@ void enforceAdaptInflowSolvability(
             terrain_blank ? &(*terrain_blank)(lev) : nullptr);
 
         const Real* a_dx = geom[lev].CellSize();
-        Real inf_lev = 0.0, out_lev = 0.0;
+        Real inf_lev = 0.0, outf_lev = 0.0, extrap_lev = 0.0;
         GpuArray<Real, AMREX_SPACEDIM> outvec_lev{};
         GpuArray<Real, AMREX_SPACEDIM * 2> pa_lev{};
         compute_adapt_inflow_fluxes(
-            lev, vels_vec, masks, domain, a_dx, inf_lev, out_lev, outvec_lev,
-            pa_lev, include_bndry_corners);
-        influx  += inf_lev;
-        outflux += out_lev;
+            lev, vels_vec, masks, domain, a_dx, inf_lev, outf_lev,
+            extrap_lev, outvec_lev, pa_lev, include_bndry_corners);
+        influx          += inf_lev;
+        outflow_flux    += outf_lev;
+        extrap_out_flux += extrap_lev;
         for (int i = 0; i < AMREX_SPACEDIM; i++) {
             outflux_vector[i] += outvec_lev[i];
         }
@@ -447,21 +577,42 @@ void enforceAdaptInflowSolvability(
 
     // net imbalance to fix: positive means influx must be added, negative
     // means outflux must be added
-    const Real deficit = outflux - influx;
+    const Real total_outflux = outflow_flux + extrap_out_flux;
+    const Real deficit = total_outflux - influx;
     if (std::abs(deficit) <= small_vel) { return; }
 
     const bool need_more_inflow = deficit > 0;
 
-    // Select, for each direction, which side of the domain is upstream
-    // (need_more_inflow) or downstream (!need_more_inflow) of the net
-    // outflux vector. Only those boundaries receive the passive correction.
+    if (!need_more_inflow) {
+        // Additional outflow is needed: extrapolate extrap_out cells from
+        // their adjacent interior velocity and scale them so that the total
+        // outflux matches influx. The outflow tag cells are left untouched.
+        const Real desired_extra_outflow = influx - outflow_flux;
+        if (extrap_out_flux < small_vel) {
+            amrex::Abort(
+                "enforceAdaptInflowSolvability: no extrap_out cells are "
+                "available on any adapt_inflow boundary to supply the "
+                "required additional outflow");
+        }
+
+        const Real alpha = desired_extra_outflow / extrap_out_flux;
+        for (int lev = 0; lev < nlevs; ++lev) {
+            apply_extrap_out_scale(
+                lev, vels_vec, bc_types, geom[lev].Domain(), alpha,
+                include_bndry_corners,
+                terrain_blank ? &(*terrain_blank)(lev) : nullptr);
+        }
+        return;
+    }
+
+    // Select, for each direction, which side of the domain is upstream of
+    // the net outflux vector. Only those boundaries receive the passive
+    // inflow correction.
     GpuArray<bool, AMREX_SPACEDIM> selected_lo{};
     GpuArray<bool, AMREX_SPACEDIM> selected_hi{};
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-        const bool vec_positive = outflux_vector[idim] > 0;
-        const bool vec_negative = outflux_vector[idim] < 0;
-        selected_lo[idim] = need_more_inflow ? vec_positive : vec_negative;
-        selected_hi[idim] = need_more_inflow ? vec_negative : vec_positive;
+        selected_lo[idim] = outflux_vector[idim] > 0;
+        selected_hi[idim] = outflux_vector[idim] < 0;
     }
 
     Real selected_area = 0.0;
