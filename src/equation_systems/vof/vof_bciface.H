@@ -55,6 +55,7 @@ protected:
             case BC::wave_generation:
             case BC::mass_inflow:
             case BC::mass_inflow_outflow:
+            case BC::adapt_inflow:
                 if (side == amrex::Orientation::low) {
                     set_bcrec_lo(dir, amrex::BCType::ext_dir);
                 } else {
@@ -83,7 +84,8 @@ protected:
             const auto bct = bctype[ori];
 
             amrex::ParmParse pp(bcid);
-            if (bct == BC::mass_inflow || bct == BC::mass_inflow_outflow) {
+            if (bct == BC::mass_inflow || bct == BC::mass_inflow_outflow ||
+                bct == BC::adapt_inflow) {
                 pp.getarr(fname, bcval[ori], 0, ndim);
             } else {
                 pp.queryarr(fname, bcval[ori], 0, ndim);
@@ -136,6 +138,7 @@ protected:
             case BC::wave_generation:
             case BC::mass_inflow:
             case BC::mass_inflow_outflow:
+            case BC::adapt_inflow:
                 if (side == amrex::Orientation::low) {
                     set_bcrec_lo(dir, amrex::BCType::ext_dir);
                 } else {
@@ -164,7 +167,8 @@ protected:
             const auto bct = bctype[ori];
 
             amrex::ParmParse pp(bcid);
-            if (bct == BC::mass_inflow || bct == BC::mass_inflow_outflow) {
+            if (bct == BC::mass_inflow || bct == BC::mass_inflow_outflow ||
+                bct == BC::adapt_inflow) {
                 pp.getarr(fname, bcval[ori], 0, ndim);
             } else {
                 pp.queryarr(fname, bcval[ori], 0, ndim);
