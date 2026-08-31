@@ -347,12 +347,14 @@ void set_extrap_out_or_passive_masks(
     }
 }
 
-/** Accumulate influx, the outflow and extrap_out fluxes, and the total
- *  passive face area from the (fully classified) masks.
+/** Accumulate influx, the outflow and extrap_out fluxes, the extrap_out
+ *  area, and the total passive face area from the (fully classified) masks.
  *
  *  outflow_flux sums abs(vel_boundary) over outflow-tagged cells, while
  *  extrap_out_flux sums abs(vel_interior) over extrap_out-tagged cells since
- *  their boundary value has not been extrapolated yet.
+ *  their boundary value has not been extrapolated yet. extrap_out_area is
+ *  the plain face area of the extrap_out-tagged cells, used to convert a
+ *  flux deficit into a uniform additive velocity correction.
  */
 void compute_adapt_inflow_fluxes(
     const int lev,
@@ -363,12 +365,14 @@ void compute_adapt_inflow_fluxes(
     Real& influx,
     Real& outflow_flux,
     Real& extrap_out_flux,
+    Real& extrap_out_area,
     Real& passive_area,
     const bool corners)
 {
     influx = 0.0;
     outflow_flux = 0.0;
     extrap_out_flux = 0.0;
+    extrap_out_area = 0.0;
     passive_area = 0.0;
 
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
@@ -446,6 +450,17 @@ void compute_adapt_inflow_fluxes(
                     return {std::abs(vi)};
                 });
 
+        extrap_out_area +=
+            ds *
+            ParReduce(
+                TypeList<ReduceOpSum>{}, TypeList<Real>{}, *vel_mf, ngrow,
+                [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept
+                    -> GpuTuple<Real> {
+                    return {(mask_ma[box_no](i, j, k) == AI_EXTRAP_OUT_TAG)
+                                ? 1.0_rt
+                                : 0.0_rt};
+                });
+
         passive_area +=
             ds *
             ParReduce(
@@ -461,6 +476,7 @@ void compute_adapt_inflow_fluxes(
     ParallelDescriptor::ReduceRealSum(influx);
     ParallelDescriptor::ReduceRealSum(outflow_flux);
     ParallelDescriptor::ReduceRealSum(extrap_out_flux);
+    ParallelDescriptor::ReduceRealSum(extrap_out_area);
     ParallelDescriptor::ReduceRealSum(passive_area);
 }
 
@@ -534,21 +550,22 @@ void apply_passive_flux(
     }
 }
 
-/** Extrapolate extrap_out cells from the interior, optionally scaled.
+/** Extrapolate extrap_out cells from the interior, optionally corrected.
  *
  *  extrap_out cells are read directly from the persisted category mask; the
- *  boundary velocity is set to vel_interior * alpha. This is always called
- *  with at least alpha = 1 so that extrap_out boundary values are always
- *  populated; alpha differs from 1 only when additional outflow is needed to
+ *  boundary velocity is set to the outward part of vel_interior plus a
+ *  uniform outward correction velocity v_add. This is always called (with
+ *  v_add = 0 by default) so that extrap_out boundary values are always
+ *  populated; v_add is only nonzero when additional outflow is needed to
  *  match influx.
  */
-void apply_extrap_out_scale(
+void apply_extrap_out_correction(
     const int lev,
     const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& vels_vec,
     const GpuArray<BC, AMREX_SPACEDIM * 2>& bc_types,
     const Box& domain,
     const Array<iMultiFab, AMREX_SPACEDIM>& masks,
-    const Real alpha,
+    const Real v_add,
     const bool corners)
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
@@ -576,6 +593,9 @@ void apply_extrap_out_scale(
         const int di = (dir == 0) ? 1 : 0;
         const int dj = (dir == 1) ? 1 : 0;
         const int dk = (dir == 2) ? 1 : 0;
+
+        // outward correction: negative for low boundary, positive for high
+        const Real v_outward = oriIsLow ? -v_add : v_add;
 
         for (MFIter mfi(*vel_mf, false); mfi.isValid(); ++mfi) {
             Box box = mfi.validbox();
@@ -609,13 +629,14 @@ void apply_extrap_out_scale(
                 // Only retain outflow
                 vi = oriIsLow ? amrex::min<Real>(vi, 0.0_rt)
                               : amrex::max<Real>(vi, 0.0_rt);
-                vel_arr(i, j, k) = vi * alpha;
+                vel_arr(i, j, k) = vi + v_outward;
             });
         }
     }
 }
 
 } // namespace
+
 
 void enforceAdaptInflowSolvability(
     const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& vels_vec,
@@ -718,6 +739,7 @@ void enforceAdaptInflowSolvability(
     }
 
     Real influx = 0.0, outflow_flux = 0.0, extrap_out_flux = 0.0;
+    Real extrap_out_area = 0.0;
     Real passive_area = 0.0;
 
     for (int lev = 0; lev < nlevs; ++lev) {
@@ -728,13 +750,15 @@ void enforceAdaptInflowSolvability(
             allow_outflow_hi);
 
         Real inf_lev = 0.0, outf_lev = 0.0, extrap_lev = 0.0, pa_lev = 0.0;
+        Real extrap_area_lev = 0.0;
         compute_adapt_inflow_fluxes(
             lev, vels_vec, masks_vec[lev], geom[lev].Domain(),
-            geom[lev].CellSize(), inf_lev, outf_lev, extrap_lev, pa_lev,
-            include_bndry_corners);
+            geom[lev].CellSize(), inf_lev, outf_lev, extrap_lev,
+            extrap_area_lev, pa_lev, include_bndry_corners);
         influx += inf_lev;
         outflow_flux += outf_lev;
         extrap_out_flux += extrap_lev;
+        extrap_out_area += extrap_area_lev;
         passive_area += pa_lev;
     }
 
@@ -744,23 +768,24 @@ void enforceAdaptInflowSolvability(
     const Real deficit = total_outflux - influx;
 
     // extrap_out cells always get their boundary value extrapolated from the
-    // adjacent interior velocity (alpha = 1); they are additionally scaled
-    // only when more outflow is needed to match influx (deficit < 0).
-    Real alpha = 1.0_rt;
+    // adjacent interior velocity (v_add = 0); a uniform additive outward
+    // correction is applied on top only when more outflow is needed to
+    // match influx (deficit < 0).
+    Real v_add = 0.0_rt;
     if (deficit < -small_vel) {
-        if (extrap_out_flux < small_vel) {
+        if (extrap_out_area < small_vel) {
             amrex::Abort(
                 "enforceAdaptInflowSolvability: no extrap_out cells are "
                 "available on any adapt_inflow boundary to supply the "
                 "required additional outflow");
         }
-        alpha = (influx - outflow_flux) / extrap_out_flux;
+        v_add = -deficit / extrap_out_area;
     }
 
     for (int lev = 0; lev < nlevs; ++lev) {
-        apply_extrap_out_scale(
-            lev, vels_vec, bc_types, geom[lev].Domain(), masks_vec[lev], alpha,
-            include_bndry_corners);
+        apply_extrap_out_correction(
+            lev, vels_vec, bc_types, geom[lev].Domain(), masks_vec[lev],
+            v_add, include_bndry_corners);
     }
 
     // Even if balance is already satisfied, make sure to disable outflow at
