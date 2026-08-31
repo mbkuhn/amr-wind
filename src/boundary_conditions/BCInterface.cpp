@@ -1,6 +1,5 @@
 #include "src/boundary_conditions/BCInterface.H"
 #include "src/core/FieldRepo.H"
-#include "src/boundary_conditions/AdaptInflowBC.H"
 #include "src/boundary_conditions/FixedGradientBC.H"
 #include "src/boundary_conditions/MassInflowOutflowBC.H"
 #include "AMReX_ParmParse.H"
@@ -114,13 +113,6 @@ void BCIface::set_bcfuncs()
             (bct == BC::mass_inflow_outflow)) {
 
             m_field.register_custom_bc<MassInflowOutflowBC>(ori);
-        }
-
-        if (((m_field.name() == "velocity") ||
-             (m_field.name() == "temperature")) &&
-            (bct == BC::adapt_inflow)) {
-
-            m_field.register_custom_bc<AdaptInflowBC>(ori);
         }
     }
 }
