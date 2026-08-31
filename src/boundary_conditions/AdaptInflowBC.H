@@ -4,6 +4,9 @@
 #include "src/core/FieldBCOps.H"
 #include "src/core/FieldRepo.H"
 #include "AMReX_Orientation.H"
+#include "AMReX_REAL.H"
+
+using namespace amrex::literals;
 
 namespace kynema_sgf {
 
