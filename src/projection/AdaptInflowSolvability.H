@@ -14,25 +14,25 @@ namespace kynema_sgf {
 
 /** Enforce mass conservation for the adapt_inflow boundary condition.
  *
- *  Classifies each adapt_inflow boundary cell into one of four categories:
- *    - inflow:      velocity at the boundary points into the domain, and
- *                   (if a vof field is supplied) the boundary cell is wet
- *    - outflow:     velocity at the boundary itself points outward, and
- *                   (if a vof field is supplied) the adjacent interior cell
- *                   is wet
- *    - extrap_out:  velocity just inside the domain points outward (no
- *                   check on the boundary velocity or on vof)
- *    - passive:     the remaining cells (neither inflow, outflow, nor
- *                   extrap_out)
+ *  Classification proceeds in two stages:
+ *    1. inflow:   velocity at the boundary points into the domain, and
+ *                 (if a vof field is supplied) the boundary cell is wet
+ *       outflow:  velocity at the boundary itself points outward, and
+ *                 (if a vof field is supplied) the adjacent interior cell
+ *                 is wet
+ *    2. The net (signed) direction of the outflow-tagged cells determines
+ *       which boundary of each direction "allows outflow" (e.g. xhi if that
+ *       direction's component is positive). All remaining (still
+ *       unclassified) cells on an allowed boundary become extrap_out; all
+ *       remaining cells on the opposite boundary become passive.
  *
  *  The total outflux is the sum of the outflow and extrap_out contributions.
  *  extrap_out boundary values are always extrapolated from the adjacent
  *  interior velocity, regardless of the flux balance. If influx exceeds the
  *  total outflux, that extrapolated value is additionally scaled by a single
  *  factor so that the total outflux matches influx. If the total outflux
- *  exceeds influx instead, a uniform inward velocity is applied to passive
- *  cells on boundaries upstream of the net (signed) outflux vector (e.g. xlo
- *  if the vector has a positive x component).
+ *  exceeds influx instead, a uniform inward velocity is applied to all
+ *  passive cells.
  *
  *  \param vels_vec     Per-level, per-direction normal velocity MultiFabs
  *  \param bc_types     Incflo BC type for each orientation
