@@ -19,10 +19,10 @@ namespace {
 
 // Mask values used to tag each boundary cell category. 0 (the iMultiFab
 // default) means "not yet classified".
-constexpr int AI_INFLOW_TAG      = -1;
-constexpr int AI_OUTFLOW_TAG     = +1;
-constexpr int AI_PASSIVE_TAG     = +2;
-constexpr int AI_EXTRAP_OUT_TAG  = +3;
+constexpr int AI_INFLOW_TAG = -1;
+constexpr int AI_OUTFLOW_TAG = +1;
+constexpr int AI_PASSIVE_TAG = +2;
+constexpr int AI_EXTRAP_OUT_TAG = +3;
 
 constexpr Real small_vel = 1.e-8_rt;
 
@@ -80,14 +80,16 @@ void set_inflow_outflow_masks(
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
-        if (bc_types[ori] != BC::adapt_inflow) { continue; }
+        if (bc_types[ori] != BC::adapt_inflow) {
+            continue;
+        }
 
         const int dir = ori.coordDir();
-        const bool oriIsLow  = ori.isLow();
+        const bool oriIsLow = ori.isLow();
         const bool oriIsHigh = ori.isHigh();
 
         const auto& vel_mf = vels_vec[lev][dir];
-        auto& mask         = masks[dir];
+        auto& mask = masks[dir];
         const auto& level_mask = level_masks[dir];
 
         const IndexType::CellIndex dir_idx_type =
@@ -115,42 +117,56 @@ void set_inflow_outflow_masks(
             }
             if (corners) {
                 const int t1 = (dir + 1) % AMREX_SPACEDIM;
-                if (box.smallEnd(t1) == domain.smallEnd(t1)) { box.growLo(t1, 1); }
-                if (box.bigEnd(t1)   == domain.bigEnd(t1))   { box.growHi(t1, 1); }
+                if (box.smallEnd(t1) == domain.smallEnd(t1)) {
+                    box.growLo(t1, 1);
+                }
+                if (box.bigEnd(t1) == domain.bigEnd(t1)) {
+                    box.growHi(t1, 1);
+                }
 #if (AMREX_SPACEDIM == 3)
                 const int t2 = (dir + 2) % AMREX_SPACEDIM;
-                if (box.smallEnd(t2) == domain.smallEnd(t2)) { box.growLo(t2, 1); }
-                if (box.bigEnd(t2)   == domain.bigEnd(t2))   { box.growHi(t2, 1); }
+                if (box.smallEnd(t2) == domain.smallEnd(t2)) {
+                    box.growLo(t2, 1);
+                }
+                if (box.bigEnd(t2) == domain.bigEnd(t2)) {
+                    box.growHi(t2, 1);
+                }
 #endif
             }
 
-            const bool at_lo_bndry = oriIsLow  && (box.smallEnd(dir) == dlo);
-            const bool at_hi_bndry = oriIsHigh && (box.bigEnd(dir)   == dhi);
-            if (!at_lo_bndry && !at_hi_bndry) { continue; }
+            const bool at_lo_bndry = oriIsLow && (box.smallEnd(dir) == dlo);
+            const bool at_hi_bndry = oriIsHigh && (box.bigEnd(dir) == dhi);
+            if (!at_lo_bndry && !at_hi_bndry) {
+                continue;
+            }
 
-            Box box2d(box); box2d.setRange(dir, bndry);
+            Box box2d(box);
+            box2d.setRange(dir, bndry);
 
-            const auto vel_arr        = vel_mf->array(mfi);
-            auto       mask_arr       = mask.array(mfi);
+            const auto vel_arr = vel_mf->array(mfi);
+            auto mask_arr = mask.array(mfi);
             const auto level_mask_arr = level_mask.const_array(mfi);
-            const auto terrain_arr =
-                terrain_blank_mf ? terrain_blank_mf->const_array(mfi)
-                                 : Array4<int const>();
+            const auto terrain_arr = terrain_blank_mf
+                                         ? terrain_blank_mf->const_array(mfi)
+                                         : Array4<int const>();
             const auto vof_arr =
                 vof_mf ? vof_mf->const_array(mfi) : Array4<Real const>();
 
-            ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
-            {
+            ParallelFor(box2d, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
                 const IntVect iv{AMREX_D_DECL(i, j, k)};
                 const IntVect lm_idx =
                     amrex::max(amrex::min(iv, ungrown_bg), ungrown_sm);
-                if (level_mask_arr(lm_idx) != 1) { return; }
+                if (level_mask_arr(lm_idx) != 1) {
+                    return;
+                }
 
                 if (terrain_arr) {
                     IntVect terrain_iv{AMREX_D_DECL(i, j, k)};
                     terrain_iv[dir] =
                         oriIsLow ? domain.smallEnd(dir) : domain.bigEnd(dir);
-                    if (terrain_arr(terrain_iv) == 1) { return; }
+                    if (terrain_arr(terrain_iv) == 1) {
+                        return;
+                    }
                 }
 
                 const Real vb = vel_arr(i, j, k);
@@ -158,10 +174,9 @@ void set_inflow_outflow_masks(
                 const bool vof_bndry_wet =
                     !vof_arr || (vof_arr(i, j, k) > vof_threshold);
                 const bool vof_interior_wet =
-                    !vof_arr ||
-                    ((oriIsLow ? vof_arr(i + di, j + dj, k + dk)
-                               : vof_arr(i - di, j - dj, k - dk)) >
-                     vof_threshold);
+                    !vof_arr || ((oriIsLow ? vof_arr(i + di, j + dj, k + dk)
+                                           : vof_arr(i - di, j - dj, k - dk)) >
+                                 vof_threshold);
 
                 mask_arr(i, j, k) = classify_inflow_outflow(
                     vb, oriIsLow, oriIsHigh, vof_bndry_wet, vof_interior_wet);
@@ -181,11 +196,13 @@ void compute_outflow_vector(
     GpuArray<Real, AMREX_SPACEDIM>& outflow_vector,
     const bool corners)
 {
-    for (int i = 0; i < AMREX_SPACEDIM; i++) { outflow_vector[i] = 0.0; }
+    for (int i = 0; i < AMREX_SPACEDIM; i++) {
+        outflow_vector[i] = 0.0;
+    }
 
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-        const Real ds = a_dx[(idim + 1) % AMREX_SPACEDIM]
-                      * a_dx[(idim + 2) % AMREX_SPACEDIM];
+        const Real ds = a_dx[(idim + 1) % AMREX_SPACEDIM] *
+                        a_dx[(idim + 2) % AMREX_SPACEDIM];
         const auto& vel_mf = vels_vec[lev][idim];
 
         IndexType idx_type = vel_mf->ixType();
@@ -199,20 +216,20 @@ void compute_outflow_vector(
         }
 
         const auto& mask = masks[idim];
-        const auto vel_ma  = vel_mf->const_arrays();
+        const auto vel_ma = vel_mf->const_arrays();
         const auto mask_ma = mask.const_arrays();
 
-        outflow_vector[idim] = ds *
-            ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
-                      *vel_mf, ngrow,
-            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
-                noexcept -> GpuTuple<Real>
-            {
-                if (mask_ma[box_no](i, j, k) == AI_OUTFLOW_TAG) {
-                    return {vel_ma[box_no](i, j, k)};
-                }
-                return {0.0_rt};
-            });
+        outflow_vector[idim] =
+            ds * ParReduce(
+                     TypeList<ReduceOpSum>{}, TypeList<Real>{}, *vel_mf, ngrow,
+                     [=] AMREX_GPU_DEVICE(
+                         int box_no, int i, int j,
+                         int k) noexcept -> GpuTuple<Real> {
+                         if (mask_ma[box_no](i, j, k) == AI_OUTFLOW_TAG) {
+                             return {vel_ma[box_no](i, j, k)};
+                         }
+                         return {0.0_rt};
+                     });
     }
 
     ParallelDescriptor::ReduceRealSum(outflow_vector.data(), AMREX_SPACEDIM);
@@ -238,17 +255,19 @@ void set_extrap_out_or_passive_masks(
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
-        if (bc_types[ori] != BC::adapt_inflow) { continue; }
+        if (bc_types[ori] != BC::adapt_inflow) {
+            continue;
+        }
 
         const int dir = ori.coordDir();
-        const bool oriIsLow  = ori.isLow();
+        const bool oriIsLow = ori.isLow();
         const bool oriIsHigh = ori.isHigh();
         const int new_tag =
             (oriIsLow ? allow_outflow_lo[dir] : allow_outflow_hi[dir])
                 ? AI_EXTRAP_OUT_TAG
                 : AI_PASSIVE_TAG;
 
-        auto& mask             = masks[dir];
+        auto& mask = masks[dir];
         const auto& level_mask = level_masks[dir];
 
         const IndexType::CellIndex dir_idx_type = mask.ixType().ixType(dir);
@@ -269,42 +288,58 @@ void set_extrap_out_or_passive_masks(
             }
             if (corners) {
                 const int t1 = (dir + 1) % AMREX_SPACEDIM;
-                if (box.smallEnd(t1) == domain.smallEnd(t1)) { box.growLo(t1, 1); }
-                if (box.bigEnd(t1)   == domain.bigEnd(t1))   { box.growHi(t1, 1); }
+                if (box.smallEnd(t1) == domain.smallEnd(t1)) {
+                    box.growLo(t1, 1);
+                }
+                if (box.bigEnd(t1) == domain.bigEnd(t1)) {
+                    box.growHi(t1, 1);
+                }
 #if (AMREX_SPACEDIM == 3)
                 const int t2 = (dir + 2) % AMREX_SPACEDIM;
-                if (box.smallEnd(t2) == domain.smallEnd(t2)) { box.growLo(t2, 1); }
-                if (box.bigEnd(t2)   == domain.bigEnd(t2))   { box.growHi(t2, 1); }
+                if (box.smallEnd(t2) == domain.smallEnd(t2)) {
+                    box.growLo(t2, 1);
+                }
+                if (box.bigEnd(t2) == domain.bigEnd(t2)) {
+                    box.growHi(t2, 1);
+                }
 #endif
             }
 
-            const bool at_lo_bndry = oriIsLow  && (box.smallEnd(dir) == dlo);
-            const bool at_hi_bndry = oriIsHigh && (box.bigEnd(dir)   == dhi);
-            if (!at_lo_bndry && !at_hi_bndry) { continue; }
+            const bool at_lo_bndry = oriIsLow && (box.smallEnd(dir) == dlo);
+            const bool at_hi_bndry = oriIsHigh && (box.bigEnd(dir) == dhi);
+            if (!at_lo_bndry && !at_hi_bndry) {
+                continue;
+            }
 
-            Box box2d(box); box2d.setRange(dir, bndry);
+            Box box2d(box);
+            box2d.setRange(dir, bndry);
 
-            auto       mask_arr       = mask.array(mfi);
+            auto mask_arr = mask.array(mfi);
             const auto level_mask_arr = level_mask.const_array(mfi);
-            const auto terrain_arr =
-                terrain_blank_mf ? terrain_blank_mf->const_array(mfi)
-                                 : Array4<int const>();
+            const auto terrain_arr = terrain_blank_mf
+                                         ? terrain_blank_mf->const_array(mfi)
+                                         : Array4<int const>();
 
-            ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
-            {
+            ParallelFor(box2d, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
                 const IntVect iv{AMREX_D_DECL(i, j, k)};
                 const IntVect lm_idx =
                     amrex::max(amrex::min(iv, ungrown_bg), ungrown_sm);
-                if (level_mask_arr(lm_idx) != 1) { return; }
+                if (level_mask_arr(lm_idx) != 1) {
+                    return;
+                }
 
                 if (terrain_arr) {
                     IntVect terrain_iv{AMREX_D_DECL(i, j, k)};
                     terrain_iv[dir] =
                         oriIsLow ? domain.smallEnd(dir) : domain.bigEnd(dir);
-                    if (terrain_arr(terrain_iv) == 1) { return; }
+                    if (terrain_arr(terrain_iv) == 1) {
+                        return;
+                    }
                 }
 
-                if (mask_arr(i, j, k) != 0) { return; }
+                if (mask_arr(i, j, k) != 0) {
+                    return;
+                }
 
                 mask_arr(i, j, k) = new_tag;
             });
@@ -331,11 +366,14 @@ void compute_adapt_inflow_fluxes(
     Real& passive_area,
     const bool corners)
 {
-    influx = 0.0; outflow_flux = 0.0; extrap_out_flux = 0.0; passive_area = 0.0;
+    influx = 0.0;
+    outflow_flux = 0.0;
+    extrap_out_flux = 0.0;
+    passive_area = 0.0;
 
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-        const Real ds = a_dx[(idim + 1) % AMREX_SPACEDIM]
-                      * a_dx[(idim + 2) % AMREX_SPACEDIM];
+        const Real ds = a_dx[(idim + 1) % AMREX_SPACEDIM] *
+                        a_dx[(idim + 2) % AMREX_SPACEDIM];
 
         const auto& vel_mf = vels_vec[lev][idim];
 
@@ -362,59 +400,62 @@ void compute_adapt_inflow_fluxes(
         }
 
         const auto& mask = masks[idim];
-        const auto vel_ma  = vel_mf->const_arrays();
+        const auto vel_ma = vel_mf->const_arrays();
         const auto mask_ma = mask.const_arrays();
 
-        influx += ds *
-            ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
-                      *vel_mf, ngrow,
-            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
-                noexcept -> GpuTuple<Real>
-            {
-                if (mask_ma[box_no](i, j, k) == AI_INFLOW_TAG) {
-                    return {std::abs(vel_ma[box_no](i, j, k))};
-                }
-                return {0.0_rt};
-            });
+        influx +=
+            ds * ParReduce(
+                     TypeList<ReduceOpSum>{}, TypeList<Real>{}, *vel_mf, ngrow,
+                     [=] AMREX_GPU_DEVICE(
+                         int box_no, int i, int j,
+                         int k) noexcept -> GpuTuple<Real> {
+                         if (mask_ma[box_no](i, j, k) == AI_INFLOW_TAG) {
+                             return {std::abs(vel_ma[box_no](i, j, k))};
+                         }
+                         return {0.0_rt};
+                     });
 
-        outflow_flux += ds *
-            ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
-                      *vel_mf, ngrow,
-            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
-                noexcept -> GpuTuple<Real>
-            {
-                if (mask_ma[box_no](i, j, k) == AI_OUTFLOW_TAG) {
-                    return {std::abs(vel_ma[box_no](i, j, k))};
-                }
-                return {0.0_rt};
-            });
+        outflow_flux +=
+            ds * ParReduce(
+                     TypeList<ReduceOpSum>{}, TypeList<Real>{}, *vel_mf, ngrow,
+                     [=] AMREX_GPU_DEVICE(
+                         int box_no, int i, int j,
+                         int k) noexcept -> GpuTuple<Real> {
+                         if (mask_ma[box_no](i, j, k) == AI_OUTFLOW_TAG) {
+                             return {std::abs(vel_ma[box_no](i, j, k))};
+                         }
+                         return {0.0_rt};
+                     });
 
-        extrap_out_flux += ds *
-            ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
-                      *vel_mf, ngrow,
-            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
-                noexcept -> GpuTuple<Real>
-            {
-                if (mask_ma[box_no](i, j, k) != AI_EXTRAP_OUT_TAG) {
-                    return {0.0_rt};
-                }
-                const int idx = (idim == 0) ? i : ((idim == 1) ? j : k);
-                const Real vi = (idx == dlo)
-                                    ? vel_ma[box_no](i + di, j + dj, k + dk)
-                                    : vel_ma[box_no](i - di, j - dj, k - dk);
-                return {std::abs(vi)};
-            });
+        extrap_out_flux +=
+            ds *
+            ParReduce(
+                TypeList<ReduceOpSum>{}, TypeList<Real>{}, *vel_mf, ngrow,
+                [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept
+                    -> GpuTuple<Real> {
+                    if (mask_ma[box_no](i, j, k) != AI_EXTRAP_OUT_TAG) {
+                        return {0.0_rt};
+                    }
+                    const int idx = (idim == 0) ? i : ((idim == 1) ? j : k);
+                    Real vi = (idx == dlo)
+                                  ? vel_ma[box_no](i + di, j + dj, k + dk)
+                                  : vel_ma[box_no](i - di, j - dj, k - dk);
+                    // Only count outflow
+                    vi = (idx == dlo) ? amrex::min<Real>(vi, 0.0_rt)
+                                      : amrex::max<Real>(vi, 0.0_rt);
+                    return {std::abs(vi)};
+                });
 
-        passive_area += ds *
-            ParReduce(TypeList<ReduceOpSum>{}, TypeList<Real>{},
-                      *vel_mf, ngrow,
-            [=] AMREX_GPU_DEVICE (int box_no, int i, int j, int k)
-                noexcept -> GpuTuple<Real>
-            {
-                return {(mask_ma[box_no](i, j, k) == AI_PASSIVE_TAG)
-                            ? 1.0_rt
-                            : 0.0_rt};
-            });
+        passive_area +=
+            ds *
+            ParReduce(
+                TypeList<ReduceOpSum>{}, TypeList<Real>{}, *vel_mf, ngrow,
+                [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept
+                    -> GpuTuple<Real> {
+                    return {
+                        (mask_ma[box_no](i, j, k) == AI_PASSIVE_TAG) ? 1.0_rt
+                                                                     : 0.0_rt};
+                });
     }
 
     ParallelDescriptor::ReduceRealSum(influx);
@@ -439,14 +480,16 @@ void apply_passive_flux(
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
-        if (bc_types[ori] != BC::adapt_inflow) { continue; }
+        if (bc_types[ori] != BC::adapt_inflow) {
+            continue;
+        }
 
         const int dir = ori.coordDir();
-        const bool oriIsLow  = ori.isLow();
+        const bool oriIsLow = ori.isLow();
         const bool oriIsHigh = ori.isHigh();
 
         const auto& vel_mf = vels_vec[lev][dir];
-        const auto& mask   = masks[dir];
+        const auto& mask = masks[dir];
 
         const IndexType::CellIndex dir_idx_type =
             (vel_mf->ixType()).ixType(dir);
@@ -454,7 +497,7 @@ void apply_passive_flux(
         const int dlo = (dir_idx_type == IndexType::CellIndex::CELL)
                             ? domain.smallEnd(dir) - 1
                             : domain.smallEnd(dir);
-        const int dhi  = domain.bigEnd(dir) + 1;
+        const int dhi = domain.bigEnd(dir) + 1;
         const int bndry = oriIsLow ? dlo : dhi;
 
         // inward speed: positive for low boundary, negative for high
@@ -472,17 +515,17 @@ void apply_passive_flux(
 #endif
             }
 
-            if ((oriIsLow  && (box.smallEnd(dir) != dlo)) ||
-                (oriIsHigh && (box.bigEnd(dir)   != dhi))) {
+            if ((oriIsLow && (box.smallEnd(dir) != dlo)) ||
+                (oriIsHigh && (box.bigEnd(dir) != dhi))) {
                 continue;
             }
 
-            Box box2d(box); box2d.setRange(dir, bndry);
+            Box box2d(box);
+            box2d.setRange(dir, bndry);
             auto vel_arr = vel_mf->array(mfi);
             const auto mask_arr = mask.const_array(mfi);
 
-            ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
-            {
+            ParallelFor(box2d, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
                 if (mask_arr(i, j, k) == AI_PASSIVE_TAG) {
                     vel_arr(i, j, k) = v_inward;
                 }
@@ -510,14 +553,16 @@ void apply_extrap_out_scale(
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
-        if (bc_types[ori] != BC::adapt_inflow) { continue; }
+        if (bc_types[ori] != BC::adapt_inflow) {
+            continue;
+        }
 
         const int dir = ori.coordDir();
-        const bool oriIsLow  = ori.isLow();
+        const bool oriIsLow = ori.isLow();
         const bool oriIsHigh = ori.isHigh();
 
         const auto& vel_mf = vels_vec[lev][dir];
-        const auto& mask   = masks[dir];
+        const auto& mask = masks[dir];
 
         const IndexType::CellIndex dir_idx_type =
             (vel_mf->ixType()).ixType(dir);
@@ -525,7 +570,7 @@ void apply_extrap_out_scale(
         const int dlo = (dir_idx_type == IndexType::CellIndex::CELL)
                             ? domain.smallEnd(dir) - 1
                             : domain.smallEnd(dir);
-        const int dhi  = domain.bigEnd(dir) + 1;
+        const int dhi = domain.bigEnd(dir) + 1;
         const int bndry = oriIsLow ? dlo : dhi;
 
         const int di = (dir == 0) ? 1 : 0;
@@ -544,28 +589,33 @@ void apply_extrap_out_scale(
 #endif
             }
 
-            if ((oriIsLow  && (box.smallEnd(dir) != dlo)) ||
-                (oriIsHigh && (box.bigEnd(dir)   != dhi))) {
+            if ((oriIsLow && (box.smallEnd(dir) != dlo)) ||
+                (oriIsHigh && (box.bigEnd(dir) != dhi))) {
                 continue;
             }
 
-            Box box2d(box); box2d.setRange(dir, bndry);
+            Box box2d(box);
+            box2d.setRange(dir, bndry);
             auto vel_arr = vel_mf->array(mfi);
             const auto mask_arr = mask.const_array(mfi);
 
-            ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
-            {
-                if (mask_arr(i, j, k) != AI_EXTRAP_OUT_TAG) { return; }
+            ParallelFor(box2d, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                if (mask_arr(i, j, k) != AI_EXTRAP_OUT_TAG) {
+                    return;
+                }
 
-                const Real vi = oriIsLow ? vel_arr(i + di, j + dj, k + dk)
-                                         : vel_arr(i - di, j - dj, k - dk);
+                Real vi = oriIsLow ? vel_arr(i + di, j + dj, k + dk)
+                                   : vel_arr(i - di, j - dj, k - dk);
+                // Only retain outflow
+                vi = oriIsLow ? amrex::min<Real>(vi, 0.0_rt)
+                              : amrex::max<Real>(vi, 0.0_rt);
                 vel_arr(i, j, k) = vi * alpha;
             });
         }
     }
 }
 
-} // file-local namespace
+} // namespace
 
 void enforceAdaptInflowSolvability(
     const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& vels_vec,
@@ -582,7 +632,9 @@ void enforceAdaptInflowSolvability(
             break;
         }
     }
-    if (!has_adapt_inflow) { return; }
+    if (!has_adapt_inflow) {
+        return;
+    }
 
     const int nlevs = static_cast<int>(vels_vec.size());
 
@@ -641,7 +693,9 @@ void enforceAdaptInflowSolvability(
 
     // Net direction of the (already-identified) outflow.
     GpuArray<Real, AMREX_SPACEDIM> outflow_vector{};
-    for (int i = 0; i < AMREX_SPACEDIM; i++) { outflow_vector[i] = 0.0; }
+    for (int i = 0; i < AMREX_SPACEDIM; i++) {
+        outflow_vector[i] = 0.0;
+    }
     for (int lev = 0; lev < nlevs; ++lev) {
         GpuArray<Real, AMREX_SPACEDIM> ov_lev{};
         compute_outflow_vector(
@@ -668,8 +722,8 @@ void enforceAdaptInflowSolvability(
 
     for (int lev = 0; lev < nlevs; ++lev) {
         set_extrap_out_or_passive_masks(
-            masks_vec[lev], level_masks_vec[lev], bc_types,
-            geom[lev].Domain(), include_bndry_corners,
+            masks_vec[lev], level_masks_vec[lev], bc_types, geom[lev].Domain(),
+            include_bndry_corners,
             terrain_blank ? &(*terrain_blank)(lev) : nullptr, allow_outflow_lo,
             allow_outflow_hi);
 
@@ -678,10 +732,10 @@ void enforceAdaptInflowSolvability(
             lev, vels_vec, masks_vec[lev], geom[lev].Domain(),
             geom[lev].CellSize(), inf_lev, outf_lev, extrap_lev, pa_lev,
             include_bndry_corners);
-        influx          += inf_lev;
-        outflow_flux    += outf_lev;
+        influx += inf_lev;
+        outflow_flux += outf_lev;
         extrap_out_flux += extrap_lev;
-        passive_area    += pa_lev;
+        passive_area += pa_lev;
     }
 
     // net imbalance to fix: positive means influx must be added, negative
@@ -705,31 +759,30 @@ void enforceAdaptInflowSolvability(
 
     for (int lev = 0; lev < nlevs; ++lev) {
         apply_extrap_out_scale(
-            lev, vels_vec, bc_types, geom[lev].Domain(), masks_vec[lev],
-            alpha, include_bndry_corners);
+            lev, vels_vec, bc_types, geom[lev].Domain(), masks_vec[lev], alpha,
+            include_bndry_corners);
     }
 
-    // Balance already satisfied (or resolved via the extrap_out scaling
-    // above); no need to touch passive cells.
-    if (deficit <= small_vel) { return; }
+    // Even if balance is already satisfied, make sure to disable outflow at
+    // passive cells
 
     // Additional inflow is needed. Passive cells only exist on boundaries
     // opposite the net outflow direction (by construction of the second
     // classification pass), so no further directional selection is needed.
-    if (passive_area < small_vel) {
+    if (deficit > small_vel && passive_area < small_vel) {
         amrex::Abort(
             "enforceAdaptInflowSolvability: no passive cells are available "
             "on any adapt_inflow boundary to balance the flux");
     }
 
-    const Real v_corr = deficit / passive_area;
+    const Real v_corr =
+        passive_area > small_vel ? deficit / passive_area : 0.0_rt;
 
     for (int lev = 0; lev < nlevs; ++lev) {
         apply_passive_flux(
-            lev, vels_vec, bc_types, geom[lev].Domain(), masks_vec[lev],
-            v_corr, include_bndry_corners);
+            lev, vels_vec, bc_types, geom[lev].Domain(), masks_vec[lev], v_corr,
+            include_bndry_corners);
     }
 }
 
 } // namespace kynema_sgf
-
