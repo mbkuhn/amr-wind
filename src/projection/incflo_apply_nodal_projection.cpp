@@ -371,6 +371,7 @@ void incflo::ApplyProjection(
     }
 
     if (!proj_for_small_dt and !incremental and velocity.has_adapt_inflow_bndry()) {
+        velocity.apply_bc_funcs(kynema_sgf::FieldState::New);
         kynema_sgf::nodal_projection::enforce_adapt_inflow_solvability(
             velocity, m_repo.mesh().Geom(), m_repo.num_active_levels());
     }
