@@ -84,7 +84,12 @@ void MacProjOp::enforce_adapt_inflow_solvability(
     auto& velocity = m_repo.get_field("velocity");
     const auto& bc_types = velocity.bc_type();
     const amrex::Vector<amrex::Geometry>& geom = m_repo.mesh().Geom();
-    kynema_sgf::enforceAdaptInflowSolvability(a_umac, bc_types, geom);
+    const kynema_sgf::IntField* terrain_blank =
+        m_repo.int_field_exists("terrain_blank")
+            ? &m_repo.get_int_field("terrain_blank")
+            : nullptr;
+    kynema_sgf::enforceAdaptInflowSolvability(
+        a_umac, bc_types, geom, false, terrain_blank);
 }
 
 void MacProjOp::init_projector(const MacProjOp::FaceFabPtrVec& beta)

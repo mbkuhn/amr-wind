@@ -40,7 +40,8 @@ void set_adapt_inflow_masks(
     const Array<iMultiFab, AMREX_SPACEDIM>& level_masks,
     const GpuArray<BC, AMREX_SPACEDIM * 2>& bc_types,
     const Box& domain,
-    const bool corners)
+    const bool corners,
+    const iMultiFab* terrain_blank_mf)
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
@@ -97,6 +98,9 @@ void set_adapt_inflow_masks(
             const auto vel_arr        = vel_mf->array(mfi);
             auto       mask_arr       = mask.array(mfi);
             const auto level_mask_arr = level_mask.const_array(mfi);
+            const auto terrain_arr =
+                terrain_blank_mf ? terrain_blank_mf->const_array(mfi)
+                                 : Array4<int const>();
 
             ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
@@ -104,6 +108,13 @@ void set_adapt_inflow_masks(
                 const IntVect lm_idx =
                     amrex::max(amrex::min(iv, ungrown_bg), ungrown_sm);
                 if (level_mask_arr(lm_idx) != 1) { return; }
+
+                if (terrain_arr) {
+                    IntVect terrain_iv{AMREX_D_DECL(i, j, k)};
+                    terrain_iv[dir] =
+                        oriIsLow ? domain.smallEnd(dir) : domain.bigEnd(dir);
+                    if (terrain_arr(terrain_iv) == 1) { return; }
+                }
 
                 const Real vb = vel_arr(i, j, k);
                 const Real vi = oriIsLow ? vel_arr(i + di, j + dj, k + dk)
@@ -249,6 +260,7 @@ void compute_adapt_inflow_fluxes(
  *  Only boundaries marked active in \p selected_lo / \p selected_hi (chosen
  *  by the caller based on the direction of the net outflux vector) are
  *  modified; passive cells on other adapt_inflow boundaries are left as-is.
+ *  Cells whose adjacent interior cell is terrain-blanked are skipped.
  *
  *  Passive cells are identified by the same two-velocity check used in
  *  set_adapt_inflow_masks rather than reading the mask iMultiFab, so that
@@ -262,7 +274,8 @@ void apply_passive_flux(
     const Real v_corr,
     const GpuArray<bool, AMREX_SPACEDIM>& selected_lo,
     const GpuArray<bool, AMREX_SPACEDIM>& selected_hi,
-    const bool corners)
+    const bool corners,
+    const iMultiFab* terrain_blank_mf)
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
@@ -314,9 +327,19 @@ void apply_passive_flux(
 
             Box box2d(box); box2d.setRange(dir, bndry);
             auto vel_arr = vel_mf->array(mfi);
+            const auto terrain_arr =
+                terrain_blank_mf ? terrain_blank_mf->const_array(mfi)
+                                 : Array4<int const>();
 
             ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
+                if (terrain_arr) {
+                    IntVect terrain_iv{AMREX_D_DECL(i, j, k)};
+                    terrain_iv[dir] =
+                        oriIsLow ? domain.smallEnd(dir) : domain.bigEnd(dir);
+                    if (terrain_arr(terrain_iv) == 1) { return; }
+                }
+
                 const Real vb = vel_arr(i, j, k);
                 const Real vi = oriIsLow ? vel_arr(i + di, j + dj, k + dk)
                                          : vel_arr(i - di, j - dj, k - dk);
@@ -338,7 +361,8 @@ void enforceAdaptInflowSolvability(
     const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& vels_vec,
     const GpuArray<BC, AMREX_SPACEDIM * 2>& bc_types,
     const Vector<Geometry>& geom,
-    const bool include_bndry_corners)
+    const bool include_bndry_corners,
+    const IntField* terrain_blank)
 {
     bool has_adapt_inflow = false;
     for (OrientationIter oit; oit != nullptr; ++oit) {
@@ -401,7 +425,8 @@ void enforceAdaptInflowSolvability(
 
         set_adapt_inflow_masks(
             lev, vels_vec, masks, level_masks, bc_types, domain,
-            include_bndry_corners);
+            include_bndry_corners,
+            terrain_blank ? &(*terrain_blank)(lev) : nullptr);
 
         const Real* a_dx = geom[lev].CellSize();
         Real inf_lev = 0.0, out_lev = 0.0;
@@ -476,7 +501,8 @@ void enforceAdaptInflowSolvability(
     for (int lev = 0; lev < nlevs; ++lev) {
         apply_passive_flux(
             lev, vels_vec, bc_types, geom[lev].Domain(), v_corr, selected_lo,
-            selected_hi, include_bndry_corners);
+            selected_hi, include_bndry_corners,
+            terrain_blank ? &(*terrain_blank)(lev) : nullptr);
     }
 }
 

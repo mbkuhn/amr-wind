@@ -2,6 +2,7 @@
 #define ADAPT_INFLOW_SOLVABILITY_H
 
 #include "src/incflo_enums.H"
+#include "src/core/IntField.H"
 #include "AMReX_Array.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_Geometry.H"
@@ -29,13 +30,18 @@ namespace kynema_sgf {
  *  \param bc_types     Incflo BC type for each orientation
  *  \param geom         AMReX geometry vector (one per level)
  *  \param include_bndry_corners  If true, include corner cells in flux sums
+ *  \param terrain_blank  Optional terrain blanking field. Boundary locations
+ *                        whose adjacent interior cell is terrain-blanked
+ *                        (value 1) are excluded from area calculations and
+ *                        velocity modifications.
  */
 void enforceAdaptInflowSolvability(
     const amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>>&
         vels_vec,
     const amrex::GpuArray<BC, AMREX_SPACEDIM * 2>& bc_types,
     const amrex::Vector<amrex::Geometry>& geom,
-    bool include_bndry_corners = false);
+    bool include_bndry_corners = false,
+    const IntField* terrain_blank = nullptr);
 
 } // namespace kynema_sgf
 

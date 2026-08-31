@@ -116,7 +116,14 @@ void kynema_sgf::nodal_projection::enforce_adapt_inflow_solvability(
             new amrex::MultiFab(velocity(lev), amrex::make_alias, 2, 1);
     }
 
-    kynema_sgf::enforceAdaptInflowSolvability(vel_vec, bc_types, geom, true);
+    auto& repo = velocity.repo();
+    const kynema_sgf::IntField* terrain_blank =
+        repo.int_field_exists("terrain_blank")
+            ? &repo.get_int_field("terrain_blank")
+            : nullptr;
+
+    kynema_sgf::enforceAdaptInflowSolvability(
+        vel_vec, bc_types, geom, true, terrain_blank);
 }
 
 /** Perform nodal projection
