@@ -775,8 +775,9 @@ void enforceAdaptInflowSolvability(
             "on any adapt_inflow boundary to balance the flux");
     }
 
-    const Real v_corr =
-        passive_area > small_vel ? deficit / passive_area : 0.0_rt;
+    const Real v_corr = passive_area > small_vel
+                            ? amrex::max<Real>(deficit, 0.0_rt) / passive_area
+                            : 0.0_rt;
 
     for (int lev = 0; lev < nlevs; ++lev) {
         apply_passive_flux(
