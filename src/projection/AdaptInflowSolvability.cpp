@@ -25,18 +25,47 @@ constexpr int AI_EXTRAP_OUT_TAG  = +3;
 
 constexpr Real small_vel = 1.e-8_rt;
 
-/** Tag each adapt_inflow boundary cell as inflow, outflow, extrap_out, or
+// Minimum vof for a cell to be considered wet when classifying boundary cells
+constexpr Real vof_threshold = 1.e-12_rt;
+
+/** Classify an adapt_inflow boundary cell as inflow, outflow, extrap_out, or
  *  passive.
  *
- *  For a low boundary, the categorisation is:
- *    inflow:      vel_boundary > 0  (points into domain)
- *    outflow:     vel_boundary < 0  (boundary value itself points outward)
- *    extrap_out:  vel_boundary == 0 AND vel_interior < 0 (outward, but the
- *                 boundary value has not been extrapolated yet)
- *    passive:     vel_boundary == 0 AND vel_interior >= 0
+ *  For a low boundary:
+ *    inflow:      vel_boundary > 0 (points into domain) AND the boundary
+ *                 cell is wet (vof_boundary > vof_threshold, if supplied)
+ *    outflow:     vel_boundary < 0 (boundary value itself points outward)
+ *                 AND the adjacent interior cell is wet
+ *                 (vof_interior > vof_threshold, if supplied)
+ *    extrap_out:  vel_interior < 0 (outward), regardless of vel_boundary or
+ *                 vof
+ *    passive:     none of the above
  *
  *  The sign conventions are reversed for high boundaries.
  */
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE int classify_adapt_inflow_cell(
+    const Real vel_boundary,
+    const Real vel_interior,
+    const bool ori_is_low,
+    const bool ori_is_high,
+    const bool vof_boundary_wet,
+    const bool vof_interior_wet)
+{
+    if (((ori_is_low && vel_boundary > 0) ||
+         (ori_is_high && vel_boundary < 0)) &&
+        vof_boundary_wet) {
+        return AI_INFLOW_TAG;
+    }
+    if (((ori_is_low && vel_boundary < 0) ||
+         (ori_is_high && vel_boundary > 0)) &&
+        vof_interior_wet) {
+        return AI_OUTFLOW_TAG;
+    }
+    if ((ori_is_low && vel_interior < 0) || (ori_is_high && vel_interior > 0)) {
+        return AI_EXTRAP_OUT_TAG;
+    }
+    return AI_PASSIVE_TAG;
+}
 void set_adapt_inflow_masks(
     const int lev,
     const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& vels_vec,
@@ -45,7 +74,8 @@ void set_adapt_inflow_masks(
     const GpuArray<BC, AMREX_SPACEDIM * 2>& bc_types,
     const Box& domain,
     const bool corners,
-    const iMultiFab* terrain_blank_mf)
+    const iMultiFab* terrain_blank_mf,
+    const MultiFab* vof_mf)
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
@@ -105,6 +135,8 @@ void set_adapt_inflow_masks(
             const auto terrain_arr =
                 terrain_blank_mf ? terrain_blank_mf->const_array(mfi)
                                  : Array4<int const>();
+            const auto vof_arr =
+                vof_mf ? vof_mf->const_array(mfi) : Array4<Real const>();
 
             ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
@@ -124,15 +156,17 @@ void set_adapt_inflow_masks(
                 const Real vi = oriIsLow ? vel_arr(i + di, j + dj, k + dk)
                                          : vel_arr(i - di, j - dj, k - dk);
 
-                if ((oriIsLow && vb > 0) || (oriIsHigh && vb < 0)) {
-                    mask_arr(i, j, k) = AI_INFLOW_TAG;
-                } else if ((oriIsLow && vb < 0) || (oriIsHigh && vb > 0)) {
-                    mask_arr(i, j, k) = AI_OUTFLOW_TAG;
-                } else if ((oriIsLow && vi < 0) || (oriIsHigh && vi > 0)) {
-                    mask_arr(i, j, k) = AI_EXTRAP_OUT_TAG;
-                } else {
-                    mask_arr(i, j, k) = AI_PASSIVE_TAG;
-                }
+                const bool vof_bndry_wet =
+                    !vof_arr || (vof_arr(i, j, k) > vof_threshold);
+                const bool vof_interior_wet =
+                    !vof_arr ||
+                    ((oriIsLow ? vof_arr(i + di, j + dj, k + dk)
+                               : vof_arr(i - di, j - dj, k - dk)) >
+                     vof_threshold);
+
+                mask_arr(i, j, k) = classify_adapt_inflow_cell(
+                    vb, vi, oriIsLow, oriIsHigh, vof_bndry_wet,
+                    vof_interior_wet);
             });
         }
     }
@@ -305,9 +339,10 @@ void compute_adapt_inflow_fluxes(
  *  modified; passive cells on other adapt_inflow boundaries are left as-is.
  *  Cells whose adjacent interior cell is terrain-blanked are skipped.
  *
- *  Passive cells are identified by the same two-velocity check used in
- *  set_adapt_inflow_masks rather than reading the mask iMultiFab, so that
- *  this function can be called in a second pass after all fluxes are known.
+ *  Passive cells are re-identified locally using the same classification
+ *  used in set_adapt_inflow_masks, rather than reading the mask iMultiFab,
+ *  so that this function can be called in a second pass after all fluxes
+ *  are known.
  */
 void apply_passive_flux(
     const int lev,
@@ -318,7 +353,8 @@ void apply_passive_flux(
     const GpuArray<bool, AMREX_SPACEDIM>& selected_lo,
     const GpuArray<bool, AMREX_SPACEDIM>& selected_hi,
     const bool corners,
-    const iMultiFab* terrain_blank_mf)
+    const iMultiFab* terrain_blank_mf,
+    const MultiFab* vof_mf)
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
@@ -373,6 +409,8 @@ void apply_passive_flux(
             const auto terrain_arr =
                 terrain_blank_mf ? terrain_blank_mf->const_array(mfi)
                                  : Array4<int const>();
+            const auto vof_arr =
+                vof_mf ? vof_mf->const_array(mfi) : Array4<Real const>();
 
             ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
@@ -387,10 +425,18 @@ void apply_passive_flux(
                 const Real vi = oriIsLow ? vel_arr(i + di, j + dj, k + dk)
                                          : vel_arr(i - di, j - dj, k - dk);
 
-                // passive: boundary vel not inward AND interior vel not outward
+                const bool vof_bndry_wet =
+                    !vof_arr || (vof_arr(i, j, k) > vof_threshold);
+                const bool vof_interior_wet =
+                    !vof_arr ||
+                    ((oriIsLow ? vof_arr(i + di, j + dj, k + dk)
+                               : vof_arr(i - di, j - dj, k - dk)) >
+                     vof_threshold);
+
                 const bool is_passive =
-                    (oriIsLow  && vb <= 0 && vi >= 0) ||
-                    (oriIsHigh && vb >= 0 && vi <= 0);
+                    classify_adapt_inflow_cell(
+                        vb, vi, oriIsLow, oriIsHigh, vof_bndry_wet,
+                        vof_interior_wet) == AI_PASSIVE_TAG;
 
                 if (is_passive) { vel_arr(i, j, k) = v_inward; }
             });
@@ -400,13 +446,13 @@ void apply_passive_flux(
 
 /** Extrapolate extrap_out cells from the interior, optionally scaled.
  *
- *  Each extrap_out cell is re-identified locally (boundary velocity is zero
- *  and the adjacent interior velocity points outward) and its boundary
- *  velocity is set to vel_interior * alpha. This is always called with at
- *  least alpha = 1 so that extrap_out boundary values are always populated;
- *  alpha is only different from 1 when additional outflow is needed to
- *  match influx. Cells whose adjacent interior cell is terrain-blanked are
- *  left untouched.
+ *  Each extrap_out cell is re-identified locally using the same
+ *  classification used in set_adapt_inflow_masks, and its boundary velocity
+ *  is set to vel_interior * alpha. This is always called with at least
+ *  alpha = 1 so that extrap_out boundary values are always populated; alpha
+ *  is only different from 1 when additional outflow is needed to match
+ *  influx. Cells whose adjacent interior cell is terrain-blanked are left
+ *  untouched.
  */
 void apply_extrap_out_scale(
     const int lev,
@@ -415,7 +461,8 @@ void apply_extrap_out_scale(
     const Box& domain,
     const Real alpha,
     const bool corners,
-    const iMultiFab* terrain_blank_mf)
+    const iMultiFab* terrain_blank_mf,
+    const MultiFab* vof_mf)
 {
     for (OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
@@ -462,6 +509,8 @@ void apply_extrap_out_scale(
             const auto terrain_arr =
                 terrain_blank_mf ? terrain_blank_mf->const_array(mfi)
                                  : Array4<int const>();
+            const auto vof_arr =
+                vof_mf ? vof_mf->const_array(mfi) : Array4<Real const>();
 
             ParallelFor(box2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
@@ -476,9 +525,18 @@ void apply_extrap_out_scale(
                 const Real vi = oriIsLow ? vel_arr(i + di, j + dj, k + dk)
                                          : vel_arr(i - di, j - dj, k - dk);
 
+                const bool vof_bndry_wet =
+                    !vof_arr || (vof_arr(i, j, k) > vof_threshold);
+                const bool vof_interior_wet =
+                    !vof_arr ||
+                    ((oriIsLow ? vof_arr(i + di, j + dj, k + dk)
+                               : vof_arr(i - di, j - dj, k - dk)) >
+                     vof_threshold);
+
                 const bool is_extrap_out =
-                    (vb == 0) &&
-                    ((oriIsLow && vi < 0) || (oriIsHigh && vi > 0));
+                    classify_adapt_inflow_cell(
+                        vb, vi, oriIsLow, oriIsHigh, vof_bndry_wet,
+                        vof_interior_wet) == AI_EXTRAP_OUT_TAG;
 
                 if (is_extrap_out) { vel_arr(i, j, k) = vi * alpha; }
             });
@@ -493,7 +551,8 @@ void enforceAdaptInflowSolvability(
     const GpuArray<BC, AMREX_SPACEDIM * 2>& bc_types,
     const Vector<Geometry>& geom,
     const bool include_bndry_corners,
-    const IntField* terrain_blank)
+    const IntField* terrain_blank,
+    const Field* vof)
 {
     bool has_adapt_inflow = false;
     for (OrientationIter oit; oit != nullptr; ++oit) {
@@ -557,7 +616,8 @@ void enforceAdaptInflowSolvability(
         set_adapt_inflow_masks(
             lev, vels_vec, masks, level_masks, bc_types, domain,
             include_bndry_corners,
-            terrain_blank ? &(*terrain_blank)(lev) : nullptr);
+            terrain_blank ? &(*terrain_blank)(lev) : nullptr,
+            vof ? &(*vof)(lev) : nullptr);
 
         const Real* a_dx = geom[lev].CellSize();
         Real inf_lev = 0.0, outf_lev = 0.0, extrap_lev = 0.0;
@@ -600,7 +660,8 @@ void enforceAdaptInflowSolvability(
         apply_extrap_out_scale(
             lev, vels_vec, bc_types, geom[lev].Domain(), alpha,
             include_bndry_corners,
-            terrain_blank ? &(*terrain_blank)(lev) : nullptr);
+            terrain_blank ? &(*terrain_blank)(lev) : nullptr,
+            vof ? &(*vof)(lev) : nullptr);
     }
 
     // Balance already satisfied (or resolved via the extrap_out scaling
@@ -654,7 +715,8 @@ void enforceAdaptInflowSolvability(
         apply_passive_flux(
             lev, vels_vec, bc_types, geom[lev].Domain(), v_corr, selected_lo,
             selected_hi, include_bndry_corners,
-            terrain_blank ? &(*terrain_blank)(lev) : nullptr);
+            terrain_blank ? &(*terrain_blank)(lev) : nullptr,
+            vof ? &(*vof)(lev) : nullptr);
     }
 }
 

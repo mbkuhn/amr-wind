@@ -121,9 +121,11 @@ void kynema_sgf::nodal_projection::enforce_adapt_inflow_solvability(
         repo.int_field_exists("terrain_blank")
             ? &repo.get_int_field("terrain_blank")
             : nullptr;
+    const kynema_sgf::Field* vof =
+        repo.field_exists("vof") ? &repo.get_field("vof") : nullptr;
 
     kynema_sgf::enforceAdaptInflowSolvability(
-        vel_vec, bc_types, geom, true, terrain_blank);
+        vel_vec, bc_types, geom, true, terrain_blank, vof);
 }
 
 /** Perform nodal projection

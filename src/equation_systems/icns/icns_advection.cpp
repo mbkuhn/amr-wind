@@ -88,8 +88,10 @@ void MacProjOp::enforce_adapt_inflow_solvability(
         m_repo.int_field_exists("terrain_blank")
             ? &m_repo.get_int_field("terrain_blank")
             : nullptr;
+    const kynema_sgf::Field* vof =
+        m_repo.field_exists("vof") ? &m_repo.get_field("vof") : nullptr;
     kynema_sgf::enforceAdaptInflowSolvability(
-        a_umac, bc_types, geom, false, terrain_blank);
+        a_umac, bc_types, geom, false, terrain_blank, vof);
 }
 
 void MacProjOp::init_projector(const MacProjOp::FaceFabPtrVec& beta)

@@ -2,6 +2,7 @@
 #define ADAPT_INFLOW_SOLVABILITY_H
 
 #include "src/incflo_enums.H"
+#include "src/core/Field.H"
 #include "src/core/IntField.H"
 #include "AMReX_Array.H"
 #include "AMReX_GpuContainers.H"
@@ -14,11 +15,13 @@ namespace kynema_sgf {
 /** Enforce mass conservation for the adapt_inflow boundary condition.
  *
  *  Classifies each adapt_inflow boundary cell into one of four categories:
- *    - inflow:      velocity at the boundary points into the domain
- *    - outflow:     velocity at the boundary itself points outward
- *    - extrap_out:  boundary velocity is zero, but velocity just inside the
- *                   domain points outward (i.e. an outflow cell whose
- *                   boundary value has not yet been extrapolated)
+ *    - inflow:      velocity at the boundary points into the domain, and
+ *                   (if a vof field is supplied) the boundary cell is wet
+ *    - outflow:     velocity at the boundary itself points outward, and
+ *                   (if a vof field is supplied) the adjacent interior cell
+ *                   is wet
+ *    - extrap_out:  velocity just inside the domain points outward (no
+ *                   check on the boundary velocity or on vof)
  *    - passive:     the remaining cells (neither inflow, outflow, nor
  *                   extrap_out)
  *
@@ -39,6 +42,10 @@ namespace kynema_sgf {
  *                        whose adjacent interior cell is terrain-blanked
  *                        (value 1) are excluded from area calculations and
  *                        velocity modifications.
+ *  \param vof  Optional volume-of-fluid field. When supplied, inflow and
+ *              outflow tags additionally require vof > 1e-12 (at the
+ *              boundary cell for inflow, at the adjacent interior cell for
+ *              outflow).
  */
 void enforceAdaptInflowSolvability(
     const amrex::Vector<amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>>&
@@ -46,7 +53,8 @@ void enforceAdaptInflowSolvability(
     const amrex::GpuArray<BC, AMREX_SPACEDIM * 2>& bc_types,
     const amrex::Vector<amrex::Geometry>& geom,
     bool include_bndry_corners = false,
-    const IntField* terrain_blank = nullptr);
+    const IntField* terrain_blank = nullptr,
+    const Field* vof = nullptr);
 
 } // namespace kynema_sgf
 
