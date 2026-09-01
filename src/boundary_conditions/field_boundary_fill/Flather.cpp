@@ -308,7 +308,7 @@ void Flather::set_velocity(
     const amrex::Real time,
     const Field& fld,
     amrex::MultiFab& mfab,
-    const int dcomp,
+    const int /* dcomp */,
     const int orig_comp) const
 {
     BL_PROFILE("kynema-sgf::Flather::set_velocity");

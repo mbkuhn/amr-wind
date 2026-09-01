@@ -59,10 +59,10 @@ void FillFlather::fillpatch_sibling_fields(
     const int lev,
     const amrex::Real time,
     amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& mfabs,
-    amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& ffabs,
-    amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& cfabs,
-    const amrex::IntVect& nghost,
-    const amrex::Vector<amrex::BCRec>& bcrec,
+    amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& /* ffabs */,
+    amrex::Array<amrex::MultiFab*, AMREX_SPACEDIM>& /* cfabs */,
+    const amrex::IntVect& /* nghost */,
+    const amrex::Vector<amrex::BCRec>& /* bcrec */,
     const amrex::Vector<amrex::BCRec>& /* unused */,
     const FieldState fstate)
 {
