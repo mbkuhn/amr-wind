@@ -92,6 +92,7 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
 
     auto& repo = mesh().field_repo();
     auto& velocity = repo.declare_field("velocity", 3, 1);
+    repo.declare_face_normal_field({"u_mac", "v_mac", "w_mac"}, 1, 1, 1);
     auto& vof = repo.declare_field("vof", 1, 1);
 
     velocity.setVal(u0, 0, 1, 1);
@@ -164,6 +165,7 @@ TEST_F(
 
     auto& repo = mesh().field_repo();
     auto& velocity = repo.declare_field("velocity", 3, 1);
+    repo.declare_face_normal_field({"u_mac", "v_mac", "w_mac"}, 1, 1, 1);
     auto& vof = repo.declare_field("vof", 1, 1);
 
     velocity.setVal(u0, 0, 1, 1);
