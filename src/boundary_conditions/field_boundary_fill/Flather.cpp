@@ -105,7 +105,7 @@ void Flather::accumulate_boundary(
         }
 
         const auto& geom = m_mesh.Geom(lev);
-        const auto& dz = geom.CellSizeArray()[2];
+        const auto dz = geom.CellSizeArray()[2];
         const auto& dom = geom.Domain();
         const int bidx = is_low ? dom.smallEnd(idir) : dom.bigEnd(idir);
         const int shift_to_boundary = sample_boundary ? (is_low ? -1 : 1) : 0;
