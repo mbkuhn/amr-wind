@@ -20,7 +20,7 @@ void FillFlather::fillpatch(
     const int lev,
     const amrex::Real time,
     amrex::MultiFab& mfab,
-    const amrex::IntVect& nghost,
+    const amrex::IntVect& /* nghost */,
     const FieldState fstate)
 {
     if (m_field.base_name() == "velocity") {
@@ -33,7 +33,7 @@ void FillFlather::fillpatch_from_coarse(
     const int lev,
     const amrex::Real time,
     amrex::MultiFab& mfab,
-    const amrex::IntVect& nghost,
+    const amrex::IntVect& /* nghost */,
     const FieldState fstate)
 {
     if (m_field.base_name() == "velocity") {
@@ -46,7 +46,7 @@ void FillFlather::fillphysbc(
     const int lev,
     const amrex::Real time,
     amrex::MultiFab& mfab,
-    const amrex::IntVect& nghost,
+    const amrex::IntVect& /* nghost */,
     const FieldState fstate)
 {
     if (m_field.base_name() == "velocity") {

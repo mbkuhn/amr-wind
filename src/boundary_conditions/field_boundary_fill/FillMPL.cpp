@@ -20,8 +20,8 @@ void FillMPL::fillpatch(
     const int lev,
     const amrex::Real time,
     amrex::MultiFab& mfab,
-    const amrex::IntVect& nghost,
-    const FieldState fstate)
+    const amrex::IntVect& /* nghost */,
+    const FieldState /* fstate */)
 {
     if (m_field.base_name() == "velocity") {
         m_abl_mpl.set_velocity(lev, time, m_field, mfab);
@@ -34,8 +34,8 @@ void FillMPL::fillpatch_from_coarse(
     const int lev,
     const amrex::Real time,
     amrex::MultiFab& mfab,
-    const amrex::IntVect& nghost,
-    const FieldState fstate)
+    const amrex::IntVect& /* nghost */,
+    const FieldState /* fstate */)
 {
     if (m_field.base_name() == "velocity") {
         m_abl_mpl.set_velocity(lev, time, m_field, mfab);
@@ -48,8 +48,8 @@ void FillMPL::fillphysbc(
     const int lev,
     const amrex::Real time,
     amrex::MultiFab& mfab,
-    const amrex::IntVect& nghost,
-    const FieldState fstate)
+    const amrex::IntVect& /* nghost */,
+    const FieldState /* fstate */)
 {
     if (m_field.base_name() == "velocity") {
         m_abl_mpl.set_velocity(lev, time, m_field, mfab);
