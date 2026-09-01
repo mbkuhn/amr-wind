@@ -222,7 +222,7 @@ public:
     //! Return a flag indicating whether a fillpatch Op has been registered
     [[nodiscard]] bool has_fillpatch_op() const
     {
-        return static_cast<bool>(!m_info->m_fillpatch_ops.empty());
+        return !m_info->m_fillpatch_ops.empty();
     }
 
     /** Setup default BC conditions for fillpatch operations
