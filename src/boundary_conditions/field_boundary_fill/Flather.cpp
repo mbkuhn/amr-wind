@@ -321,6 +321,7 @@ void Flather::set_velocity(
 
     const auto fstate = time > 0.0_rt ? FieldState::Old : FieldState::New;
     const amrex::Real tiny = constants::TIGHT_TOL;
+    const amrex::Real v_threshold = 1.0e-6_rt;
     const auto grav_z = -m_gravity[2];
 
     for (amrex::OrientationIter oit; oit != nullptr; ++oit) {
@@ -463,7 +464,9 @@ void Flather::set_velocity(
                     prescribed_inflow ? boundary_val : interior_val;
 
                 const auto scaled_vel =
-                    local_vel * (Flather_vel / averaged_vel);
+                    std::abs(averaged_vel) > v_threshold
+                        ? local_vel * (Flather_vel / averaged_vel)
+                        : Flather_vel;
 
                 // Only use if advecting liquid (or zero velocity)
                 // This is important because the averages used to calculate
