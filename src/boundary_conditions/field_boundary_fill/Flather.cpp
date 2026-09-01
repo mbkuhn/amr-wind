@@ -3,6 +3,7 @@
 #include "src/boundary_conditions/field_boundary_fill/FillFlather.H"
 #include "src/utilities/index_operations.H"
 #include "src/utilities/constants.H"
+#include "src/physics/multiphase/MultiPhase.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_GpuAtomic.H"
 #include "AMReX_ParmParse.H"
@@ -31,6 +32,11 @@ Flather::Flather(CFDSim& sim)
     }
     if (m_repo.int_field_exists("terrain_blank")) {
         m_terrain_blank = &m_repo.get_int_field("terrain_blank");
+    }
+
+    if (m_sim.physics_manager().contains("MultiPhase")) {
+        m_rho1 = m_sim.physics_manager().get<kynema_sgf::MultiPhase>().rho1();
+        m_rho2 = m_sim.physics_manager().get<kynema_sgf::MultiPhase>().rho2();
     }
 
     amrex::ParmParse pp("incflo");
@@ -323,6 +329,8 @@ void Flather::set_velocity(
     const amrex::Real tiny = constants::TIGHT_TOL;
     const amrex::Real v_threshold = 1.0e-6_rt;
     const auto grav_z = -m_gravity[2];
+    const auto rho1 = m_rho1;
+    const auto rho2 = m_rho2;
 
     for (amrex::OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
@@ -478,7 +486,14 @@ void Flather::set_velocity(
                 const bool inflow_liq = !outflow && boundary_vof > tiny;
                 const bool outflow_liq = outflow && interior_vof > tiny;
                 if (outflow_liq || inflow_liq) {
-                    arr(iv, fcomp) = scaled_vel;
+                    const amrex::Real upstream_vof =
+                        outflow_liq ? interior_vof : boundary_vof;
+                    const amrex::Real upstream_density =
+                        upstream_vof * rho1 + (1.0_rt - upstream_vof) * rho2;
+                    arr(iv, fcomp) =
+                        (rho1 * upstream_vof * scaled_vel +
+                         rho2 * (1.0_rt - upstream_vof) * local_vel) /
+                        upstream_density;
                 }
             });
         }
