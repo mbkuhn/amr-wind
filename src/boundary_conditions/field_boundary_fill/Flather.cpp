@@ -528,7 +528,7 @@ void Flather::set_velocity(
                 if (outflow_only_liq || inflow_any_liq) {
                     arr(iv, fcomp) = scaled_vel;
                 } else if (outflow) {
-                    arr(iv, fcomp) = arr(iv_adj, fcomp);
+                    arr(iv, fcomp) = local_vel;
                 }
             });
         }
