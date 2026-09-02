@@ -54,6 +54,7 @@ public:
     void accumulate_boundary(
         int current_level,
         int idir,
+        int phase_switch,
         bool is_low,
         MultiLevelVector& out_uvec,
         MultiLevelVector& out_hvec,
@@ -79,14 +80,18 @@ private:
     amrex::Real m_rho1{1000.0_rt};
     amrex::Real m_rho2{1.0_rt};
 
-    MultiLevelVector m_xlo_uvof_avg{FieldLoc::CELL};
-    MultiLevelVector m_xhi_uvof_avg{FieldLoc::CELL};
-    MultiLevelVector m_ylo_uvof_avg{FieldLoc::CELL};
-    MultiLevelVector m_yhi_uvof_avg{FieldLoc::CELL};
-    MultiLevelVector m_xlo_bnd_uvof_avg{FieldLoc::CELL};
-    MultiLevelVector m_xhi_bnd_uvof_avg{FieldLoc::CELL};
-    MultiLevelVector m_ylo_bnd_uvof_avg{FieldLoc::CELL};
-    MultiLevelVector m_yhi_bnd_uvof_avg{FieldLoc::CELL};
+    MultiLevelVector m_xlo_uliq{FieldLoc::CELL};
+    MultiLevelVector m_xhi_uliq{FieldLoc::CELL};
+    MultiLevelVector m_ylo_uliq{FieldLoc::CELL};
+    MultiLevelVector m_yhi_uliq{FieldLoc::CELL};
+    MultiLevelVector m_xlo_umix{FieldLoc::CELL};
+    MultiLevelVector m_xhi_umix{FieldLoc::CELL};
+    MultiLevelVector m_ylo_umix{FieldLoc::CELL};
+    MultiLevelVector m_yhi_umix{FieldLoc::CELL};
+    MultiLevelVector m_xlo_bnd_uvof{FieldLoc::CELL};
+    MultiLevelVector m_xhi_bnd_uvof{FieldLoc::CELL};
+    MultiLevelVector m_ylo_bnd_uvof{FieldLoc::CELL};
+    MultiLevelVector m_yhi_bnd_uvof{FieldLoc::CELL};
     MultiLevelVector m_xlo_h_avg{FieldLoc::CELL};
     MultiLevelVector m_xhi_h_avg{FieldLoc::CELL};
     MultiLevelVector m_ylo_h_avg{FieldLoc::CELL};

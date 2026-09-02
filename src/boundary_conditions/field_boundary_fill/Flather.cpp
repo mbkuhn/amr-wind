@@ -44,14 +44,18 @@ Flather::Flather(CFDSim& sim)
 
     // Vector at the x boundary extends in y direction
     // Vector at the y boundary extends in x direction
-    m_xlo_uvof_avg.resize(1, m_mesh.Geom());
-    m_xhi_uvof_avg.resize(1, m_mesh.Geom());
-    m_ylo_uvof_avg.resize(0, m_mesh.Geom());
-    m_yhi_uvof_avg.resize(0, m_mesh.Geom());
-    m_xlo_bnd_uvof_avg.resize(1, m_mesh.Geom());
-    m_xhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
-    m_ylo_bnd_uvof_avg.resize(0, m_mesh.Geom());
-    m_yhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
+    m_xlo_uliq.resize(1, m_mesh.Geom());
+    m_xhi_uliq.resize(1, m_mesh.Geom());
+    m_ylo_uliq.resize(0, m_mesh.Geom());
+    m_yhi_uliq.resize(0, m_mesh.Geom());
+    m_xlo_umix.resize(1, m_mesh.Geom());
+    m_xhi_umix.resize(1, m_mesh.Geom());
+    m_ylo_umix.resize(0, m_mesh.Geom());
+    m_yhi_umix.resize(0, m_mesh.Geom());
+    m_xlo_bnd_uvof.resize(1, m_mesh.Geom());
+    m_xhi_bnd_uvof.resize(1, m_mesh.Geom());
+    m_ylo_bnd_uvof.resize(0, m_mesh.Geom());
+    m_yhi_bnd_uvof.resize(0, m_mesh.Geom());
 
     m_xlo_h_avg.resize(1, m_mesh.Geom());
     m_xhi_h_avg.resize(1, m_mesh.Geom());
@@ -74,6 +78,7 @@ void Flather::pre_advance_work() { compute_internal_z_averages(); }
 void Flather::accumulate_boundary(
     int current_level,
     int idir,
+    int phase_switch,
     bool is_low,
     MultiLevelVector& out_uvec,
     MultiLevelVector& out_hvec,
@@ -83,11 +88,10 @@ void Flather::accumulate_boundary(
 {
     AMREX_ALWAYS_ASSERT(idir == 0 || idir == 1);
 
-    auto& avg_h = out_uvec.host_data(current_level);
+    auto& int_h = out_uvec.host_data(current_level);
     auto& dist_h = out_hvec.host_data(current_level);
-    const int nline = static_cast<int>(avg_h.size());
+    const int nline = static_cast<int>(int_h.size());
 
-    amrex::Vector<amrex::Real> uvof_sum_h(nline, 0.0_rt);
     amrex::Gpu::DeviceVector<amrex::Real> uvof_sum_d(nline, 0.0_rt);
     amrex::Gpu::DeviceVector<amrex::Real> vof_sum_d(nline, 0.0_rt);
 
@@ -181,11 +185,21 @@ void Flather::accumulate_boundary(
                 for (int idx = idx_min; idx <= idx_max; ++idx) {
                     const auto liquid_height =
                         vof_arr(ii, jj, k) * dz * mask_arr(i, j, k);
+                    amrex::Gpu::Atomic::Add(&vof_sum[idx], liquid_height);
+                    auto vel_height = liquid_height;
+                    if (phase_switch == 0 &&
+                        vof_arr(ii, jj, k) < 1.0_rt - tiny) {
+                        // Needs to be fully liquid to be counted
+                        vel_height = 0.0_rt;
+                    }
+                    if (phase_switch == 1 && vof_arr(ii, jj, k) > tiny) {
+                        // Needs to be mixture to be counted
+                        vel_height = 0.0_rt;
+                    }
                     amrex::Gpu::Atomic::Add(
                         &uvof_sum[idx],
                         vel_arr(ii_v, jj_v, k, use_mac_fields ? 0 : idir) *
-                            liquid_height);
-                    amrex::Gpu::Atomic::Add(&vof_sum[idx], liquid_height);
+                            vel_height);
                 }
             });
         }
@@ -193,17 +207,13 @@ void Flather::accumulate_boundary(
 
     amrex::Gpu::copy(
         amrex::Gpu::deviceToHost, uvof_sum_d.begin(), uvof_sum_d.end(),
-        uvof_sum_h.begin());
+        int_h.begin());
     amrex::Gpu::copy(
         amrex::Gpu::deviceToHost, vof_sum_d.begin(), vof_sum_d.end(),
         dist_h.begin());
 
-    amrex::ParallelDescriptor::ReduceRealSum(uvof_sum_h.data(), nline);
+    amrex::ParallelDescriptor::ReduceRealSum(int_h.data(), nline);
     amrex::ParallelDescriptor::ReduceRealSum(dist_h.data(), nline);
-
-    for (int n = 0; n < nline; ++n) {
-        avg_h[n] = (dist_h[n] > tiny) ? (uvof_sum_h[n] / dist_h[n]) : 0.0_rt;
-    }
 }
 
 void Flather::compute_internal_z_averages()
@@ -212,15 +222,19 @@ void Flather::compute_internal_z_averages()
 
     const int nlevels = m_repo.num_active_levels();
     const int nlevels_geom = static_cast<int>(m_mesh.Geom().size());
-    if (m_xlo_uvof_avg.size() != nlevels_geom) {
-        m_xlo_uvof_avg.resize(1, m_mesh.Geom());
-        m_xhi_uvof_avg.resize(1, m_mesh.Geom());
-        m_ylo_uvof_avg.resize(0, m_mesh.Geom());
-        m_yhi_uvof_avg.resize(0, m_mesh.Geom());
-        m_xlo_bnd_uvof_avg.resize(1, m_mesh.Geom());
-        m_xhi_bnd_uvof_avg.resize(1, m_mesh.Geom());
-        m_ylo_bnd_uvof_avg.resize(0, m_mesh.Geom());
-        m_yhi_bnd_uvof_avg.resize(0, m_mesh.Geom());
+    if (m_xlo_uliq.size() != nlevels_geom) {
+        m_xlo_uliq.resize(1, m_mesh.Geom());
+        m_xhi_uliq.resize(1, m_mesh.Geom());
+        m_ylo_uliq.resize(0, m_mesh.Geom());
+        m_yhi_uliq.resize(0, m_mesh.Geom());
+        m_xlo_umix.resize(1, m_mesh.Geom());
+        m_xhi_umix.resize(1, m_mesh.Geom());
+        m_ylo_umix.resize(0, m_mesh.Geom());
+        m_yhi_umix.resize(0, m_mesh.Geom());
+        m_xlo_bnd_uvof.resize(1, m_mesh.Geom());
+        m_xhi_bnd_uvof.resize(1, m_mesh.Geom());
+        m_ylo_bnd_uvof.resize(0, m_mesh.Geom());
+        m_yhi_bnd_uvof.resize(0, m_mesh.Geom());
 
         m_xlo_h_avg.resize(1, m_mesh.Geom());
         m_xhi_h_avg.resize(1, m_mesh.Geom());
@@ -234,19 +248,32 @@ void Flather::compute_internal_z_averages()
 
     for (int lev = 0; lev < nlevels; ++lev) {
         this->accumulate_boundary(
-            lev, 0, true, m_xlo_uvof_avg, m_xlo_h_avg, false, FieldState::New);
+            lev, 0, 0, true, m_xlo_uliq, m_xlo_h_avg, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 0, false, m_xhi_uvof_avg, m_xhi_h_avg, false, FieldState::New);
+            lev, 0, 0, false, m_xhi_uliq, m_xhi_h_avg, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 1, true, m_ylo_uvof_avg, m_ylo_h_avg, false, FieldState::New);
+            lev, 1, 0, true, m_ylo_uliq, m_ylo_h_avg, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 1, false, m_yhi_uvof_avg, m_yhi_h_avg, false, FieldState::New);
+            lev, 1, 0, false, m_yhi_uliq, m_yhi_h_avg, false, FieldState::New);
+        this->accumulate_boundary(
+            lev, 0, 1, true, m_xlo_umix, m_xlo_h_avg, false, FieldState::New);
+        this->accumulate_boundary(
+            lev, 0, 1, false, m_xhi_umix, m_xhi_h_avg, false, FieldState::New);
+        this->accumulate_boundary(
+            lev, 1, 1, true, m_ylo_umix, m_ylo_h_avg, false, FieldState::New);
+        this->accumulate_boundary(
+            lev, 1, 1, false, m_yhi_umix, m_yhi_h_avg, false, FieldState::New);
     }
 
-    m_xlo_uvof_avg.copy_host_to_device();
-    m_xhi_uvof_avg.copy_host_to_device();
-    m_ylo_uvof_avg.copy_host_to_device();
-    m_yhi_uvof_avg.copy_host_to_device();
+    m_xlo_uliq.copy_host_to_device();
+    m_xhi_uliq.copy_host_to_device();
+    m_ylo_uliq.copy_host_to_device();
+    m_yhi_uliq.copy_host_to_device();
+
+    m_xlo_umix.copy_host_to_device();
+    m_xhi_umix.copy_host_to_device();
+    m_ylo_umix.copy_host_to_device();
+    m_yhi_umix.copy_host_to_device();
 
     m_xlo_h_avg.copy_host_to_device();
     m_xhi_h_avg.copy_host_to_device();
@@ -262,34 +289,34 @@ void Flather::compute_boundary_z_averages(
     // accumulating boundaries needs to happen prior to applying fillpatch op
 
     this->accumulate_boundary(
-        lev, 0, true, m_xlo_bnd_uvof_avg, m_xlo_bnd_h_avg, true, fstate,
+        lev, 0, -1, true, m_xlo_bnd_uvof, m_xlo_bnd_h_avg, true, fstate,
         use_mac_fields);
     this->accumulate_boundary(
-        lev, 0, false, m_xhi_bnd_uvof_avg, m_xhi_bnd_h_avg, true, fstate,
+        lev, 0, -1, false, m_xhi_bnd_uvof, m_xhi_bnd_h_avg, true, fstate,
         use_mac_fields);
     this->accumulate_boundary(
-        lev, 1, true, m_ylo_bnd_uvof_avg, m_ylo_bnd_h_avg, true, fstate,
+        lev, 1, -1, true, m_ylo_bnd_uvof, m_ylo_bnd_h_avg, true, fstate,
         use_mac_fields);
     this->accumulate_boundary(
-        lev, 1, false, m_yhi_bnd_uvof_avg, m_yhi_bnd_h_avg, true, fstate,
+        lev, 1, -1, false, m_yhi_bnd_uvof, m_yhi_bnd_h_avg, true, fstate,
         use_mac_fields);
 
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_xlo_bnd_uvof_avg.host_data(lev).begin(),
-        m_xlo_bnd_uvof_avg.host_data(lev).end(),
-        m_xlo_bnd_uvof_avg.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_xlo_bnd_uvof.host_data(lev).begin(),
+        m_xlo_bnd_uvof.host_data(lev).end(),
+        m_xlo_bnd_uvof.device_data(lev).begin());
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_xhi_bnd_uvof_avg.host_data(lev).begin(),
-        m_xhi_bnd_uvof_avg.host_data(lev).end(),
-        m_xhi_bnd_uvof_avg.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_xhi_bnd_uvof.host_data(lev).begin(),
+        m_xhi_bnd_uvof.host_data(lev).end(),
+        m_xhi_bnd_uvof.device_data(lev).begin());
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_ylo_bnd_uvof_avg.host_data(lev).begin(),
-        m_ylo_bnd_uvof_avg.host_data(lev).end(),
-        m_ylo_bnd_uvof_avg.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_ylo_bnd_uvof.host_data(lev).begin(),
+        m_ylo_bnd_uvof.host_data(lev).end(),
+        m_ylo_bnd_uvof.device_data(lev).begin());
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_yhi_bnd_uvof_avg.host_data(lev).begin(),
-        m_yhi_bnd_uvof_avg.host_data(lev).end(),
-        m_yhi_bnd_uvof_avg.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_yhi_bnd_uvof.host_data(lev).begin(),
+        m_yhi_bnd_uvof.host_data(lev).end(),
+        m_yhi_bnd_uvof.device_data(lev).begin());
 
     amrex::Gpu::copyAsync(
         amrex::Gpu::hostToDevice, m_xlo_bnd_h_avg.host_data(lev).begin(),
@@ -360,22 +387,22 @@ void Flather::set_velocity(
                                       : amrex::adjCellHi(domain, idir, nghost);
         const auto shift_to_interior =
             amrex::IntVect::TheDimensionVector(idir) * (ori.isLow() ? 1 : -1);
-        const amrex::Real* xlo_uavg = m_xlo_uvof_avg.device_data(lev).data();
-        const amrex::Real* xhi_uavg = m_xhi_uvof_avg.device_data(lev).data();
-        const amrex::Real* ylo_uavg = m_ylo_uvof_avg.device_data(lev).data();
-        const amrex::Real* yhi_uavg = m_yhi_uvof_avg.device_data(lev).data();
+        const amrex::Real* xlo_uliq = m_xlo_uliq.device_data(lev).data();
+        const amrex::Real* xhi_uliq = m_xhi_uliq.device_data(lev).data();
+        const amrex::Real* ylo_uliq = m_ylo_uliq.device_data(lev).data();
+        const amrex::Real* yhi_uliq = m_yhi_uliq.device_data(lev).data();
+        const amrex::Real* xlo_umix = m_xlo_umix.device_data(lev).data();
+        const amrex::Real* xhi_umix = m_xhi_umix.device_data(lev).data();
+        const amrex::Real* ylo_umix = m_ylo_umix.device_data(lev).data();
+        const amrex::Real* yhi_umix = m_yhi_umix.device_data(lev).data();
         const amrex::Real* xlo_havg = m_xlo_h_avg.device_data(lev).data();
         const amrex::Real* xhi_havg = m_xhi_h_avg.device_data(lev).data();
         const amrex::Real* ylo_havg = m_ylo_h_avg.device_data(lev).data();
         const amrex::Real* yhi_havg = m_yhi_h_avg.device_data(lev).data();
-        const amrex::Real* xlo_bnd_uavg =
-            m_xlo_bnd_uvof_avg.device_data(lev).data();
-        const amrex::Real* xhi_bnd_uavg =
-            m_xhi_bnd_uvof_avg.device_data(lev).data();
-        const amrex::Real* ylo_bnd_uavg =
-            m_ylo_bnd_uvof_avg.device_data(lev).data();
-        const amrex::Real* yhi_bnd_uavg =
-            m_yhi_bnd_uvof_avg.device_data(lev).data();
+        const amrex::Real* xlo_bnd_u = m_xlo_bnd_uvof.device_data(lev).data();
+        const amrex::Real* xhi_bnd_u = m_xhi_bnd_uvof.device_data(lev).data();
+        const amrex::Real* ylo_bnd_u = m_ylo_bnd_uvof.device_data(lev).data();
+        const amrex::Real* yhi_bnd_u = m_yhi_bnd_uvof.device_data(lev).data();
         const amrex::Real* xlo_bnd_havg =
             m_xlo_bnd_h_avg.device_data(lev).data();
         const amrex::Real* xhi_bnd_havg =
@@ -414,26 +441,34 @@ void Flather::set_velocity(
 
                 amrex::Real boundary_val = arr(iv, fcomp);
                 amrex::Real interior_val = arr(iv_adj, fcomp);
+                amrex::Real interior_liq = arr(iv_adj, fcomp);
+                amrex::Real interior_mix = arr(iv_adj, fcomp);
                 amrex::Real boundary_h = 0.0_rt;
                 amrex::Real interior_h = 0.0_rt;
                 // Vectors at x boundaries extend in y direction
                 // Vectors at y boundaries extend in x direction
                 if (idir == 0) {
-                    interior_val =
-                        ori.isLow() ? xlo_uavg[iv_adj[1]] : xhi_uavg[iv_adj[1]];
+                    interior_liq =
+                        ori.isLow() ? xlo_uliq[iv_adj[1]] : xhi_uliq[iv_adj[1]];
+                    interior_mix =
+                        ori.isLow() ? xlo_umix[iv_adj[1]] : xhi_umix[iv_adj[1]];
+                    interior_val = interior_liq + interior_mix;
                     interior_h =
                         ori.isLow() ? xlo_havg[iv_adj[1]] : xhi_havg[iv_adj[1]];
                     boundary_val =
-                        ori.isLow() ? xlo_bnd_uavg[iv[1]] : xhi_bnd_uavg[iv[1]];
+                        ori.isLow() ? xlo_bnd_u[iv[1]] : xhi_bnd_u[iv[1]];
                     boundary_h =
                         ori.isLow() ? xlo_bnd_havg[iv[1]] : xhi_bnd_havg[iv[1]];
                 } else {
-                    interior_val =
-                        ori.isLow() ? ylo_uavg[iv_adj[0]] : yhi_uavg[iv_adj[0]];
+                    interior_liq =
+                        ori.isLow() ? ylo_uliq[iv_adj[0]] : yhi_uliq[iv_adj[0]];
+                    interior_mix =
+                        ori.isLow() ? ylo_umix[iv_adj[0]] : yhi_umix[iv_adj[0]];
+                    interior_val = interior_liq + interior_mix;
                     interior_h =
                         ori.isLow() ? ylo_havg[iv_adj[0]] : yhi_havg[iv_adj[0]];
                     boundary_val =
-                        ori.isLow() ? ylo_bnd_uavg[iv[0]] : yhi_bnd_uavg[iv[0]];
+                        ori.isLow() ? ylo_bnd_u[iv[0]] : yhi_bnd_u[iv[0]];
                     boundary_h =
                         ori.isLow() ? ylo_bnd_havg[iv[0]] : yhi_bnd_havg[iv[0]];
                 }
@@ -454,9 +489,9 @@ void Flather::set_velocity(
                 // Wave speed
                 const amrex::Real c = std::sqrt(grav_z * interior_h);
 
-                const auto Flather_vel =
-                    boundary_val + (ori.isLow() ? -1.0_rt : 1.0_rt) * c /
-                                       boundary_h * (interior_h - boundary_h);
+                const auto Flather_val =
+                    boundary_val + (ori.isLow() ? -1.0_rt : 1.0_rt) * c *
+                                       (interior_h - boundary_h);
 
                 // Use external (prescribed) velocity if inflow
                 // Assesses inflow by the whole column, not the local value
@@ -468,13 +503,17 @@ void Flather::set_velocity(
                                            ? arr(iv, fcomp)
                                            : ref_arr(iv_adj_cc, idir);
 
-                const auto averaged_vel =
-                    prescribed_inflow ? boundary_val : interior_val;
-
-                const auto scaled_vel =
-                    std::abs(averaged_vel) > v_threshold
-                        ? local_vel * (Flather_vel / averaged_vel)
-                        : Flather_vel;
+                auto scaled_vel = 0.0_rt;
+                if (prescribed_inflow) {
+                    scaled_vel = local_vel * (Flather_val / boundary_val);
+                } else {
+                    if (std::abs(interior_val) > v_threshold * interior_h) {
+                        scaled_vel = local_vel * ((Flather_val - interior_mix) /
+                                                  interior_liq);
+                    } else {
+                        scaled_vel = Flather_val / interior_h;
+                    }
+                }
 
                 // Only use if advecting liquid (or zero velocity)
                 // This is important because the averages used to calculate
@@ -483,17 +522,11 @@ void Flather::set_velocity(
                 // on those cells.
                 const bool outflow =
                     ori.isLow() ? scaled_vel <= 0.0_rt : scaled_vel >= 0.0_rt;
-                const bool inflow_liq = !outflow && boundary_vof > tiny;
-                const bool outflow_liq = outflow && interior_vof > tiny;
-                if (outflow_liq || inflow_liq) {
-                    const amrex::Real upstream_vof =
-                        outflow_liq ? interior_vof : boundary_vof;
-                    const amrex::Real upstream_density =
-                        upstream_vof * rho1 + (1.0_rt - upstream_vof) * rho2;
-                    arr(iv, fcomp) =
-                        (rho1 * upstream_vof * scaled_vel +
-                         rho2 * (1.0_rt - upstream_vof) * local_vel) /
-                        upstream_density;
+                const bool inflow_any_liq = !outflow && boundary_vof > tiny;
+                const bool outflow_only_liq =
+                    outflow && interior_vof < 1.0_rt - tiny;
+                if (outflow_only_liq || inflow_any_liq) {
+                    arr(iv, fcomp) = scaled_vel;
                 }
             });
         }
