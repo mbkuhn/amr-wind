@@ -517,7 +517,7 @@ void Flather::set_velocity(
                 if (prescribed_inflow) {
                     scaled_vel = local_vel * (Flather_val / boundary_val);
                 } else {
-                    if (std::abs(interior_val) > v_threshold * interior_h) {
+                    if (std::abs(interior_liq) > v_threshold * interior_h) {
                         scaled_vel = local_vel * ((Flather_val - interior_mix) /
                                                   interior_liq);
                     } else {
@@ -535,7 +535,9 @@ void Flather::set_velocity(
                 const bool inflow_any_liq = !outflow && boundary_vof > tiny;
                 const bool outflow_only_liq =
                     outflow && interior_vof < 1.0_rt - tiny;
-                if (outflow_only_liq || inflow_any_liq) {
+                if (outflow_only_liq || inflow_any_liq ||
+                    (outflow &&
+                     std::abs(interior_liq) <= v_threshold * interior_h)) {
                     arr(iv, fcomp) = scaled_vel;
                 } else if (outflow) {
                     arr(iv, fcomp) = local_vel;
