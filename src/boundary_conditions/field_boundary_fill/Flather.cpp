@@ -192,10 +192,12 @@ void Flather::accumulate_boundary(
                         // Needs to be fully liquid to be counted
                         vel_height = 0.0_rt;
                     }
-                    if (phase_switch == 1 && vof_arr(ii, jj, k) > tiny) {
+                    if (phase_switch == 1 &&
+                        vof_arr(ii, jj, k) >= 1.0_rt - tiny) {
                         // Needs to be mixture to be counted
                         vel_height = 0.0_rt;
                     }
+                    // Fully gas cells never count because of vof multiplier
                     amrex::Real local_vel =
                         vel_arr(ii_v, jj_v, k, use_mac_fields ? 0 : idir);
                     // If summing internal velocities, only allow outflow
