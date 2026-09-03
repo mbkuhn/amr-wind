@@ -510,19 +510,23 @@ void Flather::set_velocity(
                     ori.isLow() ? amrex::min(ref_arr(iv_adj_cc, idir), 0.0_rt)
                                 : amrex::max(ref_arr(iv_adj_cc, idir), 0.0_rt);
 
-                const auto local_vel =
-                    prescribed_inflow ? arr(iv, fcomp) : local_internal_vel;
+                bool override_interior = false;
+                auto scale_interior = 1.0;
+                if (std::abs(interior_liq) > v_threshold * interior_h) {
+                    scale_interior =
+                        (Flather_val - interior_mix) / interior_liq;
+                } else {
+                    override_interior = true;
+                }
 
+                auto local_vel = 0.0_rt;
                 auto scaled_vel = 0.0_rt;
-                if (prescribed_inflow) {
+                if (prescribed_inflow || override_interior) {
+                    local_vel = arr(iv, fcomp);
                     scaled_vel = local_vel * (Flather_val / boundary_val);
                 } else {
-                    if (std::abs(interior_liq) > v_threshold * interior_h) {
-                        scaled_vel = local_vel * ((Flather_val - interior_mix) /
-                                                  interior_liq);
-                    } else {
-                        scaled_vel = Flather_val / interior_h;
-                    }
+                    local_vel = local_internal_vel;
+                    scaled_vel = local_vel * scale_interior;
                 }
 
                 // Only use if advecting liquid (or zero velocity)
@@ -536,8 +540,7 @@ void Flather::set_velocity(
                 const bool outflow_only_liq =
                     outflow && interior_vof < 1.0_rt - tiny;
                 if (outflow_only_liq || inflow_any_liq ||
-                    (outflow &&
-                     std::abs(interior_liq) <= v_threshold * interior_h)) {
+                    (outflow && override_interior)) {
                     arr(iv, fcomp) = scaled_vel;
                 } else if (outflow) {
                     arr(iv, fcomp) = local_vel;
