@@ -196,10 +196,15 @@ void Flather::accumulate_boundary(
                         // Needs to be mixture to be counted
                         vel_height = 0.0_rt;
                     }
+                    amrex::Real local_vel =
+                        vel_arr(ii_v, jj_v, k, use_mac_fields ? 0 : idir);
+                    // If summing internal velocities, only allow outflow
+                    if (!sample_boundary) {
+                        local_vel = is_low ? amrex::min(local_vel, 0.0_rt)
+                                           : amrex::max(local_vel, 0.0_rt);
+                    }
                     amrex::Gpu::Atomic::Add(
-                        &uvof_sum[idx],
-                        vel_arr(ii_v, jj_v, k, use_mac_fields ? 0 : idir) *
-                            vel_height);
+                        &uvof_sum[idx], local_vel * vel_height);
                 }
             });
         }
@@ -499,9 +504,12 @@ void Flather::set_velocity(
                 const bool prescribed_inflow =
                     ori.isLow() ? boundary_val > 0.0_rt : boundary_val < 0.0_rt;
 
-                const auto local_vel = prescribed_inflow
-                                           ? arr(iv, fcomp)
-                                           : ref_arr(iv_adj_cc, idir);
+                const auto local_internal_vel =
+                    ori.isLow() ? amrex::min(ref_arr(iv_adj_cc, idir), 0.0_rt)
+                                : amrex::max(ref_arr(iv_adj_cc, idir), 0.0_rt);
+
+                const auto local_vel =
+                    prescribed_inflow ? arr(iv, fcomp) : local_internal_vel;
 
                 auto scaled_vel = 0.0_rt;
                 if (prescribed_inflow) {
