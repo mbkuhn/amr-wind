@@ -108,16 +108,23 @@ amrex::Real kynema_sgf::diagnostics::get_vel_max(
     const int vdir,
     const amrex::Real factor)
 {
+    const int ng = 1;
     return amrex::ReduceMax(
-        vel, level_mask, 0,
+        vel, level_mask, ng,
         [=] AMREX_GPU_HOST_DEVICE(
             amrex::Box const& bx,
             amrex::Array4<amrex::Real const> const& vel_arr,
             amrex::Array4<int const> const& mask_arr) -> amrex::Real {
             amrex::Real max_fab = -1.0e8_rt;
             amrex::Loop(bx, [=, &max_fab](int i, int j, int k) {
+                const int ii = amrex::max<int>(
+                    bx.smallEnd(0) + ng, amrex::min<int>(i, bx.bigEnd(0) - ng));
+                const int jj = amrex::max<int>(
+                    bx.smallEnd(1) + ng, amrex::min<int>(j, bx.bigEnd(1) - ng));
+                const int kk = amrex::max<int>(
+                    bx.smallEnd(2) + ng, amrex::min<int>(k, bx.bigEnd(2) - ng));
                 max_fab = amrex::max<amrex::Real>(
-                    max_fab, mask_arr(i, j, k) > 0
+                    max_fab, mask_arr(ii, jj, kk) > 0
                                  ? factor * vel_arr(i, j, k, vdir)
                                  : std::numeric_limits<amrex::Real>::lowest());
             });
@@ -150,8 +157,9 @@ amrex::Real kynema_sgf::diagnostics::get_vel_loc(
     const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> problo,
     const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
+    const int ng = 1;
     return amrex::ReduceMax(
-        vel, level_mask, 0,
+        vel, level_mask, ng,
         [=] AMREX_GPU_HOST_DEVICE(
             amrex::Box const& bx,
             amrex::Array4<amrex::Real const> const& vel_arr,
@@ -159,9 +167,15 @@ amrex::Real kynema_sgf::diagnostics::get_vel_loc(
             amrex::Real loc_fab = problo[ldir];
             amrex::Loop(bx, [=, &loc_fab](int i, int j, int k) {
                 int idx = (ldir == 0 ? i : (ldir == 1 ? j : k));
+                const int ii = amrex::max<int>(
+                    bx.smallEnd(0) + ng, amrex::min<int>(i, bx.bigEnd(0) - ng));
+                const int jj = amrex::max<int>(
+                    bx.smallEnd(1) + ng, amrex::min<int>(j, bx.bigEnd(1) - ng));
+                const int kk = amrex::max<int>(
+                    bx.smallEnd(2) + ng, amrex::min<int>(k, bx.bigEnd(2) - ng));
                 amrex::Real offset = 0.5_rt;
                 amrex::Real loc = problo[ldir] + ((idx + offset) * dx[ldir]);
-                bool mask_check = (mask_arr(i, j, k) > 0);
+                bool mask_check = (mask_arr(ii, jj, kk) > 0);
                 bool loc_check =
                     (amrex::Math::abs(vel_max - vel_arr(i, j, k, vdir)) <
                      std::numeric_limits<amrex::Real>::epsilon() * 1.0e6_rt);
