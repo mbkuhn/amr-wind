@@ -447,7 +447,7 @@ void Flather::set_velocity(
                 const amrex::IntVect iv_adj_cc = iv_adj + shift_to_cc;
 
                 amrex::Real boundary_val = arr(iv, fcomp);
-                amrex::Real interior_val = arr(iv_adj, fcomp);
+                amrex::Real interior_val = arr(iv_adj, fcomp); // Unused?
                 amrex::Real interior_liq = arr(iv_adj, fcomp);
                 amrex::Real interior_mix = arr(iv_adj, fcomp);
                 amrex::Real boundary_h = 0.0_rt;
@@ -530,6 +530,8 @@ void Flather::set_velocity(
                 // 3) If the boundary velocity is 0, then the scaling based on
                 //    external quantities is undefined. Keep the scale_interior
                 //    = 1
+                // 4) During initialization, the scaling can be very aggressive.
+                //    Limit how quickly things can change.
 
                 bool override_interior = false;
                 auto scale_interior = 1.0;
@@ -539,6 +541,10 @@ void Flather::set_velocity(
                 } else if (std::abs(boundary_val) > v_threshold * boundary_h) {
                     override_interior = true;
                 }
+
+                // Limit the scaling factor to prevent overly aggressive changes
+                scale_interior =
+                    amrex::max(0.5_rt, amrex::min(scale_interior, 1.2_rt));
 
                 auto local_vel = 0.0_rt;
                 auto scaled_vel = 0.0_rt;
