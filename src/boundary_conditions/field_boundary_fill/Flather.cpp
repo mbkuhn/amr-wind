@@ -536,7 +536,7 @@ void Flather::set_velocity(
                 if (std::abs(interior_liq) > v_threshold * interior_h) {
                     scale_interior =
                         (Flather_val - interior_mix) / interior_liq;
-                } else if (std::abs(boundary_val) < v_threshold * boundary_h) {
+                } else if (std::abs(boundary_val) > v_threshold * boundary_h) {
                     override_interior = true;
                 }
 
