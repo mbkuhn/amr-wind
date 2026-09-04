@@ -531,7 +531,9 @@ void Flather::set_velocity(
                 //    external quantities is undefined. Keep the scale_interior
                 //    = 1
                 // 4) During initialization, the scaling can be very aggressive.
-                //    Limit how quickly things can change.
+                //    Plus, when the internal and external profiles are very
+                //    different, the scaling can lead to rapid acceleration.
+                //    Switch to the external profile when the changes are rapid
 
                 bool override_interior = false;
                 auto scale_interior = 1.0;
@@ -542,9 +544,15 @@ void Flather::set_velocity(
                     override_interior = true;
                 }
 
+                if (scale_interior > 2.0_rt || scale_interior < 0.25_rt) {
+                    override_interior = true;
+                }
+
+                /*
                 // Limit the scaling factor to prevent overly aggressive changes
                 scale_interior =
                     amrex::max(0.5_rt, amrex::min(scale_interior, 1.2_rt));
+                */
 
                 auto local_vel = 0.0_rt;
                 auto scaled_vel = 0.0_rt;
