@@ -506,16 +506,37 @@ void Flather::set_velocity(
                 const bool prescribed_inflow =
                     ori.isLow() ? boundary_val > 0.0_rt : boundary_val < 0.0_rt;
 
+                // Clip the velocity in the interior to prevent inflow at
+                // outflow, this is consistent with the line integral
+                // calculations
                 const auto local_internal_vel =
                     ori.isLow() ? amrex::min(ref_arr(iv_adj_cc, idir), 0.0_rt)
                                 : amrex::max(ref_arr(iv_adj_cc, idir), 0.0_rt);
+
+                // Normal outflow case:
+                // *) For a given column, apply scale to the interior velocity,
+                // but only
+                //    to fully liquid cells; leave mixed cells unchanged.
+
+                // Edge cases:
+                // 1) If the boundary contains no liquid, the flather can be
+                // very large.
+                //    Use a regular outflow (Neumann) condition.
+                // 2) If the interior column contains no fully liquid cells,
+                // there is
+                //    nothing to scale. Instead of scaling the internal profile,
+                //    override the interior velocity with scaled external
+                //    profile.
+                // 3) If the boundary velocity is 0, then the scaling based on
+                //    external quantities is undefined. Keep the scale_interior
+                //    = 1
 
                 bool override_interior = false;
                 auto scale_interior = 1.0;
                 if (std::abs(interior_liq) > v_threshold * interior_h) {
                     scale_interior =
                         (Flather_val - interior_mix) / interior_liq;
-                } else {
+                } else if (std::abs(boundary_val) < v_threshold * boundary_h) {
                     override_interior = true;
                 }
 
