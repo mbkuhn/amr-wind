@@ -32,13 +32,15 @@ Flather::Flather(CFDSim& sim)
         m_terrain_blank = &m_repo.get_int_field("terrain_blank");
     }
 
-    if (m_sim.physics_manager().contains("MultiPhase")) {
-        m_rho1 = m_sim.physics_manager().get<kynema_sgf::MultiPhase>().rho1();
-        m_rho2 = m_sim.physics_manager().get<kynema_sgf::MultiPhase>().rho2();
+    {
+        amrex::ParmParse pp(identifier());
+        pp.query("max_velocity_scale_factor", m_velocity_scale_factor_max);
+        pp.query("min_velocity_scale_factor", m_velocity_scale_factor_min);
     }
-
-    amrex::ParmParse pp("incflo");
-    pp.queryarr("gravity", m_gravity);
+    {
+        amrex::ParmParse pp("incflo");
+        pp.queryarr("gravity", m_gravity);
+    }
 
     // Vector at the x boundary extends in y direction
     // Vector at the y boundary extends in x direction
@@ -361,6 +363,8 @@ void Flather::set_velocity(
     const amrex::Real tiny = constants::TIGHT_TOL;
     const amrex::Real v_threshold = 1.0e-6_rt;
     const auto grav_z = -m_gravity[2];
+    const auto vscale_min = m_velocity_scale_factor_min;
+    const auto vscale_max = m_velocity_scale_factor_max;
 
     for (amrex::OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
@@ -512,33 +516,35 @@ void Flather::set_velocity(
                 //    unchanged.
 
                 // Edge cases:
-                // 1) If the boundary contains no liquid, the Flather velocity
-                //    can be very large. Use a regular outflow (Neumann)
-                //    condition.
-
+                // 1) If the boundary velocity is 0, then the scaling based on
+                //    external quantities is undefined. Keep scale_interior = 1.
                 // 2) If the interior column contains no fully liquid cells,
                 //    there is nothing to scale. Instead of scaling the internal
                 //    profile, override the interior velocity with scaled
                 //    external profile.
-
-                // 3) If the boundary velocity is 0, then the scaling based on
-                //    external quantities is undefined. Keep scale_interior = 1.
-
-                // 4) During initialization, the scaling can be very aggressive.
+                // 3) During initialization, the scaling can be very aggressive.
                 //    Plus, when the internal and external profiles are very
                 //    different, the scaling can lead to rapid acceleration.
                 //    Switch to the external profile when the changes are rapid.
+                // 4) If the boundary contains no liquid, the Flather velocity
+                //    can be very large. Use a regular outflow (Neumann)
+                //    condition.
 
                 bool override_interior = false;
+                // Edge case 1 (when both conditions are false)
                 auto scale_interior = 1.0_rt;
                 if (std::abs(interior_liq) > v_threshold * interior_h) {
+                    // Normal case
                     scale_interior =
                         (Flather_val - interior_mix) / interior_liq;
                 } else if (std::abs(boundary_val) > v_threshold * boundary_h) {
+                    // Edge case 2
                     override_interior = true;
                 }
 
-                if (scale_interior > 2.0_rt || scale_interior < 0.25_rt) {
+                if (scale_interior > vscale_max ||
+                    scale_interior < vscale_min) {
+                    // Edge case 3
                     override_interior = true;
                 }
 
@@ -553,10 +559,9 @@ void Flather::set_velocity(
                 }
 
                 // Only use if advecting liquid (or zero velocity):
-                // This is important because the averages used to calculate
-                // the Flather velocity are only performed on cells containing
-                // liquid; therefore, the scaling of the velocity is only valid
-                // on those cells.
+                // The averages used to calculate the Flather velocity are only
+                // performed on cells containing liquid; therefore, the scaling
+                // of the velocity is only valid on those cells.
                 const bool outflow =
                     ori.isLow() ? scaled_vel <= 0.0_rt : scaled_vel >= 0.0_rt;
                 const bool inflow_any_liq = !outflow && boundary_vof > tiny;
@@ -566,6 +571,7 @@ void Flather::set_velocity(
                                           (outflow && override_interior))) {
                     arr(iv, fcomp) = scaled_vel;
                 } else if (outflow) {
+                    // Edge case 4 (boundary_h <= tiny)
                     arr(iv, fcomp) = local_vel;
                 }
             });

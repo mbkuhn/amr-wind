@@ -74,8 +74,8 @@ private:
     const Field& m_vof;
     const IntField* m_terrain_blank{nullptr};
     amrex::Vector<amrex::Real> m_gravity{0.0_rt, 0.0_rt, -9.81_rt};
-    amrex::Real m_rho1{1000.0_rt};
-    amrex::Real m_rho2{1.0_rt};
+    amrex::Real m_velocity_scale_factor_max{2.0_rt};
+    amrex::Real m_velocity_scale_factor_min{0.25_rt};
 
     MultiLevelVector m_xlo_uliq{FieldLoc::CELL};
     MultiLevelVector m_xhi_uliq{FieldLoc::CELL};
