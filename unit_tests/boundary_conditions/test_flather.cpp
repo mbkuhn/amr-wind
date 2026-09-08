@@ -84,8 +84,6 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
 {
     constexpr amrex::Real u0 = 2.0_rt;
     constexpr amrex::Real v0 = 3.0_rt;
-    constexpr amrex::Real u0_mac = 11.0_rt;
-    constexpr amrex::Real v0_mac = 13.0_rt;
     constexpr amrex::Real tol =
         std::numeric_limits<amrex::Real>::epsilon() * 1.0e4_rt;
 
@@ -94,16 +92,12 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
 
     auto& repo = mesh().field_repo();
     auto& velocity = repo.declare_field("velocity", 3, 1);
-    const auto mac_fields =
-        repo.declare_face_normal_field({"u_mac", "v_mac", "w_mac"}, 1, 1, 1);
+    repo.declare_face_normal_field({"u_mac", "v_mac", "w_mac"}, 1, 1, 1);
     auto& vof = repo.declare_field("vof", 1, 1);
 
     velocity.setVal(u0, 0, 1, 1);
     velocity.setVal(v0, 1, 1, 1);
     velocity.setVal(0.0_rt, 2, 1, 1);
-    mac_fields[0]->setVal(u0_mac, 0, 1, 1);
-    mac_fields[1]->setVal(v0_mac, 0, 1, 1);
-    mac_fields[2]->setVal(0.0_rt, 0, 1, 1);
     initialize_vof(vof, mesh().Geom(), m_wlev);
 
     kynema_sgf::Flather flather(sim());
@@ -129,6 +123,8 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
     const int nlevels = repo.num_active_levels();
     EXPECT_EQ(nlevels, 2);
 
+    // Flow is in positive x and y (outflow at xhi and yhi)
+    // - means it is capped at other boundaries
     for (int lev = 0; lev < nlevels; ++lev) {
         flather.accumulate_boundary(
             lev, 0, -1, true, xlo_uh, xlo_h, false,
@@ -146,43 +142,55 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
         const auto xhi_idx = xhi_uh.ncells(lev) - 1;
         const auto yhi_idx = yhi_uh.ncells(lev) - 1;
 
-        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0 * m_wlev, tol);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], 0.0_rt, tol);
         EXPECT_NEAR(xhi_uh.host_data(lev)[xhi_idx], u0 * m_wlev, tol);
-        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0 * m_wlev, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], 0.0_rt, tol);
         EXPECT_NEAR(yhi_uh.host_data(lev)[yhi_idx], v0 * m_wlev, tol);
 
         EXPECT_NEAR(xlo_h.host_data(lev)[0], m_wlev, tol);
         EXPECT_NEAR(xhi_h.host_data(lev)[xhi_idx], m_wlev, tol);
         EXPECT_NEAR(ylo_h.host_data(lev)[0], m_wlev, tol);
         EXPECT_NEAR(yhi_h.host_data(lev)[yhi_idx], m_wlev, tol);
+    }
 
-        // MAC velocity
+    velocity.setVal(-u0, 0, 1, 1);
+    velocity.setVal(-v0, 1, 1, 1);
+    // Flow is now reversed, opposite sides have outflow
+    for (int lev = 0; lev < nlevels; ++lev) {
         flather.accumulate_boundary(
-            lev, 0, -1, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New,
-            true);
+            lev, 0, -1, true, xlo_uh, xlo_h, false,
+            kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
-            lev, 1, -1, true, ylo_uh, ylo_h, false, kynema_sgf::FieldState::New,
-            true);
+            lev, 0, -1, false, xhi_uh, xhi_h, false,
+            kynema_sgf::FieldState::New);
+        flather.accumulate_boundary(
+            lev, 1, -1, true, ylo_uh, ylo_h, false,
+            kynema_sgf::FieldState::New);
+        flather.accumulate_boundary(
+            lev, 1, -1, false, yhi_uh, yhi_h, false,
+            kynema_sgf::FieldState::New);
 
-        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * m_wlev, tol);
-        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0_mac * m_wlev, tol);
+        const auto xhi_idx = xhi_uh.ncells(lev) - 1;
+        const auto yhi_idx = yhi_uh.ncells(lev) - 1;
+
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], 0.0_rt, tol);
+        EXPECT_NEAR(xhi_uh.host_data(lev)[xhi_idx], u0 * m_wlev, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], 0.0_rt, tol);
+        EXPECT_NEAR(yhi_uh.host_data(lev)[yhi_idx], v0 * m_wlev, tol);
 
         const auto dz = (8.0_rt / (m_nx * (lev + 1)));
+
         // Liquid only
         flather.accumulate_boundary(
-            lev, 0, 0, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New,
-            true);
-
+            lev, 0, 0, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New);
         const auto hliq = std::floor(m_wlev / dz) * dz;
-        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * hliq, tol);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], -u0 * hliq, tol);
 
         // Mix only
         flather.accumulate_boundary(
-            lev, 0, 1, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New,
-            true);
-
+            lev, 0, 1, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New);
         const auto hmix = m_wlev - hliq;
-        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * hmix, tol);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], -u0 * hmix, tol);
     }
 }
 
@@ -191,6 +199,8 @@ TEST_F(
 {
     constexpr amrex::Real u0 = 4.0_rt;
     constexpr amrex::Real v0 = 1.5_rt;
+    constexpr amrex::Real u0_mac = 11.0_rt;
+    constexpr amrex::Real v0_mac = 13.0_rt;
     constexpr amrex::Real tol =
         std::numeric_limits<amrex::Real>::epsilon() * 1.0e4_rt;
 
@@ -199,12 +209,17 @@ TEST_F(
 
     auto& repo = mesh().field_repo();
     auto& velocity = repo.declare_field("velocity", 3, 1);
-    repo.declare_face_normal_field({"u_mac", "v_mac", "w_mac"}, 1, 1, 1);
+
+    const auto mac_fields =
+        repo.declare_face_normal_field({"u_mac", "v_mac", "w_mac"}, 1, 1, 1);
     auto& vof = repo.declare_field("vof", 1, 1);
 
     velocity.setVal(u0, 0, 1, 1);
     velocity.setVal(v0, 1, 1, 1);
     velocity.setVal(0.0_rt, 2, 1, 1);
+    mac_fields[0]->setVal(u0_mac, 0, 1, 1);
+    mac_fields[1]->setVal(v0_mac, 0, 1, 1);
+    mac_fields[2]->setVal(0.0_rt, 0, 1, 1);
     initialize_vof(vof, mesh().Geom(), m_wlev);
 
     kynema_sgf::Flather flather(sim());
@@ -251,6 +266,17 @@ TEST_F(
         EXPECT_NEAR(xhi_h.host_data(lev)[0], m_wlev, tol);
         EXPECT_NEAR(ylo_h.host_data(lev)[0], m_wlev, tol);
         EXPECT_NEAR(yhi_h.host_data(lev)[0], m_wlev, tol);
+
+        // MAC velocity
+        flather.accumulate_boundary(
+            lev, 0, -1, true, xlo_uh, xlo_h, true, kynema_sgf::FieldState::New,
+            true);
+        flather.accumulate_boundary(
+            lev, 1, -1, true, ylo_uh, ylo_h, true, kynema_sgf::FieldState::New,
+            true);
+
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * m_wlev, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0_mac * m_wlev, tol);
     }
 }
 
