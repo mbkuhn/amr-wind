@@ -40,13 +40,10 @@ public:
         int dcomp = 0,
         int orig_comp = 0) const override;
 
-    void update_flather_variables(const int lev, const FieldState fstate)
-    {
-        compute_boundary_z_averages(lev, fstate, false);
-    }
-
     void update_flather_variables(
-        const int lev, const FieldState fstate, const bool use_mac_fields)
+        const int lev,
+        const FieldState fstate,
+        const bool use_mac_fields = false)
     {
         compute_boundary_z_averages(lev, fstate, use_mac_fields);
     }

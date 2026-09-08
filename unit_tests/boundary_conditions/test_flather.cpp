@@ -92,12 +92,16 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
 
     auto& repo = mesh().field_repo();
     auto& velocity = repo.declare_field("velocity", 3, 1);
-    repo.declare_face_normal_field({"u_mac", "v_mac", "w_mac"}, 1, 1, 1);
+    const auto mac_fields =
+        repo.declare_face_normal_field({"u_mac", "v_mac", "w_mac"}, 1, 1, 1);
     auto& vof = repo.declare_field("vof", 1, 1);
 
     velocity.setVal(u0, 0, 1, 1);
     velocity.setVal(v0, 1, 1, 1);
     velocity.setVal(0.0_rt, 2, 1, 1);
+    mac_fields[0]->setVal(11.0_rt, 0, 1, 1);
+    mac_fields[1]->setVal(13.0_rt, 0, 1, 1);
+    mac_fields[2]->setVal(0.0_rt, 0, 1, 1);
     initialize_vof(vof, mesh().Geom(), m_wlev);
 
     kynema_sgf::Flather flather(sim());
@@ -111,14 +115,14 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
     kynema_sgf::MultiLevelVector yhi_uavg;
     kynema_sgf::MultiLevelVector yhi_havg;
 
-    xlo_uavg.resize(0, mesh().Geom());
-    xlo_havg.resize(0, mesh().Geom());
-    xhi_uavg.resize(0, mesh().Geom());
-    xhi_havg.resize(0, mesh().Geom());
-    ylo_uavg.resize(1, mesh().Geom());
-    ylo_havg.resize(1, mesh().Geom());
-    yhi_uavg.resize(1, mesh().Geom());
-    yhi_havg.resize(1, mesh().Geom());
+    xlo_uavg.resize(1, mesh().Geom());
+    xlo_havg.resize(1, mesh().Geom());
+    xhi_uavg.resize(1, mesh().Geom());
+    xhi_havg.resize(1, mesh().Geom());
+    ylo_uavg.resize(0, mesh().Geom());
+    ylo_havg.resize(0, mesh().Geom());
+    yhi_uavg.resize(0, mesh().Geom());
+    yhi_havg.resize(0, mesh().Geom());
 
     const int nlevels = repo.num_active_levels();
     EXPECT_EQ(nlevels, 2);
@@ -149,6 +153,16 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
         EXPECT_NEAR(xhi_havg.host_data(lev)[xhi_idx], m_wlev, tol);
         EXPECT_NEAR(ylo_havg.host_data(lev)[0], m_wlev, tol);
         EXPECT_NEAR(yhi_havg.host_data(lev)[yhi_idx], m_wlev, tol);
+
+        flather.accumulate_boundary(
+            lev, 0, 0, true, xlo_uavg, xlo_havg, false,
+            kynema_sgf::FieldState::New, true);
+        flather.accumulate_boundary(
+            lev, 1, 0, true, ylo_uavg, ylo_havg, false,
+            kynema_sgf::FieldState::New, true);
+
+        EXPECT_NEAR(xlo_uavg.host_data(lev)[0], 11.0_rt, tol);
+        EXPECT_NEAR(ylo_uavg.host_data(lev)[0], 13.0_rt, tol);
     }
 }
 
@@ -184,14 +198,14 @@ TEST_F(
     kynema_sgf::MultiLevelVector yhi_uavg;
     kynema_sgf::MultiLevelVector yhi_havg;
 
-    xlo_uavg.resize(0, mesh().Geom());
-    xlo_havg.resize(0, mesh().Geom());
-    xhi_uavg.resize(0, mesh().Geom());
-    xhi_havg.resize(0, mesh().Geom());
-    ylo_uavg.resize(1, mesh().Geom());
-    ylo_havg.resize(1, mesh().Geom());
-    yhi_uavg.resize(1, mesh().Geom());
-    yhi_havg.resize(1, mesh().Geom());
+    xlo_uavg.resize(1, mesh().Geom());
+    xlo_havg.resize(1, mesh().Geom());
+    xhi_uavg.resize(1, mesh().Geom());
+    xhi_havg.resize(1, mesh().Geom());
+    ylo_uavg.resize(0, mesh().Geom());
+    ylo_havg.resize(0, mesh().Geom());
+    yhi_uavg.resize(0, mesh().Geom());
+    yhi_havg.resize(0, mesh().Geom());
 
     const int nlevels = repo.num_active_levels();
     EXPECT_EQ(nlevels, 2);

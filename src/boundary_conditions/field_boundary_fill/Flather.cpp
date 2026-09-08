@@ -363,8 +363,6 @@ void Flather::set_velocity(
     const amrex::Real tiny = constants::TIGHT_TOL;
     const amrex::Real v_threshold = 1.0e-6_rt;
     const auto grav_z = -m_gravity[2];
-    const auto rho1 = m_rho1;
-    const auto rho2 = m_rho2;
 
     for (amrex::OrientationIter oit; oit != nullptr; ++oit) {
         const auto ori = oit();
@@ -447,7 +445,6 @@ void Flather::set_velocity(
                 const amrex::IntVect iv_adj_cc = iv_adj + shift_to_cc;
 
                 amrex::Real boundary_val = arr(iv, fcomp);
-                amrex::Real interior_val = arr(iv_adj, fcomp); // Unused?
                 amrex::Real interior_liq = arr(iv_adj, fcomp);
                 amrex::Real interior_mix = arr(iv_adj, fcomp);
                 amrex::Real boundary_h = 0.0_rt;
@@ -459,7 +456,6 @@ void Flather::set_velocity(
                         ori.isLow() ? xlo_uliq[iv_adj[1]] : xhi_uliq[iv_adj[1]];
                     interior_mix =
                         ori.isLow() ? xlo_umix[iv_adj[1]] : xhi_umix[iv_adj[1]];
-                    interior_val = interior_liq + interior_mix;
                     interior_h =
                         ori.isLow() ? xlo_havg[iv_adj[1]] : xhi_havg[iv_adj[1]];
                     boundary_val =
@@ -471,7 +467,6 @@ void Flather::set_velocity(
                         ori.isLow() ? ylo_uliq[iv_adj[0]] : yhi_uliq[iv_adj[0]];
                     interior_mix =
                         ori.isLow() ? ylo_umix[iv_adj[0]] : yhi_umix[iv_adj[0]];
-                    interior_val = interior_liq + interior_mix;
                     interior_h =
                         ori.isLow() ? ylo_havg[iv_adj[0]] : yhi_havg[iv_adj[0]];
                     boundary_val =
