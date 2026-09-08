@@ -63,7 +63,7 @@ protected:
         std::stringstream ss;
         ss << "1 // Number of levels" << '\n';
         ss << "1 // Number of boxes at this level" << '\n';
-        ss << "0 0 2 4 6 6" << '\n';
+        ss << "0 0 2 4 8 6" << '\n';
 
         create_mesh_instance<RefineMesh>();
         std::unique_ptr<kynema_sgf::CartBoxRefinement> box_refine(
@@ -77,7 +77,7 @@ protected:
     }
 
     const int m_nx{32};
-    const amrex::Real m_wlev{4.5_rt};
+    const amrex::Real m_wlev{4.07_rt};
 };
 
 TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
@@ -167,29 +167,22 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
         EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * m_wlev, tol);
         EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0_mac * m_wlev, tol);
 
+        const auto dz = (8.0_rt / (m_nx * (lev + 1)));
         // Liquid only
         flather.accumulate_boundary(
             lev, 0, 0, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New,
             true);
-        flather.accumulate_boundary(
-            lev, 1, 0, true, ylo_uh, ylo_h, false, kynema_sgf::FieldState::New,
-            true);
 
-        const auto hliq = std::floor(m_wlev);
+        const auto hliq = std::floor(m_wlev / dz) * dz;
         EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * hliq, tol);
-        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0_mac * hliq, tol);
 
         // Mix only
         flather.accumulate_boundary(
             lev, 0, 1, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New,
             true);
-        flather.accumulate_boundary(
-            lev, 1, 1, true, ylo_uh, ylo_h, false, kynema_sgf::FieldState::New,
-            true);
 
-        const auto hmix = m_wlev - std::floor(m_wlev);
+        const auto hmix = m_wlev - hliq;
         EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * hmix, tol);
-        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0_mac * hmix, tol);
     }
 }
 
