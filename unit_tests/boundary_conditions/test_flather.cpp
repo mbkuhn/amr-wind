@@ -77,13 +77,15 @@ protected:
     }
 
     const int m_nx{32};
-    const amrex::Real m_wlev{4.0_rt};
+    const amrex::Real m_wlev{4.5_rt};
 };
 
 TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
 {
     constexpr amrex::Real u0 = 2.0_rt;
     constexpr amrex::Real v0 = 3.0_rt;
+    constexpr amrex::Real u0_mac = 11.0_rt;
+    constexpr amrex::Real v0_mac = 13.0_rt;
     constexpr amrex::Real tol =
         std::numeric_limits<amrex::Real>::epsilon() * 1.0e4_rt;
 
@@ -99,70 +101,93 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
     velocity.setVal(u0, 0, 1, 1);
     velocity.setVal(v0, 1, 1, 1);
     velocity.setVal(0.0_rt, 2, 1, 1);
-    mac_fields[0]->setVal(11.0_rt, 0, 1, 1);
-    mac_fields[1]->setVal(13.0_rt, 0, 1, 1);
+    mac_fields[0]->setVal(u0_mac, 0, 1, 1);
+    mac_fields[1]->setVal(v0_mac, 0, 1, 1);
     mac_fields[2]->setVal(0.0_rt, 0, 1, 1);
     initialize_vof(vof, mesh().Geom(), m_wlev);
 
     kynema_sgf::Flather flather(sim());
 
-    kynema_sgf::MultiLevelVector xlo_uavg;
-    kynema_sgf::MultiLevelVector xlo_havg;
-    kynema_sgf::MultiLevelVector xhi_uavg;
-    kynema_sgf::MultiLevelVector xhi_havg;
-    kynema_sgf::MultiLevelVector ylo_uavg;
-    kynema_sgf::MultiLevelVector ylo_havg;
-    kynema_sgf::MultiLevelVector yhi_uavg;
-    kynema_sgf::MultiLevelVector yhi_havg;
+    kynema_sgf::MultiLevelVector xlo_uh;
+    kynema_sgf::MultiLevelVector xlo_h;
+    kynema_sgf::MultiLevelVector xhi_uh;
+    kynema_sgf::MultiLevelVector xhi_h;
+    kynema_sgf::MultiLevelVector ylo_uh;
+    kynema_sgf::MultiLevelVector ylo_h;
+    kynema_sgf::MultiLevelVector yhi_uh;
+    kynema_sgf::MultiLevelVector yhi_h;
 
-    xlo_uavg.resize(1, mesh().Geom());
-    xlo_havg.resize(1, mesh().Geom());
-    xhi_uavg.resize(1, mesh().Geom());
-    xhi_havg.resize(1, mesh().Geom());
-    ylo_uavg.resize(0, mesh().Geom());
-    ylo_havg.resize(0, mesh().Geom());
-    yhi_uavg.resize(0, mesh().Geom());
-    yhi_havg.resize(0, mesh().Geom());
+    xlo_uh.resize(1, mesh().Geom());
+    xlo_h.resize(1, mesh().Geom());
+    xhi_uh.resize(1, mesh().Geom());
+    xhi_h.resize(1, mesh().Geom());
+    ylo_uh.resize(0, mesh().Geom());
+    ylo_h.resize(0, mesh().Geom());
+    yhi_uh.resize(0, mesh().Geom());
+    yhi_h.resize(0, mesh().Geom());
 
     const int nlevels = repo.num_active_levels();
     EXPECT_EQ(nlevels, 2);
 
     for (int lev = 0; lev < nlevels; ++lev) {
         flather.accumulate_boundary(
-            lev, 0, 0, true, xlo_uavg, xlo_havg, false,
+            lev, 0, -1, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New);
+        flather.accumulate_boundary(
+            lev, 0, -1, false, xhi_uh, xhi_h, false,
             kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
-            lev, 0, 0, false, xhi_uavg, xhi_havg, false,
-            kynema_sgf::FieldState::New);
+            lev, 1, -1, true, ylo_uh, ylo_h, false, kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
-            lev, 1, 0, true, ylo_uavg, ylo_havg, false,
-            kynema_sgf::FieldState::New);
-        flather.accumulate_boundary(
-            lev, 1, 0, false, yhi_uavg, yhi_havg, false,
+            lev, 1, -1, false, yhi_uh, yhi_h, false,
             kynema_sgf::FieldState::New);
 
-        const auto xhi_idx = xhi_uavg.ncells(lev) - 1;
-        const auto yhi_idx = yhi_uavg.ncells(lev) - 1;
+        const auto xhi_idx = xhi_uh.ncells(lev) - 1;
+        const auto yhi_idx = yhi_uh.ncells(lev) - 1;
 
-        EXPECT_NEAR(xlo_uavg.host_data(lev)[0], u0, tol);
-        EXPECT_NEAR(xhi_uavg.host_data(lev)[xhi_idx], u0, tol);
-        EXPECT_NEAR(ylo_uavg.host_data(lev)[0], v0, tol);
-        EXPECT_NEAR(yhi_uavg.host_data(lev)[yhi_idx], v0, tol);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0 * m_wlev, tol);
+        EXPECT_NEAR(xhi_uh.host_data(lev)[xhi_idx], u0 * m_wlev, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0 * m_wlev, tol);
+        EXPECT_NEAR(yhi_uh.host_data(lev)[yhi_idx], v0 * m_wlev, tol);
 
-        EXPECT_NEAR(xlo_havg.host_data(lev)[0], m_wlev, tol);
-        EXPECT_NEAR(xhi_havg.host_data(lev)[xhi_idx], m_wlev, tol);
-        EXPECT_NEAR(ylo_havg.host_data(lev)[0], m_wlev, tol);
-        EXPECT_NEAR(yhi_havg.host_data(lev)[yhi_idx], m_wlev, tol);
+        EXPECT_NEAR(xlo_h.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(xhi_h.host_data(lev)[xhi_idx], m_wlev, tol);
+        EXPECT_NEAR(ylo_h.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(yhi_h.host_data(lev)[yhi_idx], m_wlev, tol);
 
+        // MAC velocity
         flather.accumulate_boundary(
-            lev, 0, 0, true, xlo_uavg, xlo_havg, false,
-            kynema_sgf::FieldState::New, true);
+            lev, 0, -1, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New,
+            true);
         flather.accumulate_boundary(
-            lev, 1, 0, true, ylo_uavg, ylo_havg, false,
-            kynema_sgf::FieldState::New, true);
+            lev, 1, -1, true, ylo_uh, ylo_h, false, kynema_sgf::FieldState::New,
+            true);
 
-        EXPECT_NEAR(xlo_uavg.host_data(lev)[0], 11.0_rt, tol);
-        EXPECT_NEAR(ylo_uavg.host_data(lev)[0], 13.0_rt, tol);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * m_wlev, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0_mac * m_wlev, tol);
+
+        // Liquid only
+        flather.accumulate_boundary(
+            lev, 0, 0, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New,
+            true);
+        flather.accumulate_boundary(
+            lev, 1, 0, true, ylo_uh, ylo_h, false, kynema_sgf::FieldState::New,
+            true);
+
+        const auto hliq = std::floor(m_wlev);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * hliq, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0_mac * hliq, tol);
+
+        // Mix only
+        flather.accumulate_boundary(
+            lev, 0, 1, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New,
+            true);
+        flather.accumulate_boundary(
+            lev, 1, 1, true, ylo_uh, ylo_h, false, kynema_sgf::FieldState::New,
+            true);
+
+        const auto hmix = m_wlev - std::floor(m_wlev);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0_mac * hmix, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0_mac * hmix, tol);
     }
 }
 
@@ -189,50 +214,46 @@ TEST_F(
 
     kynema_sgf::Flather flather(sim());
 
-    kynema_sgf::MultiLevelVector xlo_uavg;
-    kynema_sgf::MultiLevelVector xlo_havg;
-    kynema_sgf::MultiLevelVector xhi_uavg;
-    kynema_sgf::MultiLevelVector xhi_havg;
-    kynema_sgf::MultiLevelVector ylo_uavg;
-    kynema_sgf::MultiLevelVector ylo_havg;
-    kynema_sgf::MultiLevelVector yhi_uavg;
-    kynema_sgf::MultiLevelVector yhi_havg;
+    kynema_sgf::MultiLevelVector xlo_uh;
+    kynema_sgf::MultiLevelVector xlo_h;
+    kynema_sgf::MultiLevelVector xhi_uh;
+    kynema_sgf::MultiLevelVector xhi_h;
+    kynema_sgf::MultiLevelVector ylo_uh;
+    kynema_sgf::MultiLevelVector ylo_h;
+    kynema_sgf::MultiLevelVector yhi_uh;
+    kynema_sgf::MultiLevelVector yhi_h;
 
-    xlo_uavg.resize(1, mesh().Geom());
-    xlo_havg.resize(1, mesh().Geom());
-    xhi_uavg.resize(1, mesh().Geom());
-    xhi_havg.resize(1, mesh().Geom());
-    ylo_uavg.resize(0, mesh().Geom());
-    ylo_havg.resize(0, mesh().Geom());
-    yhi_uavg.resize(0, mesh().Geom());
-    yhi_havg.resize(0, mesh().Geom());
+    xlo_uh.resize(1, mesh().Geom());
+    xlo_h.resize(1, mesh().Geom());
+    xhi_uh.resize(1, mesh().Geom());
+    xhi_h.resize(1, mesh().Geom());
+    ylo_uh.resize(0, mesh().Geom());
+    ylo_h.resize(0, mesh().Geom());
+    yhi_uh.resize(0, mesh().Geom());
+    yhi_h.resize(0, mesh().Geom());
 
     const int nlevels = repo.num_active_levels();
     EXPECT_EQ(nlevels, 2);
 
     for (int lev = 0; lev < nlevels; ++lev) {
         flather.accumulate_boundary(
-            lev, 0, 0, true, xlo_uavg, xlo_havg, true,
-            kynema_sgf::FieldState::New);
+            lev, 0, -1, true, xlo_uh, xlo_h, true, kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
-            lev, 0, 0, false, xhi_uavg, xhi_havg, true,
-            kynema_sgf::FieldState::New);
+            lev, 0, -1, false, xhi_uh, xhi_h, true, kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
-            lev, 1, 0, true, ylo_uavg, ylo_havg, true,
-            kynema_sgf::FieldState::New);
+            lev, 1, -1, true, ylo_uh, ylo_h, true, kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
-            lev, 1, 0, false, yhi_uavg, yhi_havg, true,
-            kynema_sgf::FieldState::New);
+            lev, 1, -1, false, yhi_uh, yhi_h, true, kynema_sgf::FieldState::New);
 
-        EXPECT_NEAR(xlo_uavg.host_data(lev)[0], u0, tol);
-        EXPECT_NEAR(xhi_uavg.host_data(lev)[0], u0, tol);
-        EXPECT_NEAR(ylo_uavg.host_data(lev)[0], v0, tol);
-        EXPECT_NEAR(yhi_uavg.host_data(lev)[0], v0, tol);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0, tol);
+        EXPECT_NEAR(xhi_uh.host_data(lev)[0], u0, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0, tol);
+        EXPECT_NEAR(yhi_uh.host_data(lev)[0], v0, tol);
 
-        EXPECT_NEAR(xlo_havg.host_data(lev)[0], m_wlev, tol);
-        EXPECT_NEAR(xhi_havg.host_data(lev)[0], m_wlev, tol);
-        EXPECT_NEAR(ylo_havg.host_data(lev)[0], m_wlev, tol);
-        EXPECT_NEAR(yhi_havg.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(xlo_h.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(xhi_h.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(ylo_h.host_data(lev)[0], m_wlev, tol);
+        EXPECT_NEAR(yhi_h.host_data(lev)[0], m_wlev, tol);
     }
 }
 
