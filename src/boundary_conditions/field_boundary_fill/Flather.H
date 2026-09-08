@@ -77,26 +77,26 @@ private:
     amrex::Real m_velocity_scale_factor_max{2.0_rt};
     amrex::Real m_velocity_scale_factor_min{0.25_rt};
 
-    MultiLevelVector m_xlo_uliq{FieldLoc::CELL};
-    MultiLevelVector m_xhi_uliq{FieldLoc::CELL};
-    MultiLevelVector m_ylo_uliq{FieldLoc::CELL};
-    MultiLevelVector m_yhi_uliq{FieldLoc::CELL};
-    MultiLevelVector m_xlo_umix{FieldLoc::CELL};
-    MultiLevelVector m_xhi_umix{FieldLoc::CELL};
-    MultiLevelVector m_ylo_umix{FieldLoc::CELL};
-    MultiLevelVector m_yhi_umix{FieldLoc::CELL};
-    MultiLevelVector m_xlo_bnd_uvof{FieldLoc::CELL};
-    MultiLevelVector m_xhi_bnd_uvof{FieldLoc::CELL};
-    MultiLevelVector m_ylo_bnd_uvof{FieldLoc::CELL};
-    MultiLevelVector m_yhi_bnd_uvof{FieldLoc::CELL};
-    MultiLevelVector m_xlo_h_avg{FieldLoc::CELL};
-    MultiLevelVector m_xhi_h_avg{FieldLoc::CELL};
-    MultiLevelVector m_ylo_h_avg{FieldLoc::CELL};
-    MultiLevelVector m_yhi_h_avg{FieldLoc::CELL};
-    MultiLevelVector m_xlo_bnd_h_avg{FieldLoc::CELL};
-    MultiLevelVector m_xhi_bnd_h_avg{FieldLoc::CELL};
-    MultiLevelVector m_ylo_bnd_h_avg{FieldLoc::CELL};
-    MultiLevelVector m_yhi_bnd_h_avg{FieldLoc::CELL};
+    MultiLevelVector m_xlo_uhliq{FieldLoc::CELL};
+    MultiLevelVector m_xhi_uhliq{FieldLoc::CELL};
+    MultiLevelVector m_ylo_uhliq{FieldLoc::CELL};
+    MultiLevelVector m_yhi_uhliq{FieldLoc::CELL};
+    MultiLevelVector m_xlo_uhmix{FieldLoc::CELL};
+    MultiLevelVector m_xhi_uhmix{FieldLoc::CELL};
+    MultiLevelVector m_ylo_uhmix{FieldLoc::CELL};
+    MultiLevelVector m_yhi_uhmix{FieldLoc::CELL};
+    MultiLevelVector m_xlo_bnd_uh{FieldLoc::CELL};
+    MultiLevelVector m_xhi_bnd_uh{FieldLoc::CELL};
+    MultiLevelVector m_ylo_bnd_uh{FieldLoc::CELL};
+    MultiLevelVector m_yhi_bnd_uh{FieldLoc::CELL};
+    MultiLevelVector m_xlo_h{FieldLoc::CELL};
+    MultiLevelVector m_xhi_h{FieldLoc::CELL};
+    MultiLevelVector m_ylo_h{FieldLoc::CELL};
+    MultiLevelVector m_yhi_h{FieldLoc::CELL};
+    MultiLevelVector m_xlo_bnd_h{FieldLoc::CELL};
+    MultiLevelVector m_xhi_bnd_h{FieldLoc::CELL};
+    MultiLevelVector m_ylo_bnd_h{FieldLoc::CELL};
+    MultiLevelVector m_yhi_bnd_h{FieldLoc::CELL};
 };
 
 } // namespace kynema_sgf

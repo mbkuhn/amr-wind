@@ -44,27 +44,27 @@ Flather::Flather(CFDSim& sim)
 
     // Vector at the x boundary extends in y direction
     // Vector at the y boundary extends in x direction
-    m_xlo_uliq.resize(1, m_mesh.Geom());
-    m_xhi_uliq.resize(1, m_mesh.Geom());
-    m_ylo_uliq.resize(0, m_mesh.Geom());
-    m_yhi_uliq.resize(0, m_mesh.Geom());
-    m_xlo_umix.resize(1, m_mesh.Geom());
-    m_xhi_umix.resize(1, m_mesh.Geom());
-    m_ylo_umix.resize(0, m_mesh.Geom());
-    m_yhi_umix.resize(0, m_mesh.Geom());
-    m_xlo_bnd_uvof.resize(1, m_mesh.Geom());
-    m_xhi_bnd_uvof.resize(1, m_mesh.Geom());
-    m_ylo_bnd_uvof.resize(0, m_mesh.Geom());
-    m_yhi_bnd_uvof.resize(0, m_mesh.Geom());
+    m_xlo_uhliq.resize(1, m_mesh.Geom());
+    m_xhi_uhliq.resize(1, m_mesh.Geom());
+    m_ylo_uhliq.resize(0, m_mesh.Geom());
+    m_yhi_uhliq.resize(0, m_mesh.Geom());
+    m_xlo_uhmix.resize(1, m_mesh.Geom());
+    m_xhi_uhmix.resize(1, m_mesh.Geom());
+    m_ylo_uhmix.resize(0, m_mesh.Geom());
+    m_yhi_uhmix.resize(0, m_mesh.Geom());
+    m_xlo_bnd_uh.resize(1, m_mesh.Geom());
+    m_xhi_bnd_uh.resize(1, m_mesh.Geom());
+    m_ylo_bnd_uh.resize(0, m_mesh.Geom());
+    m_yhi_bnd_uh.resize(0, m_mesh.Geom());
 
-    m_xlo_h_avg.resize(1, m_mesh.Geom());
-    m_xhi_h_avg.resize(1, m_mesh.Geom());
-    m_ylo_h_avg.resize(0, m_mesh.Geom());
-    m_yhi_h_avg.resize(0, m_mesh.Geom());
-    m_xlo_bnd_h_avg.resize(1, m_mesh.Geom());
-    m_xhi_bnd_h_avg.resize(1, m_mesh.Geom());
-    m_ylo_bnd_h_avg.resize(0, m_mesh.Geom());
-    m_yhi_bnd_h_avg.resize(0, m_mesh.Geom());
+    m_xlo_h.resize(1, m_mesh.Geom());
+    m_xhi_h.resize(1, m_mesh.Geom());
+    m_ylo_h.resize(0, m_mesh.Geom());
+    m_yhi_h.resize(0, m_mesh.Geom());
+    m_xlo_bnd_h.resize(1, m_mesh.Geom());
+    m_xhi_bnd_h.resize(1, m_mesh.Geom());
+    m_ylo_bnd_h.resize(0, m_mesh.Geom());
+    m_yhi_bnd_h.resize(0, m_mesh.Geom());
 }
 
 void Flather::post_init_actions()
@@ -92,7 +92,7 @@ void Flather::accumulate_boundary(
     auto& dist_h = out_hvec.host_data(current_level);
     const int nline = static_cast<int>(int_h.size());
 
-    amrex::Gpu::DeviceVector<amrex::Real> uvof_sum_d(nline, 0.0_rt);
+    amrex::Gpu::DeviceVector<amrex::Real> uh_sum_d(nline, 0.0_rt);
     amrex::Gpu::DeviceVector<amrex::Real> vof_sum_d(nline, 0.0_rt);
 
     const amrex::Real tiny = constants::TIGHT_TOL;
@@ -157,7 +157,7 @@ void Flather::accumulate_boundary(
                 use_terrain ? (*m_terrain_blank)(lev).const_array(mfi)
                             : amrex::Array4<int const>();
 
-            amrex::Real* uvof_sum = uvof_sum_d.data();
+            amrex::Real* uh_sum = uh_sum_d.data();
             amrex::Real* vof_sum = vof_sum_d.data();
 
             amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -206,14 +206,14 @@ void Flather::accumulate_boundary(
                                            : amrex::max(local_vel, 0.0_rt);
                     }
                     amrex::Gpu::Atomic::Add(
-                        &uvof_sum[idx], local_vel * vel_height);
+                        &uh_sum[idx], local_vel * vel_height);
                 }
             });
         }
     }
 
     amrex::Gpu::copy(
-        amrex::Gpu::deviceToHost, uvof_sum_d.begin(), uvof_sum_d.end(),
+        amrex::Gpu::deviceToHost, uh_sum_d.begin(), uh_sum_d.end(),
         int_h.begin());
     amrex::Gpu::copy(
         amrex::Gpu::deviceToHost, vof_sum_d.begin(), vof_sum_d.end(),
@@ -229,63 +229,63 @@ void Flather::compute_internal_z_averages()
 
     const int nlevels = m_repo.num_active_levels();
     const int nlevels_geom = static_cast<int>(m_mesh.Geom().size());
-    if (m_xlo_uliq.size() != nlevels_geom) {
-        m_xlo_uliq.resize(1, m_mesh.Geom());
-        m_xhi_uliq.resize(1, m_mesh.Geom());
-        m_ylo_uliq.resize(0, m_mesh.Geom());
-        m_yhi_uliq.resize(0, m_mesh.Geom());
-        m_xlo_umix.resize(1, m_mesh.Geom());
-        m_xhi_umix.resize(1, m_mesh.Geom());
-        m_ylo_umix.resize(0, m_mesh.Geom());
-        m_yhi_umix.resize(0, m_mesh.Geom());
-        m_xlo_bnd_uvof.resize(1, m_mesh.Geom());
-        m_xhi_bnd_uvof.resize(1, m_mesh.Geom());
-        m_ylo_bnd_uvof.resize(0, m_mesh.Geom());
-        m_yhi_bnd_uvof.resize(0, m_mesh.Geom());
+    if (m_xlo_uhliq.size() != nlevels_geom) {
+        m_xlo_uhliq.resize(1, m_mesh.Geom());
+        m_xhi_uhliq.resize(1, m_mesh.Geom());
+        m_ylo_uhliq.resize(0, m_mesh.Geom());
+        m_yhi_uhliq.resize(0, m_mesh.Geom());
+        m_xlo_uhmix.resize(1, m_mesh.Geom());
+        m_xhi_uhmix.resize(1, m_mesh.Geom());
+        m_ylo_uhmix.resize(0, m_mesh.Geom());
+        m_yhi_uhmix.resize(0, m_mesh.Geom());
+        m_xlo_bnd_uh.resize(1, m_mesh.Geom());
+        m_xhi_bnd_uh.resize(1, m_mesh.Geom());
+        m_ylo_bnd_uh.resize(0, m_mesh.Geom());
+        m_yhi_bnd_uh.resize(0, m_mesh.Geom());
 
-        m_xlo_h_avg.resize(1, m_mesh.Geom());
-        m_xhi_h_avg.resize(1, m_mesh.Geom());
-        m_ylo_h_avg.resize(0, m_mesh.Geom());
-        m_yhi_h_avg.resize(0, m_mesh.Geom());
-        m_xlo_bnd_h_avg.resize(1, m_mesh.Geom());
-        m_xhi_bnd_h_avg.resize(1, m_mesh.Geom());
-        m_ylo_bnd_h_avg.resize(0, m_mesh.Geom());
-        m_yhi_bnd_h_avg.resize(0, m_mesh.Geom());
+        m_xlo_h.resize(1, m_mesh.Geom());
+        m_xhi_h.resize(1, m_mesh.Geom());
+        m_ylo_h.resize(0, m_mesh.Geom());
+        m_yhi_h.resize(0, m_mesh.Geom());
+        m_xlo_bnd_h.resize(1, m_mesh.Geom());
+        m_xhi_bnd_h.resize(1, m_mesh.Geom());
+        m_ylo_bnd_h.resize(0, m_mesh.Geom());
+        m_yhi_bnd_h.resize(0, m_mesh.Geom());
     }
 
     for (int lev = 0; lev < nlevels; ++lev) {
         this->accumulate_boundary(
-            lev, 0, 0, true, m_xlo_uliq, m_xlo_h_avg, false, FieldState::New);
+            lev, 0, 0, true, m_xlo_uhliq, m_xlo_h, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 0, 0, false, m_xhi_uliq, m_xhi_h_avg, false, FieldState::New);
+            lev, 0, 0, false, m_xhi_uhliq, m_xhi_h, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 1, 0, true, m_ylo_uliq, m_ylo_h_avg, false, FieldState::New);
+            lev, 1, 0, true, m_ylo_uhliq, m_ylo_h, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 1, 0, false, m_yhi_uliq, m_yhi_h_avg, false, FieldState::New);
+            lev, 1, 0, false, m_yhi_uhliq, m_yhi_h, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 0, 1, true, m_xlo_umix, m_xlo_h_avg, false, FieldState::New);
+            lev, 0, 1, true, m_xlo_uhmix, m_xlo_h, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 0, 1, false, m_xhi_umix, m_xhi_h_avg, false, FieldState::New);
+            lev, 0, 1, false, m_xhi_uhmix, m_xhi_h, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 1, 1, true, m_ylo_umix, m_ylo_h_avg, false, FieldState::New);
+            lev, 1, 1, true, m_ylo_uhmix, m_ylo_h, false, FieldState::New);
         this->accumulate_boundary(
-            lev, 1, 1, false, m_yhi_umix, m_yhi_h_avg, false, FieldState::New);
+            lev, 1, 1, false, m_yhi_uhmix, m_yhi_h, false, FieldState::New);
     }
 
-    m_xlo_uliq.copy_host_to_device();
-    m_xhi_uliq.copy_host_to_device();
-    m_ylo_uliq.copy_host_to_device();
-    m_yhi_uliq.copy_host_to_device();
+    m_xlo_uhliq.copy_host_to_device();
+    m_xhi_uhliq.copy_host_to_device();
+    m_ylo_uhliq.copy_host_to_device();
+    m_yhi_uhliq.copy_host_to_device();
 
-    m_xlo_umix.copy_host_to_device();
-    m_xhi_umix.copy_host_to_device();
-    m_ylo_umix.copy_host_to_device();
-    m_yhi_umix.copy_host_to_device();
+    m_xlo_uhmix.copy_host_to_device();
+    m_xhi_uhmix.copy_host_to_device();
+    m_ylo_uhmix.copy_host_to_device();
+    m_yhi_uhmix.copy_host_to_device();
 
-    m_xlo_h_avg.copy_host_to_device();
-    m_xhi_h_avg.copy_host_to_device();
-    m_ylo_h_avg.copy_host_to_device();
-    m_yhi_h_avg.copy_host_to_device();
+    m_xlo_h.copy_host_to_device();
+    m_xhi_h.copy_host_to_device();
+    m_ylo_h.copy_host_to_device();
+    m_yhi_h.copy_host_to_device();
 }
 
 void Flather::compute_boundary_z_averages(
@@ -296,51 +296,47 @@ void Flather::compute_boundary_z_averages(
     // accumulating boundaries needs to happen prior to applying fillpatch op
 
     this->accumulate_boundary(
-        lev, 0, -1, true, m_xlo_bnd_uvof, m_xlo_bnd_h_avg, true, fstate,
+        lev, 0, -1, true, m_xlo_bnd_uh, m_xlo_bnd_h, true, fstate,
         use_mac_fields);
     this->accumulate_boundary(
-        lev, 0, -1, false, m_xhi_bnd_uvof, m_xhi_bnd_h_avg, true, fstate,
+        lev, 0, -1, false, m_xhi_bnd_uh, m_xhi_bnd_h, true, fstate,
         use_mac_fields);
     this->accumulate_boundary(
-        lev, 1, -1, true, m_ylo_bnd_uvof, m_ylo_bnd_h_avg, true, fstate,
+        lev, 1, -1, true, m_ylo_bnd_uh, m_ylo_bnd_h, true, fstate,
         use_mac_fields);
     this->accumulate_boundary(
-        lev, 1, -1, false, m_yhi_bnd_uvof, m_yhi_bnd_h_avg, true, fstate,
+        lev, 1, -1, false, m_yhi_bnd_uh, m_yhi_bnd_h, true, fstate,
         use_mac_fields);
 
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_xlo_bnd_uvof.host_data(lev).begin(),
-        m_xlo_bnd_uvof.host_data(lev).end(),
-        m_xlo_bnd_uvof.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_xlo_bnd_uh.host_data(lev).begin(),
+        m_xlo_bnd_uh.host_data(lev).end(),
+        m_xlo_bnd_uh.device_data(lev).begin());
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_xhi_bnd_uvof.host_data(lev).begin(),
-        m_xhi_bnd_uvof.host_data(lev).end(),
-        m_xhi_bnd_uvof.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_xhi_bnd_uh.host_data(lev).begin(),
+        m_xhi_bnd_uh.host_data(lev).end(),
+        m_xhi_bnd_uh.device_data(lev).begin());
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_ylo_bnd_uvof.host_data(lev).begin(),
-        m_ylo_bnd_uvof.host_data(lev).end(),
-        m_ylo_bnd_uvof.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_ylo_bnd_uh.host_data(lev).begin(),
+        m_ylo_bnd_uh.host_data(lev).end(),
+        m_ylo_bnd_uh.device_data(lev).begin());
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_yhi_bnd_uvof.host_data(lev).begin(),
-        m_yhi_bnd_uvof.host_data(lev).end(),
-        m_yhi_bnd_uvof.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_yhi_bnd_uh.host_data(lev).begin(),
+        m_yhi_bnd_uh.host_data(lev).end(),
+        m_yhi_bnd_uh.device_data(lev).begin());
 
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_xlo_bnd_h_avg.host_data(lev).begin(),
-        m_xlo_bnd_h_avg.host_data(lev).end(),
-        m_xlo_bnd_h_avg.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_xlo_bnd_h.host_data(lev).begin(),
+        m_xlo_bnd_h.host_data(lev).end(), m_xlo_bnd_h.device_data(lev).begin());
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_xhi_bnd_h_avg.host_data(lev).begin(),
-        m_xhi_bnd_h_avg.host_data(lev).end(),
-        m_xhi_bnd_h_avg.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_xhi_bnd_h.host_data(lev).begin(),
+        m_xhi_bnd_h.host_data(lev).end(), m_xhi_bnd_h.device_data(lev).begin());
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_ylo_bnd_h_avg.host_data(lev).begin(),
-        m_ylo_bnd_h_avg.host_data(lev).end(),
-        m_ylo_bnd_h_avg.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_ylo_bnd_h.host_data(lev).begin(),
+        m_ylo_bnd_h.host_data(lev).end(), m_ylo_bnd_h.device_data(lev).begin());
     amrex::Gpu::copyAsync(
-        amrex::Gpu::hostToDevice, m_yhi_bnd_h_avg.host_data(lev).begin(),
-        m_yhi_bnd_h_avg.host_data(lev).end(),
-        m_yhi_bnd_h_avg.device_data(lev).begin());
+        amrex::Gpu::hostToDevice, m_yhi_bnd_h.host_data(lev).begin(),
+        m_yhi_bnd_h.host_data(lev).end(), m_yhi_bnd_h.device_data(lev).begin());
 }
 
 void Flather::set_velocity(
@@ -394,30 +390,26 @@ void Flather::set_velocity(
                                       : amrex::adjCellHi(domain, idir, nghost);
         const auto shift_to_interior =
             amrex::IntVect::TheDimensionVector(idir) * (ori.isLow() ? 1 : -1);
-        const amrex::Real* xlo_uliq = m_xlo_uliq.device_data(lev).data();
-        const amrex::Real* xhi_uliq = m_xhi_uliq.device_data(lev).data();
-        const amrex::Real* ylo_uliq = m_ylo_uliq.device_data(lev).data();
-        const amrex::Real* yhi_uliq = m_yhi_uliq.device_data(lev).data();
-        const amrex::Real* xlo_umix = m_xlo_umix.device_data(lev).data();
-        const amrex::Real* xhi_umix = m_xhi_umix.device_data(lev).data();
-        const amrex::Real* ylo_umix = m_ylo_umix.device_data(lev).data();
-        const amrex::Real* yhi_umix = m_yhi_umix.device_data(lev).data();
-        const amrex::Real* xlo_havg = m_xlo_h_avg.device_data(lev).data();
-        const amrex::Real* xhi_havg = m_xhi_h_avg.device_data(lev).data();
-        const amrex::Real* ylo_havg = m_ylo_h_avg.device_data(lev).data();
-        const amrex::Real* yhi_havg = m_yhi_h_avg.device_data(lev).data();
-        const amrex::Real* xlo_bnd_u = m_xlo_bnd_uvof.device_data(lev).data();
-        const amrex::Real* xhi_bnd_u = m_xhi_bnd_uvof.device_data(lev).data();
-        const amrex::Real* ylo_bnd_u = m_ylo_bnd_uvof.device_data(lev).data();
-        const amrex::Real* yhi_bnd_u = m_yhi_bnd_uvof.device_data(lev).data();
-        const amrex::Real* xlo_bnd_havg =
-            m_xlo_bnd_h_avg.device_data(lev).data();
-        const amrex::Real* xhi_bnd_havg =
-            m_xhi_bnd_h_avg.device_data(lev).data();
-        const amrex::Real* ylo_bnd_havg =
-            m_ylo_bnd_h_avg.device_data(lev).data();
-        const amrex::Real* yhi_bnd_havg =
-            m_yhi_bnd_h_avg.device_data(lev).data();
+        const amrex::Real* xlo_uhliq = m_xlo_uhliq.device_data(lev).data();
+        const amrex::Real* xhi_uhliq = m_xhi_uhliq.device_data(lev).data();
+        const amrex::Real* ylo_uhliq = m_ylo_uhliq.device_data(lev).data();
+        const amrex::Real* yhi_uhliq = m_yhi_uhliq.device_data(lev).data();
+        const amrex::Real* xlo_uhmix = m_xlo_uhmix.device_data(lev).data();
+        const amrex::Real* xhi_uhmix = m_xhi_uhmix.device_data(lev).data();
+        const amrex::Real* ylo_uhmix = m_ylo_uhmix.device_data(lev).data();
+        const amrex::Real* yhi_uhmix = m_yhi_uhmix.device_data(lev).data();
+        const amrex::Real* xlo_h = m_xlo_h.device_data(lev).data();
+        const amrex::Real* xhi_h = m_xhi_h.device_data(lev).data();
+        const amrex::Real* ylo_h = m_ylo_h.device_data(lev).data();
+        const amrex::Real* yhi_h = m_yhi_h.device_data(lev).data();
+        const amrex::Real* xlo_bnd_uh = m_xlo_bnd_uh.device_data(lev).data();
+        const amrex::Real* xhi_bnd_uh = m_xhi_bnd_uh.device_data(lev).data();
+        const amrex::Real* ylo_bnd_uh = m_ylo_bnd_uh.device_data(lev).data();
+        const amrex::Real* yhi_bnd_uh = m_yhi_bnd_uh.device_data(lev).data();
+        const amrex::Real* xlo_bnd_h = m_xlo_bnd_h.device_data(lev).data();
+        const amrex::Real* xhi_bnd_h = m_xhi_bnd_h.device_data(lev).data();
+        const amrex::Real* ylo_bnd_h = m_ylo_bnd_h.device_data(lev).data();
+        const amrex::Real* yhi_bnd_h = m_yhi_bnd_h.device_data(lev).data();
 
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (false)
@@ -454,27 +446,27 @@ void Flather::set_velocity(
                 // Vectors at x boundaries extend in y direction
                 // Vectors at y boundaries extend in x direction
                 if (idir == 0) {
-                    interior_liq =
-                        ori.isLow() ? xlo_uliq[iv_adj[1]] : xhi_uliq[iv_adj[1]];
-                    interior_mix =
-                        ori.isLow() ? xlo_umix[iv_adj[1]] : xhi_umix[iv_adj[1]];
+                    interior_liq = ori.isLow() ? xlo_uhliq[iv_adj[1]]
+                                               : xhi_uhliq[iv_adj[1]];
+                    interior_mix = ori.isLow() ? xlo_uhmix[iv_adj[1]]
+                                               : xhi_uhmix[iv_adj[1]];
                     interior_h =
-                        ori.isLow() ? xlo_havg[iv_adj[1]] : xhi_havg[iv_adj[1]];
+                        ori.isLow() ? xlo_h[iv_adj[1]] : xhi_h[iv_adj[1]];
                     boundary_val =
-                        ori.isLow() ? xlo_bnd_u[iv[1]] : xhi_bnd_u[iv[1]];
+                        ori.isLow() ? xlo_bnd_uh[iv[1]] : xhi_bnd_uh[iv[1]];
                     boundary_h =
-                        ori.isLow() ? xlo_bnd_havg[iv[1]] : xhi_bnd_havg[iv[1]];
+                        ori.isLow() ? xlo_bnd_h[iv[1]] : xhi_bnd_h[iv[1]];
                 } else {
-                    interior_liq =
-                        ori.isLow() ? ylo_uliq[iv_adj[0]] : yhi_uliq[iv_adj[0]];
-                    interior_mix =
-                        ori.isLow() ? ylo_umix[iv_adj[0]] : yhi_umix[iv_adj[0]];
+                    interior_liq = ori.isLow() ? ylo_uhliq[iv_adj[0]]
+                                               : yhi_uhliq[iv_adj[0]];
+                    interior_mix = ori.isLow() ? ylo_uhmix[iv_adj[0]]
+                                               : yhi_uhmix[iv_adj[0]];
                     interior_h =
-                        ori.isLow() ? ylo_havg[iv_adj[0]] : yhi_havg[iv_adj[0]];
+                        ori.isLow() ? ylo_h[iv_adj[0]] : yhi_h[iv_adj[0]];
                     boundary_val =
-                        ori.isLow() ? ylo_bnd_u[iv[0]] : yhi_bnd_u[iv[0]];
+                        ori.isLow() ? ylo_bnd_uh[iv[0]] : yhi_bnd_uh[iv[0]];
                     boundary_h =
-                        ori.isLow() ? ylo_bnd_havg[iv[0]] : yhi_bnd_havg[iv[0]];
+                        ori.isLow() ? ylo_bnd_h[iv[0]] : yhi_bnd_h[iv[0]];
                 }
 
                 // Set velocity to zero and skip for terrain
@@ -493,6 +485,7 @@ void Flather::set_velocity(
                 // Wave speed
                 const amrex::Real c = std::sqrt(grav_z * interior_h);
 
+                // Calculation of Flather formula. "val" = velocity * h
                 const auto Flather_val =
                     boundary_val + (ori.isLow() ? -1.0_rt : 1.0_rt) * c *
                                        (interior_h - boundary_h);
@@ -550,6 +543,7 @@ void Flather::set_velocity(
 
                 auto local_vel = 0.0_rt;
                 auto scaled_vel = 0.0_rt;
+                // Apply scale to velocity, depends on direction
                 if (prescribed_inflow || override_interior) {
                     local_vel = arr(iv, fcomp);
                     scaled_vel = local_vel * (Flather_val / boundary_val);
