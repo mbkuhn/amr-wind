@@ -531,7 +531,7 @@ void Flather::set_velocity(
                 //    Switch to the external profile when the changes are rapid
 
                 bool override_interior = false;
-                auto scale_interior = 1.0;
+                auto scale_interior = 1.0_rt;
                 if (std::abs(interior_liq) > v_threshold * interior_h) {
                     scale_interior =
                         (Flather_val - interior_mix) / interior_liq;
