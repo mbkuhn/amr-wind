@@ -173,10 +173,10 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
         const auto xhi_idx = xhi_uh.ncells(lev) - 1;
         const auto yhi_idx = yhi_uh.ncells(lev) - 1;
 
-        EXPECT_NEAR(xlo_uh.host_data(lev)[0], 0.0_rt, tol);
-        EXPECT_NEAR(xhi_uh.host_data(lev)[xhi_idx], u0 * m_wlev, tol);
-        EXPECT_NEAR(ylo_uh.host_data(lev)[0], 0.0_rt, tol);
-        EXPECT_NEAR(yhi_uh.host_data(lev)[yhi_idx], v0 * m_wlev, tol);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], -u0 * m_wlev, tol);
+        EXPECT_NEAR(xhi_uh.host_data(lev)[xhi_idx], 0.0_rt, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], -v0 * m_wlev, tol);
+        EXPECT_NEAR(yhi_uh.host_data(lev)[yhi_idx], 0.0_rt, tol);
 
         const auto dz = (8.0_rt / (m_nx * (lev + 1)));
 
