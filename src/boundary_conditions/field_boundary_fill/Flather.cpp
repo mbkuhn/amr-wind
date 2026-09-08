@@ -509,37 +509,48 @@ void Flather::set_velocity(
                 //    unchanged.
 
                 // Edge cases:
-                // 1) If the boundary velocity is 0, then the scaling based on
-                //    external quantities is undefined. Keep scale_interior = 1.
-                // 2) If the interior column contains no fully liquid cells,
+                // 1) If the interior column contains no fully liquid cells,
                 //    there is nothing to scale. Instead of scaling the internal
                 //    profile, override the interior velocity with scaled
                 //    external profile.
-                // 3) During initialization, the scaling can be very aggressive.
+                // 2) During initialization, the scaling can be very aggressive.
                 //    Plus, when the internal and external profiles are very
                 //    different, the scaling can lead to rapid acceleration.
                 //    Switch to the external profile when the changes are rapid.
+                // 3) If the boundary velocity is 0, then the scaling based on
+                //    external quantities is undefined. Use a regular outflow
+                //    (Neumann) condition, even if edge cases 1) or 2) apply.
                 // 4) If the boundary contains no liquid, the Flather velocity
                 //    can be very large. Use a regular outflow (Neumann)
                 //    condition.
 
-                bool override_interior = false;
-                // Edge case 1 (when both conditions are false)
+                bool interior_valid =
+                    std::abs(interior_liq) > v_threshold * interior_h;
+                bool boundary_valid =
+                    std::abs(boundary_val) > v_threshold * boundary_h;
+
+                // Use boundary data by default (edge case 1)
+                bool override_interior = true;
                 auto scale_interior = 1.0_rt;
-                if (std::abs(interior_liq) > v_threshold * interior_h) {
-                    // Normal case
+                if (interior_valid) {
+                    // Normal case: calculate velocity scale with Flather
                     scale_interior =
                         (Flather_val - interior_mix) / interior_liq;
-                } else if (std::abs(boundary_val) > v_threshold * boundary_h) {
-                    // Edge case 2
-                    override_interior = true;
+
+                    bool interior_bounded = scale_interior > vscale_max ||
+                                            scale_interior < vscale_min;
+                    // If scale is unbounded, override interior data
+                    // (edge case 2)
+                    override_interior = !interior_bounded;
+                    // If scale is unbounded, revert to 1
+                    // (part of edge case 3)
+                    scale_interior =
+                        !interior_bounded ? 1.0_rt : scale_interior;
                 }
 
-                if (scale_interior > vscale_max ||
-                    scale_interior < vscale_min) {
-                    // Edge case 3
-                    override_interior = true;
-                }
+                // Never override interior with invalid boundary data
+                // (part of edge case 3)
+                override_interior = override_interior && boundary_valid;
 
                 auto local_vel = 0.0_rt;
                 auto scaled_vel = 0.0_rt;
@@ -565,7 +576,7 @@ void Flather::set_velocity(
                                           (outflow && override_interior))) {
                     arr(iv, fcomp) = scaled_vel;
                 } else if (outflow) {
-                    // Edge case 4 (boundary_h <= tiny)
+                    // edge case 4 (boundary_h <= tiny)
                     arr(iv, fcomp) = local_vel;
                 }
             });
