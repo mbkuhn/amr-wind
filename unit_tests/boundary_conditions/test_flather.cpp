@@ -131,12 +131,14 @@ TEST_F(FlatherBoundaryAverageTest, accumulate_boundary_multilevel)
 
     for (int lev = 0; lev < nlevels; ++lev) {
         flather.accumulate_boundary(
-            lev, 0, -1, true, xlo_uh, xlo_h, false, kynema_sgf::FieldState::New);
+            lev, 0, -1, true, xlo_uh, xlo_h, false,
+            kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
             lev, 0, -1, false, xhi_uh, xhi_h, false,
             kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
-            lev, 1, -1, true, ylo_uh, ylo_h, false, kynema_sgf::FieldState::New);
+            lev, 1, -1, true, ylo_uh, ylo_h, false,
+            kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
             lev, 1, -1, false, yhi_uh, yhi_h, false,
             kynema_sgf::FieldState::New);
@@ -239,11 +241,13 @@ TEST_F(
         flather.accumulate_boundary(
             lev, 0, -1, true, xlo_uh, xlo_h, true, kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
-            lev, 0, -1, false, xhi_uh, xhi_h, true, kynema_sgf::FieldState::New);
+            lev, 0, -1, false, xhi_uh, xhi_h, true,
+            kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
             lev, 1, -1, true, ylo_uh, ylo_h, true, kynema_sgf::FieldState::New);
         flather.accumulate_boundary(
-            lev, 1, -1, false, yhi_uh, yhi_h, true, kynema_sgf::FieldState::New);
+            lev, 1, -1, false, yhi_uh, yhi_h, true,
+            kynema_sgf::FieldState::New);
 
         EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0, tol);
         EXPECT_NEAR(xhi_uh.host_data(lev)[0], u0, tol);
