@@ -249,10 +249,10 @@ TEST_F(
             lev, 1, -1, false, yhi_uh, yhi_h, true,
             kynema_sgf::FieldState::New);
 
-        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0, tol);
-        EXPECT_NEAR(xhi_uh.host_data(lev)[0], u0, tol);
-        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0, tol);
-        EXPECT_NEAR(yhi_uh.host_data(lev)[0], v0, tol);
+        EXPECT_NEAR(xlo_uh.host_data(lev)[0], u0 * m_wlev, tol);
+        EXPECT_NEAR(xhi_uh.host_data(lev)[0], u0 * m_wlev, tol);
+        EXPECT_NEAR(ylo_uh.host_data(lev)[0], v0 * m_wlev, tol);
+        EXPECT_NEAR(yhi_uh.host_data(lev)[0], v0 * m_wlev, tol);
 
         EXPECT_NEAR(xlo_h.host_data(lev)[0], m_wlev, tol);
         EXPECT_NEAR(xhi_h.host_data(lev)[0], m_wlev, tol);
