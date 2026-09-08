@@ -25,8 +25,6 @@ Flather::Flather(CFDSim& sim)
     , m_v_mac(m_sim.repo().get_field("v_mac"))
     , m_vof(m_sim.repo().get_field("vof"))
 {
-    // amrex::ParmParse pp(identifier());
-
     if (!m_repo.field_exists("vof")) {
         amrex::Abort("Flather BC requires the vof field");
     }
@@ -495,14 +493,14 @@ void Flather::set_velocity(
                     boundary_val + (ori.isLow() ? -1.0_rt : 1.0_rt) * c *
                                        (interior_h - boundary_h);
 
-                // Use external (prescribed) velocity if inflow
-                // Assesses inflow by the whole column, not the local value
-                // Assumes values are up-to-date from another fillpatch op
+                // Use external (prescribed) velocity if inflow:
+                // - Assesses inflow by the whole column, not the local value
+                // - Assumes values are up-to-date from another fillpatch op
                 const bool prescribed_inflow =
                     ori.isLow() ? boundary_val > 0.0_rt : boundary_val < 0.0_rt;
 
                 // Clip the velocity in the interior to prevent inflow at
-                // outflow, this is consistent with the line integral
+                // outflow; this is consistent with the line integral
                 // calculations
                 const auto local_internal_vel =
                     ori.isLow() ? amrex::min(ref_arr(iv_adj_cc, idir), 0.0_rt)
@@ -510,25 +508,26 @@ void Flather::set_velocity(
 
                 // Normal outflow case:
                 // *) For a given column, apply scale to the interior velocity,
-                // but only
-                //    to fully liquid cells; leave mixed cells unchanged.
+                //    but only to fully liquid cells; leave mixed cells
+                //    unchanged.
 
                 // Edge cases:
-                // 1) If the boundary contains no liquid, the flather can be
-                // very large.
-                //    Use a regular outflow (Neumann) condition.
+                // 1) If the boundary contains no liquid, the Flather velocity
+                //    can be very large. Use a regular outflow (Neumann)
+                //    condition.
+
                 // 2) If the interior column contains no fully liquid cells,
-                // there is
-                //    nothing to scale. Instead of scaling the internal profile,
-                //    override the interior velocity with scaled external
-                //    profile.
+                //    there is nothing to scale. Instead of scaling the internal
+                //    profile, override the interior velocity with scaled
+                //    external profile.
+
                 // 3) If the boundary velocity is 0, then the scaling based on
-                //    external quantities is undefined. Keep the scale_interior
-                //    = 1
+                //    external quantities is undefined. Keep scale_interior = 1.
+
                 // 4) During initialization, the scaling can be very aggressive.
                 //    Plus, when the internal and external profiles are very
                 //    different, the scaling can lead to rapid acceleration.
-                //    Switch to the external profile when the changes are rapid
+                //    Switch to the external profile when the changes are rapid.
 
                 bool override_interior = false;
                 auto scale_interior = 1.0_rt;
@@ -543,12 +542,6 @@ void Flather::set_velocity(
                     override_interior = true;
                 }
 
-                /*
-                // Limit the scaling factor to prevent overly aggressive changes
-                scale_interior =
-                    amrex::max(0.5_rt, amrex::min(scale_interior, 1.2_rt));
-                */
-
                 auto local_vel = 0.0_rt;
                 auto scaled_vel = 0.0_rt;
                 if (prescribed_inflow || override_interior) {
@@ -559,7 +552,7 @@ void Flather::set_velocity(
                     scaled_vel = local_vel * scale_interior;
                 }
 
-                // Only use if advecting liquid (or zero velocity)
+                // Only use if advecting liquid (or zero velocity):
                 // This is important because the averages used to calculate
                 // the Flather velocity are only performed on cells containing
                 // liquid; therefore, the scaling of the velocity is only valid
