@@ -537,15 +537,16 @@ void Flather::set_velocity(
                     scale_interior =
                         (Flather_val - interior_mix) / interior_liq;
 
-                    bool interior_bounded = scale_interior > vscale_max ||
-                                            scale_interior < vscale_min;
+                    const bool interior_unbounded =
+                        scale_interior > vscale_max ||
+                        scale_interior < vscale_min;
                     // If scale is unbounded, override interior data
                     // (edge case 2)
-                    override_interior = !interior_bounded;
+                    override_interior = interior_unbounded;
                     // If scale is unbounded, revert to 1
                     // (part of edge case 3)
                     scale_interior =
-                        !interior_bounded ? 1.0_rt : scale_interior;
+                        interior_unbounded ? 1.0_rt : scale_interior;
                 }
 
                 // Never override interior with invalid boundary data
