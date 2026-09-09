@@ -136,8 +136,7 @@ void Flather::accumulate_boundary(
              ++mfi) {
             // Iterate in cell-centered index space, even for MAC fields, so
             // the box type matches the domain and the ii_v/jj_v face offsets
-            amrex::Box bx =
-                mfi.tilebox(amrex::IntVect::TheZeroVector()) & dom;
+            amrex::Box bx = mfi.tilebox(amrex::IntVect::TheZeroVector()) & dom;
             if (!bx.ok()) {
                 continue;
             }
