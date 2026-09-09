@@ -185,7 +185,10 @@ void Flather::accumulate_boundary(
                 for (int idx = idx_min; idx <= idx_max; ++idx) {
                     const auto liquid_height =
                         vof_arr(ii, jj, k) * dz * mask_arr(i, j, k);
-                    amrex::Gpu::Atomic::Add(&vof_sum[idx], liquid_height);
+                    // Threads share these sums, so the atomic must be
+                    // host-safe as well as device-safe
+                    amrex::HostDevice::Atomic::Add(
+                        &vof_sum[idx], liquid_height);
                     auto vel_height = liquid_height;
                     if (phase_switch == 0 &&
                         vof_arr(ii, jj, k) < 1.0_rt - tiny) {
@@ -205,7 +208,7 @@ void Flather::accumulate_boundary(
                         local_vel = is_low ? amrex::min(local_vel, 0.0_rt)
                                            : amrex::max(local_vel, 0.0_rt);
                     }
-                    amrex::Gpu::Atomic::Add(
+                    amrex::HostDevice::Atomic::Add(
                         &uh_sum[idx], local_vel * vel_height);
                 }
             });
